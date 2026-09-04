@@ -94,6 +94,8 @@ export const ADMIN_ROUTE_ALIASES = {
   '/admin/settings/media': '/admin/management/media',
   '/admin/settings/content': '/admin/management/settings',
   '/admin/settings/media-page': '/admin/management/media',
+  '/admin/tasks': '/admin/academic/tasks',
+  '/admin/chats': '/admin/academic/chats',
   '/admin/settings/attendance': '/admin/academic/attendance'
 };
 

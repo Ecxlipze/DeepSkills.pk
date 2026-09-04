@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useTasks } from '../context/TasksContext';
-import { FaTimes, FaEdit, FaTrash } from 'react-icons/fa';
+import { supabase } from '../supabaseClient';
+import { FaTimes, FaEdit, FaTrash, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 
 const Container = styled.div`
   max-width: 1000px;
@@ -214,15 +215,45 @@ const StatusPill = styled.span`
   padding: 4px 8px;
   border-radius: 50px;
   font-size: 0.75rem;
-  background: rgba(46, 125, 50, 0.15); 
-  color: #4caf50; 
-  border: 1px solid rgba(46, 125, 50, 0.3);
+  background: ${props => props.$danger ? 'rgba(239, 68, 68, 0.15)' : 'rgba(46, 125, 50, 0.15)'}; 
+  color: ${props => props.$danger ? '#ef4444' : '#4caf50'}; 
+  border: 1px solid ${props => props.$danger ? 'rgba(239, 68, 68, 0.3)' : 'rgba(46, 125, 50, 0.3)'};
+`;
+
+const ModalTabs = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 12px;
+`;
+
+const ModalTabBtn = styled.button`
+  background: ${props => props.$active ? 'rgba(123, 31, 46, 0.25)' : 'rgba(255, 255, 255, 0.04)'};
+  color: ${props => props.$active ? '#ff4d6d' : '#888'};
+  border: 1px solid ${props => props.$active ? 'rgba(123, 31, 46, 0.5)' : 'rgba(255, 255, 255, 0.08)'};
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    color: #fff;
+    background: rgba(123, 31, 46, 0.15);
+  }
 `;
 
 const ViewTasks = () => {
   const { user } = useAuth();
   const { tasks, deleteTask, updateTask, gradeSubmission } = useTasks();
   const [selectedTask, setSelectedTask] = useState(null);
+  const [modalTab, setModalTab] = useState('submitted');
+  const [batchStudents, setBatchStudents] = useState([]);
+  const [loadingBatchStudents, setLoadingBatchStudents] = useState(false);
   const [gradingMarks, setGradingMarks] = useState({}); // { submissionId: value }
   const [editingTask, setEditingTask] = useState(null);
   const [editFormData, setEditFormData] = useState({
@@ -239,6 +270,29 @@ const ViewTasks = () => {
     const refreshedTask = tasks.find((task) => task.id === selectedTask.id);
     if (refreshedTask) setSelectedTask(refreshedTask);
   }, [tasks, selectedTask]);
+
+  useEffect(() => {
+    if (!selectedTask?.batch) {
+      setBatchStudents([]);
+      return;
+    }
+    const fetchEnrolledStudents = async () => {
+      setLoadingBatchStudents(true);
+      try {
+        const { data } = await supabase
+          .from('admissions')
+          .select('id, name, cnic, phone, email')
+          .eq('batch', selectedTask.batch)
+          .eq('status', 'Active');
+        setBatchStudents(data || []);
+      } catch (err) {
+        console.error("Error fetching batch students:", err);
+      } finally {
+        setLoadingBatchStudents(false);
+      }
+    };
+    fetchEnrolledStudents();
+  }, [selectedTask]);
 
   const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date(new Date().setHours(0,0,0,0));
@@ -344,69 +398,132 @@ const ViewTasks = () => {
                 <CloseBtn onClick={() => setSelectedTask(null)}><FaTimes /></CloseBtn>
               </ModalHeader>
               <ModalBody>
-                {selectedTask.submissions.length === 0 ? (
-                  <EmptyState>No submissions yet.</EmptyState>
-                ) : (
-                  <TableWrapper>
-                    <StyledTable>
-                      <thead>
-                        <tr>
-                          <th>Student Name</th>
-                          <th>CNIC</th>
-                          <th>Submitted At</th>
-                          <th>File</th>
-                          <th>Status</th>
-                          {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && <th>Marks ({selectedTask.totalMarks})</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedTask.submissions.map((sub, i) => (
-                          <tr key={i}>
-                            <td style={{ color: '#fff', fontWeight: '500' }}>{sub.studentName}</td>
-                            <td>{sub.cnic}</td>
-                            <td>{new Date(sub.submittedAt).toLocaleString()}</td>
-                            <td>
-                              {sub.fileUrl ? (
-                                <span 
-                                  onClick={() => {
-                                    if (sub.fileUrl && sub.fileUrl.startsWith('http')) {
-                                      window.open(sub.fileUrl, '_blank');
-                                    } else {
-                                      alert(`File preview not available for older submissions.`);
-                                    }
-                                  }}
-                                  style={{ color: '#4da6ff', textDecoration: 'underline', cursor: 'pointer' }}
-                                >
-                                  Preview File
-                                </span>
-                              ) : '-'}
-                            </td>
-                            <td><StatusPill>{sub.status}</StatusPill></td>
-                            {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && (
-                              <td>
-                                <div style={{ display: 'flex', gap: '5px' }}>
-                                  <input
-                                    type="number"
-                                    placeholder="Marks"
-                                    defaultValue={sub.marksObtained}
-                                    onChange={(e) => setGradingMarks({...gradingMarks, [sub.id]: e.target.value})}
-                                    style={{ width: '60px', padding: '5px', borderRadius: '4px', background: '#000', border: '1px solid #333', color: '#fff' }}
-                                  />
-                                  <button
-                                    onClick={() => gradeSubmission(sub.id, gradingMarks[sub.id] || sub.marksObtained)}
-                                    style={{ padding: '5px 10px', background: '#7B1F2E', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                                  >
-                                    Save
-                                  </button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </StyledTable>
-                  </TableWrapper>
-                )}
+                {(() => {
+                  const submittedCnics = new Set((selectedTask.submissions || []).map(s => s.cnic));
+                  const nonSubmitters = batchStudents.filter(s => !submittedCnics.has(s.cnic));
+
+                  return (
+                    <>
+                      <ModalTabs>
+                        <ModalTabBtn 
+                          $active={modalTab === 'submitted'} 
+                          onClick={() => setModalTab('submitted')}
+                        >
+                          <FaCheckCircle style={{ marginRight: '6px' }} />
+                          Submitted ({selectedTask.submissions.length})
+                        </ModalTabBtn>
+                        <ModalTabBtn 
+                          $active={modalTab === 'pending'} 
+                          onClick={() => setModalTab('pending')}
+                        >
+                          <FaExclamationCircle style={{ marginRight: '6px' }} />
+                          Not Submitted ({nonSubmitters.length})
+                        </ModalTabBtn>
+                      </ModalTabs>
+
+                      {modalTab === 'submitted' ? (
+                        selectedTask.submissions.length === 0 ? (
+                          <EmptyState>No submissions yet.</EmptyState>
+                        ) : (
+                          <TableWrapper>
+                            <StyledTable>
+                              <thead>
+                                <tr>
+                                  <th>Student Name</th>
+                                  <th>CNIC</th>
+                                  <th>Submitted At</th>
+                                  <th>File</th>
+                                  <th>Status</th>
+                                  {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && <th>Marks ({selectedTask.totalMarks})</th>}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedTask.submissions.map((sub, i) => (
+                                  <tr key={i}>
+                                    <td style={{ color: '#fff', fontWeight: '500' }}>{sub.studentName}</td>
+                                    <td>{sub.cnic}</td>
+                                    <td>{new Date(sub.submittedAt).toLocaleString()}</td>
+                                    <td>
+                                      {sub.fileUrl ? (
+                                        <span 
+                                          onClick={() => {
+                                            if (sub.fileUrl && sub.fileUrl.startsWith('http')) {
+                                              window.open(sub.fileUrl, '_blank');
+                                            } else {
+                                              alert(`File preview not available for older submissions.`);
+                                            }
+                                          }}
+                                          style={{ color: '#4da6ff', textDecoration: 'underline', cursor: 'pointer' }}
+                                        >
+                                          Preview File
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                    <td><StatusPill>{sub.status}</StatusPill></td>
+                                    {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && (
+                                      <td>
+                                        <div style={{ display: 'flex', gap: '5px' }}>
+                                          <input
+                                            type="number"
+                                            placeholder="Marks"
+                                            defaultValue={sub.marksObtained}
+                                            onChange={(e) => setGradingMarks({...gradingMarks, [sub.id]: e.target.value})}
+                                            style={{ width: '60px', padding: '5px', borderRadius: '4px', background: '#000', border: '1px solid #333', color: '#fff' }}
+                                          />
+                                          <button
+                                            onClick={() => gradeSubmission(sub.id, gradingMarks[sub.id] || sub.marksObtained)}
+                                            style={{ padding: '5px 10px', background: '#7B1F2E', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                          >
+                                            Save
+                                          </button>
+                                        </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </StyledTable>
+                          </TableWrapper>
+                        )
+                      ) : (
+                        nonSubmitters.length === 0 ? (
+                          <EmptyState style={{ color: '#4caf50' }}>
+                            All active students in {selectedTask.batch} have submitted! 🎉
+                          </EmptyState>
+                        ) : (
+                          <TableWrapper>
+                            <StyledTable>
+                              <thead>
+                                <tr>
+                                  <th>Student Name</th>
+                                  <th>CNIC</th>
+                                  <th>Phone</th>
+                                  <th>Email</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {nonSubmitters.map((s, i) => (
+                                  <tr key={i}>
+                                    <td style={{ color: '#fff', fontWeight: '500' }}>{s.name}</td>
+                                    <td>{s.cnic}</td>
+                                    <td>{s.phone}</td>
+                                    <td style={{ fontSize: '0.85rem' }}>{s.email}</td>
+                                    <td>
+                                      <StatusPill $danger={isOverdue(selectedTask.dueDate)}>
+                                        {isOverdue(selectedTask.dueDate) ? 'Overdue' : 'Pending'}
+                                      </StatusPill>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </StyledTable>
+                          </TableWrapper>
+                        )
+                      )}
+                    </>
+                  );
+                })()}
               </ModalBody>
             </ModalContent>
           </ModalOverlay>

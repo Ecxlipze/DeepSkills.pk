@@ -101,11 +101,41 @@ if (!is_array($data) || !is_array($data['payload'] ?? null)) {
     enroll_respond(400, ['status' => 'error', 'message' => 'Enrollment payload is required.']);
 }
 
+$payload = $data['payload'];
+
+// Normalize payment plan to 'full' or 'installment'
+$rawPlan = strtolower(trim((string)($payload['paymentPlan'] ?? '')));
+if ($rawPlan === 'full' || $rawPlan === 'one-time' || $rawPlan === '1') {
+    $payload['paymentPlan'] = 'full';
+    $payload['installmentCount'] = 1;
+} else {
+    $payload['paymentPlan'] = 'installment';
+    if (is_numeric($rawPlan) && (int)$rawPlan > 1 && empty($payload['installmentCount'])) {
+        $payload['installmentCount'] = (int)$rawPlan;
+    }
+}
+
+// Normalize payment method to lowercase snake_case
+if (!empty($payload['firstPaymentMethod'])) {
+    $methodMap = [
+        'cash' => 'cash',
+        'bank transfer' => 'bank_transfer',
+        'bank_transfer' => 'bank_transfer',
+        'online' => 'online',
+        'cheque' => 'cheque',
+        'check' => 'cheque',
+    ];
+    $cleanMethod = strtolower(trim((string)$payload['firstPaymentMethod']));
+    $payload['firstPaymentMethod'] = $methodMap[$cleanMethod] ?? str_replace(' ', '_', $cleanMethod);
+} else {
+    $payload['firstPaymentMethod'] = 'cash';
+}
+
 [$status, $result] = enroll_http_json('POST', $supabaseUrl . '/rest/v1/rpc/enroll_counsellor_student', [
     'apikey: ' . $serviceKey,
     'Authorization: Bearer ' . $serviceKey,
     'Content-Type: application/json',
-], ['payload' => $data['payload']]);
+], ['payload' => $payload]);
 
 if ($status >= 400) {
     $message = is_array($result) ? ($result['message'] ?? $result['error'] ?? 'Enrollment failed.') : 'Enrollment failed.';

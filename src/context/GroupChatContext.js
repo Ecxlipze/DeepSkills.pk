@@ -13,6 +13,7 @@ export const GroupChatProvider = ({ children }) => {
   const [mutes, setMutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [teacherBatches, setTeacherBatches] = useState([]);
+  const [adminBatches, setAdminBatches] = useState([]);
 
   useEffect(() => {
     const fetchTeacherBatches = async () => {
@@ -37,8 +38,38 @@ export const GroupChatProvider = ({ children }) => {
     fetchTeacherBatches();
   }, [user?.role, user?.cnic]);
 
+  useEffect(() => {
+    const fetchAdminBatches = async () => {
+      if (user?.role !== 'admin') {
+        setAdminBatches([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('batches')
+          .select('id, batch_name, course')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          setAdminBatches(data);
+        }
+      } catch (err) {
+        console.error('Error fetching admin chat batches:', err);
+      }
+    };
+
+    fetchAdminBatches();
+  }, [user?.role]);
+
   // Parse batches and courses (handle comma separated strings)
   const availableBatches = useMemo(() => {
+    if (user?.role === 'admin') {
+      return adminBatches.map((batch) => ({
+        batch: batch.batch_name,
+        course: batch.course || 'General Course'
+      }));
+    }
+
     if (user?.role === 'teacher') {
       return teacherBatches.map((batch) => ({
         batch: batch.batch_name,
@@ -54,7 +85,7 @@ export const GroupChatProvider = ({ children }) => {
       batch,
       course: courseList[index] || user.assigned_course || "General Course"
     }));
-  }, [teacherBatches, user?.role, user?.batch, user?.assigned_course]);
+  }, [adminBatches, teacherBatches, user?.role, user?.batch, user?.assigned_course]);
 
   useEffect(() => {
     if (availableBatches.length === 0) {
@@ -155,16 +186,16 @@ export const GroupChatProvider = ({ children }) => {
   }, [activeBatch, fetchMembers, fetchMessages, fetchMutes]);
 
   const sendMessage = async (messageData) => {
-    if (!user || !activeBatch || (user.role !== 'teacher' && isMuted)) return;
+    if (!user || !activeBatch || (!['teacher', 'admin'].includes(user.role) && isMuted)) return;
     try {
       const { error } = await supabase
         .from('group_chat_messages')
         .insert([{
           ...messageData,
           batch: activeBatch,
-          sender_cnic: user.cnic,
-          sender_name: user.name,
-          sender_role: user.role,
+          sender_cnic: user.cnic || 'ADMIN',
+          sender_name: user.name || user.full_name || 'Administrator',
+          sender_role: user.role || 'admin',
           reactions: []
         }]);
       if (error) throw error;

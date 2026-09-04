@@ -42,6 +42,8 @@ const ContentManager = dynamic(() => import('../../src/admin/ContentManager'), {
 const MediaPageManager = dynamic(() => import('../../src/admin/MediaPageManager'), { ssr: false });
 const AdminAttendanceSettings = dynamic(() => import('../../src/admin/AdminAttendanceSettings'), { ssr: false });
 const ReportsSystem = dynamic(() => import('../../src/admin/ReportsSystem'), { ssr: false });
+const AdminTasksPage = dynamic(() => import('../../src/admin/AdminTasksPage'), { ssr: false });
+const AdminGroupChatsPage = dynamic(() => import('../../src/admin/AdminGroupChatsPage'), { ssr: false });
 const DepartmentPlaceholder = dynamic(() => import('../../src/admin/DepartmentPlaceholder'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
@@ -63,6 +65,8 @@ const ADMIN_ROUTE_ACCESS = {
   reports: { allowedRoles: ['admin', 'custom'], permissionKey: 'reports' },
   results: { allowedRoles: ['admin', 'custom'], permissionKey: 'results' },
   blog: { allowedRoles: ['admin', 'custom'], permissionKey: 'blog' },
+  tasks: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
+  chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   settings: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' }
 };
 
@@ -83,6 +87,8 @@ function getAdminPage(path = []) {
   if (section === 'courses') return child ? <CourseDetailPage courseId={child} /> : <CourseManager />;
   if (section === 'batches') return <CourseManager />;
   if (section === 'attendance') return <AdminAttendancePage />;
+  if (section === 'tasks') return <AdminTasksPage />;
+  if (section === 'chats') return <AdminGroupChatsPage />;
   if (section === 'certificates') return <CertificateManager />;
   if (section === 'hr') {
     if (child === 'teachers') return <TeacherManager />;
@@ -109,8 +115,8 @@ function getAdminPage(path = []) {
     if (child === 'results') return <AdminResults />;
     if (child === 'announcements') return <AdminAnnouncements />;
     if (child === 'complaints') return <AdminComplaints />;
-    if (child === 'tasks') return <DepartmentPlaceholder title="Tasks & Assignments" icon="✅" />;
-    if (child === 'chats') return <DepartmentPlaceholder title="Group Chats" icon="💬" />;
+    if (child === 'tasks') return <AdminTasksPage />;
+    if (child === 'chats') return <AdminGroupChatsPage />;
     if (child === 'reports') return <ReportsSystem mode="academic" />;
   }
 

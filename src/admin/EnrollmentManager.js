@@ -549,7 +549,8 @@ const EnrollmentManager = () => {
       if (authError) throw authError;
 
       // 3. Automate Fee Generation
-      const amountPerInst = planType === 'full' ? totalFee : Math.round(totalFee / installmentCount);
+      const normalizedPlan = planType === 'full' ? 'full' : 'installment';
+      const amountPerInst = normalizedPlan === 'full' ? totalFee : Math.round(totalFee / installmentCount);
 
       // Create Fee Plan record
       const { error: feePlanError } = await supabase
@@ -559,8 +560,8 @@ const EnrollmentManager = () => {
           course: selectedApp.course || selectedApp.selectedCourse,
           batch: batch.batch_name,
           total_fee: totalFee,
-          plan_type: planType,
-          installment_count: planType === 'full' ? 1 : installmentCount
+          plan_type: normalizedPlan,
+          installment_count: normalizedPlan === 'full' ? 1 : installmentCount
         })
         .select()
         .single();
@@ -569,7 +570,7 @@ const EnrollmentManager = () => {
 
       // Create Payment installments
       const paymentRows = [];
-      const insts = planType === 'full' ? 1 : installmentCount;
+      const insts = normalizedPlan === 'full' ? 1 : installmentCount;
 
       for (let i = 1; i <= insts; i++) {
         const dueDate = new Date();
@@ -578,12 +579,13 @@ const EnrollmentManager = () => {
         paymentRows.push({
           entity_id: selectedApp.isReEnrollment ? selectedApp.original_admission_id : selectedApp.id,
           entity_type: 'student',
-          installment_number: planType === 'full' ? null : i,
-          total_installments: planType === 'full' ? null : insts,
+          installment_number: normalizedPlan === 'full' ? null : i,
+          total_installments: normalizedPlan === 'full' ? null : insts,
           amount: amountPerInst,
           due_date: dueDate.toISOString().split('T')[0],
           status: 'pending',
-          description: planType === 'full' ? 'Full Course Fee' : `Installment ${i} of ${insts}`
+          method: null,
+          description: normalizedPlan === 'full' ? 'Full Course Fee' : `Installment ${i} of ${insts}`
         });
       }
 

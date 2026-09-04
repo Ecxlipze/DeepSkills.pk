@@ -22,7 +22,19 @@ const STATUS_OPTIONS = [
   { value: 'lost', label: 'Lost' }
 ];
 const SOURCES = ['Social Media', 'Friend', 'Google', 'Referral', 'Other'];
-const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Online', 'Cheque'];
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'online', label: 'Online' },
+  { value: 'cheque', label: 'Cheque' }
+];
+const normalizePaymentMethod = (method) => {
+  if (!method) return 'cash';
+  const val = String(method).trim().toLowerCase().replace(/\s+/g, '_');
+  if (['cash', 'bank_transfer', 'online', 'cheque'].includes(val)) return val;
+  if (val === 'check') return 'cheque';
+  return 'cash';
+};
 const EDUCATION = ['Matric', 'Inter', 'Bachelor', 'Master', 'Other'];
 
 const emptyEnrollment = {
@@ -49,7 +61,7 @@ const emptyEnrollment = {
   paymentPlan: 'full',
   installmentCount: 1,
   firstPayment: '',
-  firstPaymentMethod: 'Cash',
+  firstPaymentMethod: 'cash',
   firstPaymentDate: new Date().toISOString().split('T')[0],
   firstPaymentRef: '',
   notes: ''
@@ -232,6 +244,9 @@ const CounsellorPanel = ({ initialView }) => {
       return;
     }
 
+    const isFullPlan = enrollment.paymentPlan === 'full';
+    const computedInstallments = isFullPlan ? 1 : (Number(enrollment.installmentCount) || Number(enrollment.paymentPlan) || 1);
+
     const payload = {
       ...enrollment,
       batchId: enrollment.batchId,
@@ -240,6 +255,9 @@ const CounsellorPanel = ({ initialView }) => {
       totalFee: toInt(enrollment.totalFee),
       discountAmount: toInt(enrollment.discountAmount),
       firstPayment: toInt(enrollment.firstPayment),
+      paymentPlan: isFullPlan ? 'full' : 'installment',
+      installmentCount: computedInstallments,
+      firstPaymentMethod: normalizePaymentMethod(enrollment.firstPaymentMethod || 'cash'),
       counsellorName: user?.name || 'Counsellor'
     };
 
@@ -320,7 +338,7 @@ const CounsellorPanel = ({ initialView }) => {
         entity_type: 'student',
         amount: toInt(studentAction.amount),
         paid_date: studentAction.paidDate || new Date().toISOString().split('T')[0],
-        method: studentAction.method || 'Cash',
+        method: normalizePaymentMethod(studentAction.method || 'cash'),
         reference_number: studentAction.reference || null,
         status: 'paid',
         description: 'Counsellor payment record'
@@ -398,7 +416,7 @@ const CounsellorPanel = ({ initialView }) => {
                   <Readonly>Final Fee: Rs. {finalFee.toLocaleString()}</Readonly>
                   <Field><label>Payment Plan</label><select value={enrollment.paymentPlan} onChange={(e) => updateEnrollment('paymentPlan', e.target.value)}><option value="full">Full</option><option value="2">Installments - 2 months</option><option value="3">Installments - 3 months</option><option value="6">Installments - 6 months</option></select></Field>
                   <Field><label>First Payment</label><input type="number" value={enrollment.firstPayment} onChange={(e) => updateEnrollment('firstPayment', e.target.value)} /></Field>
-                  <Field><label>First Payment Method</label><select value={enrollment.firstPaymentMethod} onChange={(e) => updateEnrollment('firstPaymentMethod', e.target.value)}>{PAYMENT_METHODS.map((item) => <option key={item}>{item}</option>)}</select></Field>
+                  <Field><label>First Payment Method</label><select value={enrollment.firstPaymentMethod} onChange={(e) => updateEnrollment('firstPaymentMethod', e.target.value)}>{PAYMENT_METHODS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
                   <Field><label>First Payment Date</label><input type="date" value={enrollment.firstPaymentDate} onChange={(e) => updateEnrollment('firstPaymentDate', e.target.value)} /></Field>
                   <Field><label>First Payment Reference</label><input value={enrollment.firstPaymentRef} onChange={(e) => updateEnrollment('firstPaymentRef', e.target.value)} /></Field>
                   <Field className="wide"><label>Internal Notes</label><textarea value={enrollment.notes} onChange={(e) => updateEnrollment('notes', e.target.value)} /></Field>
@@ -486,7 +504,7 @@ const CounsellorPanel = ({ initialView }) => {
         {studentAction && (
           <Modal onClose={() => setStudentAction(null)} title={studentAction.type === 'batch' ? 'Edit Batch Assignment' : studentAction.type === 'payment' ? 'Add Payment' : 'Add Counsellor Note'}>
             {studentAction.type === 'batch' && <Field><label>Batch</label><select value={studentAction.batchId || ''} onChange={(e) => setStudentAction({ ...studentAction, batchId: e.target.value })}>{activeBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.course} - {batch.batch_name}</option>)}</select></Field>}
-            {studentAction.type === 'payment' && <Grid><Field><label>Amount</label><input type="number" value={studentAction.amount || ''} onChange={(e) => setStudentAction({ ...studentAction, amount: e.target.value })} /></Field><Field><label>Paid Date</label><input type="date" value={studentAction.paidDate || new Date().toISOString().split('T')[0]} onChange={(e) => setStudentAction({ ...studentAction, paidDate: e.target.value })} /></Field><Field><label>Method</label><select value={studentAction.method || 'Cash'} onChange={(e) => setStudentAction({ ...studentAction, method: e.target.value })}>{PAYMENT_METHODS.map((item) => <option key={item}>{item}</option>)}</select></Field><Field><label>Reference</label><input value={studentAction.reference || ''} onChange={(e) => setStudentAction({ ...studentAction, reference: e.target.value })} /></Field></Grid>}
+            {studentAction.type === 'payment' && <Grid><Field><label>Amount</label><input type="number" value={studentAction.amount || ''} onChange={(e) => setStudentAction({ ...studentAction, amount: e.target.value })} /></Field><Field><label>Paid Date</label><input type="date" value={studentAction.paidDate || new Date().toISOString().split('T')[0]} onChange={(e) => setStudentAction({ ...studentAction, paidDate: e.target.value })} /></Field><Field><label>Method</label><select value={studentAction.method || 'cash'} onChange={(e) => setStudentAction({ ...studentAction, method: e.target.value })}>{PAYMENT_METHODS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field><Field><label>Reference</label><input value={studentAction.reference || ''} onChange={(e) => setStudentAction({ ...studentAction, reference: e.target.value })} /></Field></Grid>}
             {studentAction.type === 'note' && <Field><label>Note</label><textarea value={studentAction.note || ''} onChange={(e) => setStudentAction({ ...studentAction, note: e.target.value })} /></Field>}
             <Primary onClick={saveStudentAction}>Save</Primary>
           </Modal>

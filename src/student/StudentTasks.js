@@ -161,7 +161,8 @@ const StatusBadge = styled.span`
   
   ${({ $status }) => {
     switch($status) {
-      case 'Submitted': return 'background: rgba(46, 125, 50, 0.15); color: #4caf50; border: 1px solid rgba(46, 125, 50, 0.3);';
+      case 'Graded': return 'background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);';
+      case 'Submitted': return 'background: rgba(55, 138, 221, 0.15); color: #378ADD; border: 1px solid rgba(55, 138, 221, 0.3);';
       case 'Overdue': return 'background: rgba(211, 47, 47, 0.15); color: #f44336; border: 1px solid rgba(211, 47, 47, 0.3);';
       case 'Pending': return 'background: rgba(255, 152, 0, 0.15); color: #ff9800; border: 1px solid rgba(255, 152, 0, 0.3);';
       default: return 'background: #333; color: #fff;';
@@ -317,18 +318,28 @@ const StudentTasks = () => {
 
   // Helper to determine student status on a task
   const getStatus = (task) => {
-    const isSubmitted = task.submissions.some(s => s.cnic === studentCnic);
-    if (isSubmitted) return 'Submitted';
+    const sub = task.submissions?.find(s => s.cnic === studentCnic);
+    if (sub) {
+      if (sub.status === 'Graded') return 'Graded';
+      return 'Submitted';
+    }
     const isOverdue = new Date(task.dueDate) < new Date(new Date().setHours(0,0,0,0));
     if (isOverdue) return 'Overdue';
     return 'Pending';
   };
 
-  const tasksWithStatus = myTasks.map(t => ({ ...t, status: getStatus(t) }));
+  const tasksWithStatus = myTasks.map(t => {
+    const sub = t.submissions?.find(s => s.cnic === studentCnic);
+    return {
+      ...t,
+      status: getStatus(t),
+      mySubmission: sub
+    };
+  });
   
   const todayTasks = tasksWithStatus.filter(t => t.dueDate === todayString);
   const pendingCount = tasksWithStatus.filter(t => t.status === 'Pending').length;
-  const completedCount = tasksWithStatus.filter(t => t.status === 'Submitted').length;
+  const completedCount = tasksWithStatus.filter(t => t.status === 'Submitted' || t.status === 'Graded').length;
   const progressPercent = myTasks.length > 0 ? Math.round((completedCount / myTasks.length) * 100) : 0;
 
   const filteredTasks = tasksWithStatus.filter(t => {
@@ -410,6 +421,10 @@ const StudentTasks = () => {
                     </DueDate>
                     {task.status === 'Pending' ? (
                       <SubmitBtn onClick={() => setSelectedTaskToSubmit(task)}>Submit Task</SubmitBtn>
+                    ) : task.status === 'Graded' ? (
+                      <StatusBadge $status="Graded">
+                        Graded: {task.mySubmission?.marksObtained ?? '-'} / {task.totalMarks || 100}
+                      </StatusBadge>
                     ) : (
                       <StatusBadge $status={task.status}>{task.status}</StatusBadge>
                     )}
@@ -434,7 +449,7 @@ const StudentTasks = () => {
           <hr style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '15px 0' }} />
           
           <FilterBar>
-            {['All', 'Pending', 'Submitted', 'Overdue'].map(f => (
+            {['All', 'Pending', 'Submitted', 'Graded', 'Overdue'].map(f => (
               <FilterBtn 
                 key={f} 
                 $active={filter === f} 
@@ -462,14 +477,20 @@ const StudentTasks = () => {
                   </div>
                   
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '15px' }}>
-                    <StatusBadge $status={task.status}>{task.status}</StatusBadge>
+                    {task.status === 'Graded' ? (
+                      <StatusBadge $status="Graded">
+                        Graded: {task.mySubmission?.marksObtained ?? '-'} / {task.totalMarks || 100}
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge $status={task.status}>{task.status}</StatusBadge>
+                    )}
                     {task.status === 'Pending' && (
                       <SubmitBtn onClick={() => setSelectedTaskToSubmit(task)}>Submit</SubmitBtn>
                     )}
-                    {task.status === 'Submitted' && (
+                    {(task.status === 'Submitted' || task.status === 'Graded') && (
                       <span 
                         onClick={() => {
-                          const mySub = task.submissions.find(s => s.cnic === studentCnic);
+                          const mySub = task.mySubmission || task.submissions.find(s => s.cnic === studentCnic);
                           if (mySub?.fileUrl && mySub.fileUrl.startsWith('http')) {
                             window.open(mySub.fileUrl, '_blank');
                           } else {

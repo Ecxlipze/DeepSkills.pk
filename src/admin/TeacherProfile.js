@@ -74,14 +74,33 @@ const ProfileHeader = styled.div`
 `;
 
 const StatusBadge = styled.div`
-  padding: 6px 16px;
+  display: inline-block;
+  padding: 5px 12px;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  background: ${props => props.$active ? 'rgba(46, 204, 113, 0.1)' : 'rgba(107, 114, 128, 0.1)'};
-  color: ${props => props.$active ? '#2ecc71' : '#9ca3af'};
-  border: 1px solid ${props => props.$active ? 'rgba(46, 204, 113, 0.2)' : 'rgba(107, 114, 128, 0.2)'};
+  background: ${props => {
+    if (props.$variant === 'success' || props.$active) return 'rgba(46, 204, 113, 0.12)';
+    if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.12)';
+    if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.12)';
+    if (props.$variant === 'info') return 'rgba(55, 138, 221, 0.12)';
+    return 'rgba(107, 114, 128, 0.12)';
+  }};
+  color: ${props => {
+    if (props.$variant === 'success' || props.$active) return '#2ecc71';
+    if (props.$variant === 'warning') return '#f59e0b';
+    if (props.$variant === 'danger') return '#ef4444';
+    if (props.$variant === 'info') return '#378ADD';
+    return '#9ca3af';
+  }};
+  border: 1px solid ${props => {
+    if (props.$variant === 'success' || props.$active) return 'rgba(46, 204, 113, 0.25)';
+    if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.25)';
+    if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.25)';
+    if (props.$variant === 'info') return 'rgba(55, 138, 221, 0.25)';
+    return 'rgba(107, 114, 128, 0.25)';
+  }};
 `;
 
 const InfoGrid = styled.div`
@@ -278,6 +297,10 @@ const TeacherProfile = () => {
   const [allCourses, setAllCourses] = useState([]);
   const [salaryConfig, setSalaryConfig] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [complaints, setComplaints] = useState([]);
+  const [batchStudentCounts, setBatchStudentCounts] = useState({});
+  const [attendanceStats, setAttendanceStats] = useState({ totalSessions: 0, attendanceRate: 0 });
 
   // Modals
   const [isManageBatchesOpen, setIsManageBatchesOpen] = useState(false);
@@ -298,9 +321,92 @@ const TeacherProfile = () => {
         supabase.from('courses').select('*')
       ]);
 
-      setAssignments(assRes.data || []);
+      const teacherAssignments = assRes.data || [];
+      setAssignments(teacherAssignments);
       setAllBatches(batchRes.data || []);
       setAllCourses(courseRes.data || []);
+
+      const teacherBatchNames = teacherAssignments
+        .map(a => a.batches?.batch_name)
+        .filter(Boolean);
+
+      // 1. Fetch Tasks & Submissions
+      let teacherTasks = [];
+      if (teacherBatchNames.length > 0) {
+        const { data: tData } = await supabase
+          .from('tasks')
+          .select('*')
+          .in('batch', teacherBatchNames)
+          .order('created_at', { ascending: false });
+        
+        if (tData && tData.length > 0) {
+          const taskIds = tData.map(t => t.id);
+          const { data: sData } = await supabase
+            .from('task_submissions')
+            .select('*')
+            .in('task_id', taskIds);
+          
+          teacherTasks = tData.map(t => ({
+            ...t,
+            submissions: (sData || []).filter(s => s.task_id === t.id)
+          }));
+        }
+      } else if (data.name) {
+        const { data: tData } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('assigned_by', data.name)
+          .order('created_at', { ascending: false });
+        teacherTasks = tData || [];
+      }
+      setTasks(teacherTasks);
+
+      // 2. Fetch Complaints addressed to teacher
+      let teacherComplaints = [];
+      if (teacherBatchNames.length > 0) {
+        const { data: cData } = await supabase
+          .from('complaints')
+          .select('*')
+          .eq('send_to', 'My Batch Teacher')
+          .in('batch', teacherBatchNames)
+          .order('created_at', { ascending: false });
+        teacherComplaints = cData || [];
+      }
+      setComplaints(teacherComplaints);
+
+      // 3. Batch Student Counts & Attendance
+      if (teacherBatchNames.length > 0) {
+        const { data: studentsData } = await supabase
+          .from('admissions')
+          .select('id, batch, status')
+          .in('batch', teacherBatchNames)
+          .eq('status', 'Active');
+        
+        const counts = {};
+        (studentsData || []).forEach(s => {
+          counts[s.batch] = (counts[s.batch] || 0) + 1;
+        });
+        setBatchStudentCounts(counts);
+
+        const studentIds = (studentsData || []).map(s => s.id);
+        if (studentIds.length > 0) {
+          const { data: attData } = await supabase
+            .from('attendance')
+            .select('status')
+            .in('student_id', studentIds);
+          
+          if (attData && attData.length > 0) {
+            const presentCount = attData.filter(a => a.status === 'present' || a.status === 'late').length;
+            const rate = Math.round((presentCount / attData.length) * 100);
+            setAttendanceStats({ totalSessions: attData.length, attendanceRate: rate });
+          } else {
+            setAttendanceStats({ totalSessions: 0, attendanceRate: 0 });
+          }
+        }
+      } else {
+        setBatchStudentCounts({});
+        setAttendanceStats({ totalSessions: 0, attendanceRate: 0 });
+      }
       
       // Fetch Salary Config
       const { data: salary } = await supabase.from('teacher_salaries').select('*').eq('teacher_id', id).single();
@@ -317,9 +423,6 @@ const TeacherProfile = () => {
         .eq('entity_type', 'teacher')
         .order('paid_date', { ascending: false });
       setPaymentHistory(payments || []);
-      
-      // Mock performance metrics for demo
-      // In real app, compute these from tasks/complaints tables
     } catch (err) {
       toast.error("Error loading teacher profile");
       navigate('/admin/management/teachers');
@@ -429,7 +532,17 @@ const TeacherProfile = () => {
 
   if (loading) return <AdminLayout><Container style={{textAlign:'center',paddingTop:'100px'}}>Loading...</Container></AdminLayout>;
 
-  const initials = teacher.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const initials = (teacher.name || 'Teacher').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const totalTasks = tasks.length;
+  const totalSubmissions = tasks.reduce((sum, t) => sum + (t.submissions?.length || 0), 0);
+  const gradedSubmissions = tasks.reduce((sum, t) => sum + (t.submissions?.filter(s => s.status === 'Graded').length || 0), 0);
+  const gradingRate = totalSubmissions > 0 ? Math.round((gradedSubmissions / totalSubmissions) * 100) : 100;
+  
+  const totalComplaints = complaints.length;
+  const resolvedComplaints = complaints.filter(c => c.status === 'Closed' || c.status === 'Resolved').length;
+  const complaintResolutionRate = totalComplaints > 0 ? Math.round((resolvedComplaints / totalComplaints) * 100) : 100;
+
+  const totalStudents = Object.values(batchStudentCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <AdminLayout>
@@ -442,22 +555,23 @@ const TeacherProfile = () => {
               <div className="avatar">{initials}</div>
               <h2>{teacher.name}</h2>
               <div className="specialization">{teacher.specialization}</div>
-              <StatusBadge $active={teacher.status === 'Active'}>{teacher.status}</StatusBadge>
+              <StatusBadge $variant={teacher.status === 'Active' ? 'success' : 'danger'}>{teacher.status}</StatusBadge>
             </ProfileHeader>
 
             <InfoGrid>
-              <InfoRow><span className="label">CNIC</span><span className="value">{teacher.cnic}</span></InfoRow>
               <InfoRow><span className="label">Phone</span><span className="value">{teacher.phone}</span></InfoRow>
-              <InfoRow><span className="label">Email</span><span className="value">{teacher.email}</span></InfoRow>
-              <InfoRow><span className="label">Added On</span><span className="value">{new Date(teacher.added_on || '2025-01-01').toLocaleDateString()}</span></InfoRow>
+              <InfoRow><span className="label">CNIC</span><span className="value">{teacher.cnic}</span></InfoRow>
+              <InfoRow><span className="label">Email</span><span className="value" style={{ fontSize: '0.75rem' }}>{teacher.email}</span></InfoRow>
+              <InfoRow><span className="label">Experience</span><span className="value">{teacher.experience_years} Years</span></InfoRow>
+              <InfoRow><span className="label">Joined</span><span className="value">{new Date(teacher.created_at).toLocaleDateString()}</span></InfoRow>
             </InfoGrid>
 
             <AssignedBatches>
-              <h4>Assignments</h4>
+              <h4>Assigned Batches ({assignments.length})</h4>
               <div className="batch-list">
                 {assignments.map(a => (
                   <BatchItem key={a.id}>
-                    <div className="info">
+                    <div>
                       <span className="name">{a.batches?.batch_name}</span>
                       <span className="role">{a.role} Teacher</span>
                     </div>
@@ -490,12 +604,187 @@ const TeacherProfile = () => {
                 {activeTab === 'Performance' && (
                   <motion.div initial={{opacity:0}} animate={{opacity:1}}>
                     <StatsGrid>
-                      <MiniStat><div className="val">87%</div><div className="lab">Task Completion</div></MiniStat>
-                      <MiniStat><div className="val">2.4h</div><div className="lab">Response Time</div></MiniStat>
-                      <MiniStat><div className="val">94%</div><div className="lab">Resolution Rate</div></MiniStat>
+                      <MiniStat>
+                        <div className="val">{gradingRate}%</div>
+                        <div className="lab">Task Grading ({gradedSubmissions}/{totalSubmissions})</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{complaintResolutionRate}%</div>
+                        <div className="lab">Complaints Solved ({resolvedComplaints}/{totalComplaints})</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{totalStudents}</div>
+                        <div className="lab">Active Students Enrolled</div>
+                      </MiniStat>
                     </StatsGrid>
-                    <PerformanceBar percent={83}><div className="header"><span>Student Attendance</span><span>83%</span></div><div className="track"><div className="fill" /></div></PerformanceBar>
-                    <PerformanceBar percent={90}><div className="header"><span>Tasks Assigned (Month)</span><span>24</span></div><div className="track"><div className="fill" /></div></PerformanceBar>
+                    <PerformanceBar percent={attendanceStats.attendanceRate}>
+                      <div className="header">
+                        <span>Student Batch Attendance</span>
+                        <span>{attendanceStats.attendanceRate}% ({attendanceStats.totalSessions} sessions logged)</span>
+                      </div>
+                      <div className="track"><div className="fill" /></div>
+                    </PerformanceBar>
+                    <PerformanceBar percent={Math.min(100, Math.round((totalTasks / 10) * 100))}>
+                      <div className="header">
+                        <span>Assigned Tasks</span>
+                        <span>{totalTasks} Total Tasks</span>
+                      </div>
+                      <div className="track"><div className="fill" /></div>
+                    </PerformanceBar>
+                  </motion.div>
+                )}
+
+                {activeTab === 'Tasks' && (
+                  <motion.div initial={{opacity:0}} animate={{opacity:1}}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h4 style={{ margin: 0, color: '#888', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+                        Assigned Tasks & Submissions ({tasks.length})
+                      </h4>
+                    </div>
+                    <div style={{ background: '#0a0a0a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <th>Task Title</th>
+                            <th>Batch / Course</th>
+                            <th>Category</th>
+                            <th>Due Date</th>
+                            <th>Submissions</th>
+                            <th>Graded</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tasks.map(t => {
+                            const subCount = t.submissions?.length || 0;
+                            const gradedCount = t.submissions?.filter(s => s.status === 'Graded').length || 0;
+                            return (
+                              <tr key={t.id}>
+                                <td style={{ fontWeight: '600', color: '#fff' }}>{t.title}</td>
+                                <td>
+                                  <div>{t.course}</div>
+                                  <div style={{ color: '#378ADD', fontSize: '0.8rem' }}>{t.batch}</div>
+                                </td>
+                                <td>{t.category}</td>
+                                <td>{new Date(t.due_date).toLocaleDateString()}</td>
+                                <td>{subCount} submitted</td>
+                                <td>
+                                  <StatusBadge $variant={gradedCount === subCount && subCount > 0 ? 'success' : gradedCount > 0 ? 'info' : 'warning'}>
+                                    {gradedCount}/{subCount} Graded
+                                  </StatusBadge>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {tasks.length === 0 && (
+                            <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#555' }}>No tasks assigned by this teacher.</td></tr>
+                          )}
+                        </tbody>
+                      </Table>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'Complaints' && (
+                  <motion.div initial={{opacity:0}} animate={{opacity:1}}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h4 style={{ margin: 0, color: '#888', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+                        Complaints Addressed to Instructor ({complaints.length})
+                      </h4>
+                    </div>
+                    <div style={{ background: '#0a0a0a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <th>Subject</th>
+                            <th>Student CNIC</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th>Date Raised</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {complaints.map(c => (
+                            <tr key={c.id}>
+                              <td>
+                                <div style={{ fontWeight: '600', color: '#fff' }}>{c.subject}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#888' }}>{c.description?.substring(0, 60)}{c.description?.length > 60 ? '...' : ''}</div>
+                              </td>
+                              <td style={{ color: '#aaa' }}>{c.student_cnic}</td>
+                              <td style={{ color: '#378ADD' }}>{c.batch}</td>
+                              <td>
+                                <StatusBadge $variant={c.status === 'Closed' || c.status === 'Resolved' ? 'success' : c.status === 'In Progress' ? 'info' : 'warning'}>
+                                  {c.status}
+                                </StatusBadge>
+                              </td>
+                              <td style={{ color: '#666', fontSize: '0.85rem' }}>{new Date(c.created_at).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                          {complaints.length === 0 && (
+                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#555' }}>No complaints received for this teacher.</td></tr>
+                          )}
+                        </tbody>
+                      </Table>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'Batches' && (
+                  <motion.div initial={{opacity:0}} animate={{opacity:1}}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h4 style={{ margin: 0, color: '#888', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+                        Assigned Batches & Classes ({assignments.length})
+                      </h4>
+                      <SubmitBtn 
+                        style={{ width: 'auto', padding: '8px 16px', marginTop: 0, fontSize: '0.85rem' }}
+                        onClick={() => setIsManageBatchesOpen(true)}
+                      >
+                        <FaPlus /> Assign New Batch
+                      </SubmitBtn>
+                    </div>
+                    <div style={{ background: '#0a0a0a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <th>Batch Name</th>
+                            <th>Course</th>
+                            <th>Role</th>
+                            <th>Shift / Timing</th>
+                            <th>Enrolled Students</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assignments.map(a => {
+                            const batchName = a.batches?.batch_name;
+                            const studentCount = batchStudentCounts[batchName] || 0;
+                            return (
+                              <tr key={a.id}>
+                                <td style={{ fontWeight: '700', color: '#fff' }}>{batchName}</td>
+                                <td style={{ color: '#ccc' }}>{a.batches?.course}</td>
+                                <td>
+                                  <StatusBadge $variant={a.role === 'Main' ? 'info' : 'warning'}>
+                                    {a.role} Teacher
+                                  </StatusBadge>
+                                </td>
+                                <td style={{ color: '#888' }}>{a.batches?.time_shift || a.batches?.timing_label || 'Regular'}</td>
+                                <td style={{ fontWeight: '600', color: '#10B981' }}>{studentCount} active students</td>
+                                <td>
+                                  <button 
+                                    onClick={() => removeAssignment(a.id, batchName)}
+                                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#ef4444', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {assignments.length === 0 && (
+                            <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#555' }}>No batches currently assigned to this teacher.</td></tr>
+                          )}
+                        </tbody>
+                      </Table>
+                    </div>
                   </motion.div>
                 )}
 

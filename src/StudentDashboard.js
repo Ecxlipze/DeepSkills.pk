@@ -6,7 +6,8 @@ import {
   FaHome, FaTasks, FaChartLine, FaCertificate,
   FaExclamationCircle, FaUserPlus, FaComments,
   FaWallet, FaUserFriends, FaGraduationCap, FaCheckCircle,
-  FaCalendarCheck, FaClock, FaArrowRight, FaAward, FaBookOpen
+  FaCalendarCheck, FaClock, FaArrowRight, FaAward, FaBookOpen,
+  FaChalkboardTeacher
 } from 'react-icons/fa';
 import DashboardLayout from './components/DashboardLayout';
 import { useAuth } from './context/AuthContext';
@@ -415,10 +416,11 @@ export const StudentDashboard = () => {
         if (admError) throw admError;
 
         let batchInfo = null;
+        let instructorName = null;
         if (admission.batch) {
           const { data: bData } = await supabase
             .from('batches')
-            .select('time_shift, timing_label, completed_at, status')
+            .select('id, time_shift, timing_label, completed_at, status')
             .eq('batch_name', admission.batch)
             .eq('course', admission.course)
             .order('created_at', { ascending: false });
@@ -426,6 +428,18 @@ export const StudentDashboard = () => {
           batchInfo = batchRows.find((batch) =>
             admission.batch_timing && [batch.time_shift, batch.timing_label].includes(admission.batch_timing)
           ) || batchRows[0] || null;
+
+          if (batchInfo?.id) {
+            const { data: tbData } = await supabase
+              .from('teacher_batches')
+              .select('role, teachers(name, specialization)')
+              .eq('batch_id', batchInfo.id);
+            
+            if (tbData && tbData.length > 0) {
+              const mainTeacher = tbData.find(tb => tb.role === 'Main') || tbData[0];
+              instructorName = mainTeacher?.teachers?.name || null;
+            }
+          }
         }
 
         const { data: attendance } = await supabase
@@ -440,6 +454,7 @@ export const StudentDashboard = () => {
           ...admission,
           timing: batchInfo?.time_shift || admission.batch_timing || "Timing not assigned",
           batchCompletedAt: batchInfo?.completed_at,
+          instructor: instructorName,
           totalClasses,
           attended
         });
@@ -457,6 +472,7 @@ export const StudentDashboard = () => {
     course: studentData?.course || "Course not assigned",
     batch: studentData?.batch || "Batch not assigned",
     timing: studentData?.timing || "---",
+    instructor: studentData?.instructor || null,
     status: studentData?.status || user?.status || 'Active',
     graduatedAt: studentData?.graduated_at || studentData?.batchCompletedAt,
     totalClasses: studentData?.totalClasses || 0,
@@ -512,6 +528,12 @@ export const StudentDashboard = () => {
                 <FaClock />
                 <span>{student.batch} — {student.timing}</span>
               </div>
+              {student.instructor && (
+                <div className="meta-item">
+                  <FaChalkboardTeacher />
+                  <span>Instructor: <strong>{student.instructor}</strong></span>
+                </div>
+              )}
             </div>
           </StudentInfo>
 
@@ -519,8 +541,8 @@ export const StudentDashboard = () => {
             <QuickActionBtn to="/student/tasks" $primary>
               <FaTasks /> View Tasks
             </QuickActionBtn>
-            <QuickActionBtn to="/student/attendance">
-              <FaCalendarCheck /> Attendance
+            <QuickActionBtn to="/student/chats">
+              <FaComments /> Batch Chat
             </QuickActionBtn>
           </BannerActions>
         </WelcomeBanner>

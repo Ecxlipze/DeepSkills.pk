@@ -76,14 +76,33 @@ const ProfileHeader = styled.div`
 `;
 
 const StatusBadge = styled.div`
-  padding: 6px 16px;
+  display: inline-block;
+  padding: 5px 12px;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  background: ${props => props.$active ? 'rgba(46, 204, 113, 0.1)' : 'rgba(107, 114, 128, 0.1)'};
-  color: ${props => props.$active ? '#2ecc71' : '#9ca3af'};
-  border: 1px solid ${props => props.$active ? 'rgba(46, 204, 113, 0.2)' : 'rgba(107, 114, 128, 0.2)'};
+  background: ${props => {
+    if (props.$variant === 'success' || props.$active) return 'rgba(46, 204, 113, 0.12)';
+    if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.12)';
+    if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.12)';
+    if (props.$variant === 'info') return 'rgba(55, 138, 221, 0.12)';
+    return 'rgba(107, 114, 128, 0.12)';
+  }};
+  color: ${props => {
+    if (props.$variant === 'success' || props.$active) return '#2ecc71';
+    if (props.$variant === 'warning') return '#f59e0b';
+    if (props.$variant === 'danger') return '#ef4444';
+    if (props.$variant === 'info') return '#378ADD';
+    return '#9ca3af';
+  }};
+  border: 1px solid ${props => {
+    if (props.$variant === 'success' || props.$active) return 'rgba(46, 204, 113, 0.25)';
+    if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.25)';
+    if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.25)';
+    if (props.$variant === 'info') return 'rgba(55, 138, 221, 0.25)';
+    return 'rgba(107, 114, 128, 0.25)';
+  }};
 `;
 
 const InfoGrid = styled.div`
@@ -353,6 +372,7 @@ const StudentProfile = ({ studentId }) => {
   
   // Tab-specific data
   const [tasks, setTasks] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [finance, setFinance] = useState({ totalFee: 0, paid: 0, plan: null, payments: [] });
   const [availableBatches, setAvailableBatches] = useState([]);
@@ -371,6 +391,11 @@ const StudentProfile = ({ studentId }) => {
   const [setupPlanType, setSetupPlanType] = useState('installment');
   const [setupInstallments, setSetupInstallments] = useState(4);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+  // Record Payment states
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentReference, setPaymentReference] = useState('');
 
   const fetchStudentData = React.useCallback(async () => {
     setLoading(true);
@@ -397,7 +422,15 @@ const StudentProfile = ({ studentId }) => {
         setTasks(merged);
       }
 
-      // 3. Fetch Complaints
+      // 3. Fetch Attendance Records
+      const { data: attData } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', id)
+        .order('date', { ascending: false });
+      if (attData) setAttendanceRecords(attData);
+
+      // 4. Fetch Complaints
       const { data: compData } = await supabase.from('complaints').select('*').eq('student_cnic', data.cnic);
       if (compData) setComplaints(compData);
       
@@ -637,21 +670,22 @@ const StudentProfile = ({ studentId }) => {
   const handleSetupFeePlan = async () => {
     setProcessing(true);
     try {
-      const amountPerInst = setupPlanType === 'full' ? setupTotalFee : Math.round(setupTotalFee / setupInstallments);
+      const normalizedPlan = setupPlanType === 'full' ? 'full' : 'installment';
+      const amountPerInst = normalizedPlan === 'full' ? setupTotalFee : Math.round(setupTotalFee / setupInstallments);
       
       const { error: planError } = await supabase.from('fee_plans').insert({
         student_id: id,
         course: student.course,
         batch: student.batch,
         total_fee: setupTotalFee,
-        plan_type: setupPlanType,
-        installment_count: setupPlanType === 'full' ? 1 : setupInstallments
+        plan_type: normalizedPlan,
+        installment_count: normalizedPlan === 'full' ? 1 : setupInstallments
       });
 
       if (planError) throw planError;
 
       const paymentRows = [];
-      const instCount = setupPlanType === 'full' ? 1 : setupInstallments;
+      const instCount = normalizedPlan === 'full' ? 1 : setupInstallments;
 
       for (let i = 1; i <= instCount; i++) {
         const dueDate = new Date();
@@ -660,12 +694,13 @@ const StudentProfile = ({ studentId }) => {
         paymentRows.push({
           entity_id: id,
           entity_type: 'student',
-          installment_number: setupPlanType === 'full' ? null : i,
-          total_installments: setupPlanType === 'full' ? null : instCount,
+          installment_number: normalizedPlan === 'full' ? null : i,
+          total_installments: normalizedPlan === 'full' ? null : instCount,
           amount: amountPerInst,
           due_date: dueDate.toISOString().split('T')[0],
           status: 'pending',
-          description: setupPlanType === 'full' ? 'Full Course Fee' : `Installment ${i} of ${instCount}`
+          method: null,
+          description: normalizedPlan === 'full' ? 'Full Course Fee' : `Installment ${i} of ${instCount}`
         });
       }
 
@@ -677,6 +712,55 @@ const StudentProfile = ({ studentId }) => {
       fetchStudentData();
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    const amt = parseInt(paymentAmount, 10);
+    if (!amt || amt <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const pendingInst = (finance.payments || []).find(p => p.status === 'pending');
+      if (pendingInst) {
+        const { error } = await supabase
+          .from('payments')
+          .update({
+            status: 'paid',
+            paid_date: new Date().toISOString().split('T')[0],
+            method: paymentMethod,
+            reference_number: paymentReference || null,
+            amount: amt
+          })
+          .eq('id', pendingInst.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('payments')
+          .insert({
+            entity_id: id,
+            entity_type: 'student',
+            amount: amt,
+            paid_date: new Date().toISOString().split('T')[0],
+            method: paymentMethod,
+            reference_number: paymentReference || null,
+            status: 'paid',
+            description: 'Direct Payment'
+          });
+        if (error) throw error;
+      }
+
+      toast.success("Payment recorded successfully");
+      setIsPaymentOpen(false);
+      setPaymentAmount('');
+      setPaymentReference('');
+      fetchStudentData();
+    } catch (err) {
+      toast.error(err.message || 'Failed to record payment');
     } finally {
       setProcessing(false);
     }
@@ -704,11 +788,26 @@ const StudentProfile = ({ studentId }) => {
   }
 
   const initials = (student.name || 'Student').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const totalAttendance = attendanceRecords.length;
+  const attendedCount = attendanceRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+  const attendanceRate = totalAttendance > 0 ? Math.round((attendedCount / totalAttendance) * 100) : 0;
 
   return (
     <AdminLayout>
       <Container>
         <BackLink to="/admin/management/students"><FaArrowLeft /> Back to Students</BackLink>
+        
+        {/* TOP ALERT IF INACTIVE */}
+        {student.status !== 'Active' && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+            <AlertBanner>
+              <div className="icon"><FaUserSlash size={18} /></div>
+              <div className="text">
+                <strong>Account Inactive</strong> — This student's dashboard access is revoked.
+              </div>
+            </AlertBanner>
+          </motion.div>
+        )}
         
         <Layout>
           {/* SIDEBAR CARD */}
@@ -717,19 +816,22 @@ const StudentProfile = ({ studentId }) => {
               <div className="avatar">{initials}</div>
               <h2>{student.name}</h2>
               <div className="cnic">{student.cnic}</div>
-              <StatusBadge $active={student.status === 'Active'}>{student.status}</StatusBadge>
+              <StatusBadge $variant={student.status === 'Active' ? 'success' : 'danger'}>{student.status}</StatusBadge>
             </ProfileHeader>
 
             <InfoGrid>
+              <InfoRow>
+                <span className="label">Course</span>
+                <span className="value" style={{ maxWidth: '160px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {student.course}
+                </span>
+              </InfoRow>
+              <InfoRow><span className="label">Batch</span><span className="value">{student.batch || 'Unassigned'}</span></InfoRow>
+              <InfoRow><span className="label">Timing</span><span className="value">{student.batch_timing || '—'}</span></InfoRow>
               <InfoRow><span className="label">Phone</span><span className="value">{student.phone}</span></InfoRow>
-              <InfoRow><span className="label">Email</span><span className="value">{student.email}</span></InfoRow>
-              <InfoRow><span className="label">Course</span><span className="value">{student.course}</span></InfoRow>
-              <InfoRow><span className="label">Batch</span><span className="value">{student.batch}</span></InfoRow>
-              <InfoRow><span className="label">Timing</span><span className="value">{student.batch_timing || 'N/A'}</span></InfoRow>
-              <InfoRow><span className="label">Education</span><span className="value">{student.education}</span></InfoRow>
-              <InfoRow><span className="label">Referral</span><span className="value">{student.hear_about_us || 'N/A'}</span></InfoRow>
-              <InfoRow><span className="label">Applied</span><span className="value">{new Date(student.submitted_at).toLocaleDateString()}</span></InfoRow>
-              <InfoRow><span className="label">Enrolled</span><span className="value">{new Date(student.batch_assigned_at || student.submitted_at).toLocaleDateString()}</span></InfoRow>
+              <InfoRow><span className="label">Email</span><span className="value" style={{ fontSize: '0.75rem' }}>{student.email}</span></InfoRow>
+              <InfoRow><span className="label">Education</span><span className="value">{student.education || '—'}</span></InfoRow>
+              <InfoRow><span className="label">Enrolled</span><span className="value">{new Date(student.submitted_at).toLocaleDateString()}</span></InfoRow>
             </InfoGrid>
 
             <ActionButtons>
@@ -738,7 +840,7 @@ const StudentProfile = ({ studentId }) => {
                   name: student.name,
                   phone: student.phone,
                   email: student.email,
-                  education: student.education,
+                  education: student.education || '',
                   cnic: student.cnic,
                   course: student.course
                 });
@@ -746,7 +848,7 @@ const StudentProfile = ({ studentId }) => {
               }}>
                 <FaEdit /> Edit Profile
               </Button>
-              <Button className="edit" onClick={() => {
+              <Button className="batches" onClick={() => {
                 const currentBatch = availableBatches.find((batch) =>
                   batch.batch_name === student.batch
                   && batch.course === student.course
@@ -782,9 +884,18 @@ const StudentProfile = ({ studentId }) => {
                 {activeTab === 'Overview' && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <StatsGrid>
-                      <MiniStat><div className="val">85%</div><div className="lab">Attendance</div></MiniStat>
-                      <MiniStat><div className="val">{tasks.filter(t => t.submission).length}/{tasks.length}</div><div className="lab">Tasks Done</div></MiniStat>
-                      <MiniStat><div className="val">{complaints.filter(c => c.status === 'Open').length}</div><div className="lab">Open Complaints</div></MiniStat>
+                      <MiniStat>
+                        <div className="val">{totalAttendance > 0 ? `${attendanceRate}%` : 'N/A'}</div>
+                        <div className="lab">Attendance ({attendedCount}/{totalAttendance})</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{tasks.filter(t => t.submission).length}/{tasks.length}</div>
+                        <div className="lab">Tasks Done</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{complaints.filter(c => c.status === 'Open').length}</div>
+                        <div className="lab">Open Complaints</div>
+                      </MiniStat>
                     </StatsGrid>
                     
                     <h4 style={{ marginBottom: '20px', color: '#888', textTransform: 'uppercase', fontSize: '0.8rem' }}>Recent Activity</h4>
@@ -819,19 +930,59 @@ const StudentProfile = ({ studentId }) => {
                             <th style={{ padding: '15px' }}>Category</th>
                             <th style={{ padding: '15px' }}>Due Date</th>
                             <th style={{ padding: '15px' }}>Status</th>
+                            <th style={{ padding: '15px' }}>Marks</th>
+                            <th style={{ padding: '15px' }}>Submission</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {tasks.map(t => (
-                            <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                              <td style={{ padding: '15px' }}>{t.title}</td>
-                              <td style={{ padding: '15px' }}>{t.category}</td>
-                              <td style={{ padding: '15px' }}>{new Date(t.due_date).toLocaleDateString()}</td>
-                              <td style={{ padding: '15px' }}>
-                                <StatusBadge $active={t.submission}>{t.submission ? 'Submitted' : 'Pending'}</StatusBadge>
-                              </td>
-                            </tr>
-                          ))}
+                          {tasks.length === 0 ? (
+                            <tr><td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#666' }}>No tasks assigned to this student's batch.</td></tr>
+                          ) : (
+                            tasks.map(t => {
+                              const sub = t.submission;
+                              const isGraded = sub?.status === 'Graded';
+                              const isSubmitted = Boolean(sub);
+                              const isOverdue = !isSubmitted && new Date(t.due_date) < new Date(new Date().setHours(0,0,0,0));
+
+                              return (
+                                <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                  <td style={{ padding: '15px', color: '#fff', fontWeight: '500' }}>{t.title}</td>
+                                  <td style={{ padding: '15px', color: '#888' }}>{t.category}</td>
+                                  <td style={{ padding: '15px', color: isOverdue ? '#ef4444' : '#888' }}>
+                                    {new Date(t.due_date).toLocaleDateString()}
+                                  </td>
+                                  <td style={{ padding: '15px' }}>
+                                    {isGraded ? (
+                                      <StatusBadge $variant="success">Graded</StatusBadge>
+                                    ) : isSubmitted ? (
+                                      <StatusBadge $variant="info">Submitted</StatusBadge>
+                                    ) : isOverdue ? (
+                                      <StatusBadge $variant="danger">Overdue</StatusBadge>
+                                    ) : (
+                                      <StatusBadge $variant="warning">Pending</StatusBadge>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '15px', color: isGraded ? '#10B981' : '#666' }}>
+                                    {isGraded ? `${sub.marks_obtained ?? sub.marksObtained ?? '-'} / ${t.total_marks || 100}` : '—'}
+                                  </td>
+                                  <td style={{ padding: '15px' }}>
+                                    {sub?.file_url ? (
+                                      <a
+                                        href={sub.file_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ color: '#378ADD', textDecoration: 'underline', fontSize: '0.85rem' }}
+                                      >
+                                        View File
+                                      </a>
+                                    ) : (
+                                      <span style={{ color: '#555', fontSize: '0.85rem' }}>—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -839,10 +990,61 @@ const StudentProfile = ({ studentId }) => {
                 )}
 
                 {activeTab === 'Attendance' && (
-                  <div style={{ textAlign: 'center', padding: '50px 0', color: '#555' }}>
-                    <FaCalendarAlt size={40} style={{ marginBottom: '15px' }} />
-                    <p>Attendance records for this batch are currently being synchronized.</p>
-                  </div>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <StatsGrid style={{ marginBottom: '20px' }}>
+                      <MiniStat>
+                        <div className="val">{totalAttendance > 0 ? `${attendanceRate}%` : 'N/A'}</div>
+                        <div className="lab">Overall Rate</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{attendedCount} / {totalAttendance}</div>
+                        <div className="lab">Sessions Present</div>
+                      </MiniStat>
+                      <MiniStat>
+                        <div className="val">{attendanceRecords.filter(a => a.status === 'absent').length}</div>
+                        <div className="lab">Sessions Absent</div>
+                      </MiniStat>
+                    </StatsGrid>
+
+                    <div style={{ background: '#0a0a0a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead>
+                          <tr style={{ textAlign: 'left', color: '#666', background: 'rgba(255,255,255,0.02)' }}>
+                            <th style={{ padding: '15px' }}>Date</th>
+                            <th style={{ padding: '15px' }}>Day</th>
+                            <th style={{ padding: '15px' }}>Batch</th>
+                            <th style={{ padding: '15px' }}>Status</th>
+                            <th style={{ padding: '15px' }}>Marked At</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attendanceRecords.length === 0 ? (
+                            <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>No attendance records recorded for this student yet.</td></tr>
+                          ) : (
+                            attendanceRecords.map((r, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                <td style={{ padding: '15px', color: '#fff', fontWeight: '500' }}>{r.date}</td>
+                                <td style={{ padding: '15px', color: '#888' }}>{r.day_of_week || '—'}</td>
+                                <td style={{ padding: '15px', color: '#aaa' }}>{r.batch_name || student.batch || '—'}</td>
+                                <td style={{ padding: '15px' }}>
+                                  {r.status === 'present' ? (
+                                    <StatusBadge $variant="success">Present</StatusBadge>
+                                  ) : r.status === 'late' ? (
+                                    <StatusBadge $variant="warning">Late</StatusBadge>
+                                  ) : (
+                                    <StatusBadge $variant="danger">Absent</StatusBadge>
+                                  )}
+                                </td>
+                                <td style={{ padding: '15px', color: '#666', fontSize: '0.8rem' }}>
+                                  {r.marked_at ? new Date(r.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </motion.div>
                 )}
 
                 {activeTab === 'Complaints' && (
@@ -933,21 +1135,34 @@ const StudentProfile = ({ studentId }) => {
               </ModalHeader>
               <FormGroup>
                 <label>Amount (PKR)</label>
-                <input type="number" placeholder="e.g. 5000" />
+                <input
+                  type="number"
+                  placeholder="e.g. 5000"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
               </FormGroup>
               <FormGroup>
                 <label>Payment Method</label>
-                <select>
-                  <option>Cash</option>
-                  <option>Bank Transfer</option>
-                  <option>EasyPaisa / JazzCash</option>
+                <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="online">Online / EasyPaisa / JazzCash</option>
+                  <option value="cheque">Cheque</option>
                 </select>
               </FormGroup>
               <FormGroup>
                 <label>Reference #</label>
-                <input type="text" placeholder="TXN-123456" />
+                <input
+                  type="text"
+                  placeholder="TXN-123456"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                />
               </FormGroup>
-              <SubmitBtn onClick={() => { toast.success("Payment added successfully"); setIsPaymentOpen(false); }}>Record Payment</SubmitBtn>
+              <SubmitBtn onClick={handleRecordPayment} disabled={processing}>
+                {processing ? 'Recording...' : 'Record Payment'}
+              </SubmitBtn>
             </ModalContent>
           </ModalOverlay>
         )}
