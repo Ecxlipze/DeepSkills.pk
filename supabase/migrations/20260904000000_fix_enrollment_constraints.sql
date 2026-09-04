@@ -66,8 +66,9 @@ BEGIN
     v_payment_method := 'cash';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM admissions WHERE cnic = v_cnic) THEN
-    RETURN jsonb_build_object('ok', false, 'code', 'duplicate_cnic', 'message', 'This CNIC is already enrolled.');
+  -- Check if student is already actively enrolled in this specific course
+  IF EXISTS (SELECT 1 FROM admissions WHERE cnic = v_cnic AND course = v_course AND status = 'Active') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'already_enrolled', 'message', 'This student is already actively enrolled in this course.');
   END IF;
 
   SELECT * INTO v_batch FROM batches WHERE id = v_batch_id AND COALESCE(status, 'Active') = 'Active';
@@ -86,7 +87,6 @@ BEGIN
   IF v_plan_type = 'full' THEN
     v_installments := 1;
   END IF;
-  v_amount_per := CASE WHEN v_installments > 0 THEN ROUND(v_final_fee::NUMERIC / v_installments)::INTEGER ELSE v_final_fee END;
 
   INSERT INTO admissions (
     name, father_name, cnic, dob, gender, phone, email, city, address, education,
@@ -142,27 +142,106 @@ BEGIN
     NULLIF(payload->>'discountReason', ''), v_final_fee, v_plan_type, v_installments, 'counsellor'
   );
 
-  FOR v_i IN 1..v_installments LOOP
-    INSERT INTO payments (
-      entity_id, entity_type, installment_number, total_installments, amount, due_date,
-      paid_date, method, reference_number, status, description, notes
-    )
-    VALUES (
-      v_admission.id,
-      'student',
-      CASE WHEN v_plan_type = 'full' THEN NULL ELSE v_i END,
-      CASE WHEN v_plan_type = 'full' THEN NULL ELSE v_installments END,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN v_first_payment ELSE v_amount_per END,
-      (v_first_payment_date + ((v_i - 1) || ' months')::INTERVAL)::DATE,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN v_first_payment_date ELSE NULL END,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN v_payment_method ELSE NULL END,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN v_payment_ref ELSE NULL END,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN 'paid' ELSE 'pending' END,
-      CASE WHEN v_plan_type = 'full' THEN 'Full Course Fee' ELSE CONCAT('Installment ', v_i, ' of ', v_installments) END,
-      CASE WHEN v_i = 1 AND v_first_payment > 0 THEN 'First payment at enrollment' ELSE NULL END
-    );
-  END LOOP;
+  -- GENERATE BALANCED PAYMENT SCHEDULE (zero rupee discrepancy)
+  IF v_plan_type = 'full' THEN
+    IF v_first_payment >= v_final_fee AND v_final_fee > 0 THEN
+      -- Fully paid up front
+      INSERT INTO payments (
+        entity_id, entity_type, installment_number, total_installments, amount, due_date,
+        paid_date, method, reference_number, status, description, notes
+      ) VALUES (
+        v_admission.id, 'student', NULL, NULL, v_final_fee, v_first_payment_date,
+        v_first_payment_date, v_payment_method, v_payment_ref, 'paid', 'Full Course Fee', 'Paid in full at enrollment'
+      );
+    ELSIF v_first_payment > 0 AND v_first_payment < v_final_fee THEN
+      -- Partial payment at enrollment, remaining balance scheduled
+      INSERT INTO payments (
+        entity_id, entity_type, installment_number, total_installments, amount, due_date,
+        paid_date, method, reference_number, status, description, notes
+      ) VALUES (
+        v_admission.id, 'student', 1, 2, v_first_payment, v_first_payment_date,
+        v_first_payment_date, v_payment_method, v_payment_ref, 'paid', 'Down Payment at Enrollment', 'Partial payment'
+      );
+      INSERT INTO payments (
+        entity_id, entity_type, installment_number, total_installments, amount, due_date,
+        paid_date, method, reference_number, status, description, notes
+      ) VALUES (
+        v_admission.id, 'student', 2, 2, (v_final_fee - v_first_payment), (v_first_payment_date + INTERVAL '1 month')::DATE,
+        NULL, NULL, NULL, 'pending', 'Remaining Course Fee Balance', 'Due within 30 days'
+      );
+    ELSE
+      -- Zero paid at enrollment, full fee pending
+      INSERT INTO payments (
+        entity_id, entity_type, installment_number, total_installments, amount, due_date,
+        paid_date, method, reference_number, status, description, notes
+      ) VALUES (
+        v_admission.id, 'student', NULL, NULL, v_final_fee, v_first_payment_date,
+        NULL, NULL, NULL, 'pending', 'Full Course Fee', 'Payment pending'
+      );
+    END IF;
+  ELSE
+    -- Installment Plan with dynamic remainder distribution
+    DECLARE
+      v_rem_bal INTEGER;
+      v_rem_count INTEGER;
+      v_alloc INTEGER := 0;
+      v_cur_amt INTEGER;
+    BEGIN
+      IF v_first_payment > 0 THEN
+        -- Voucher 1: Paid down payment
+        INSERT INTO payments (
+          entity_id, entity_type, installment_number, total_installments, amount, due_date,
+          paid_date, method, reference_number, status, description, notes
+        ) VALUES (
+          v_admission.id, 'student', 1, v_installments, v_first_payment, v_first_payment_date,
+          v_first_payment_date, v_payment_method, v_payment_ref, 'paid', 'Installment 1 of ' || v_installments, 'Paid at enrollment'
+        );
 
+        v_rem_bal := GREATEST(0, v_final_fee - v_first_payment);
+        v_rem_count := GREATEST(1, v_installments - 1);
+
+        -- Vouchers 2..N: Remaining balance distributed evenly
+        IF v_installments > 1 AND v_rem_bal > 0 THEN
+          FOR v_i IN 2..v_installments LOOP
+            IF v_i = v_installments THEN
+              v_cur_amt := v_rem_bal - v_alloc;
+            ELSE
+              v_cur_amt := ROUND(v_rem_bal::NUMERIC / v_rem_count)::INTEGER;
+              v_alloc := v_alloc + v_cur_amt;
+            END IF;
+
+            INSERT INTO payments (
+              entity_id, entity_type, installment_number, total_installments, amount, due_date,
+              paid_date, method, reference_number, status, description, notes
+            ) VALUES (
+              v_admission.id, 'student', v_i, v_installments, v_cur_amt, (v_first_payment_date + ((v_i - 1) || ' months')::INTERVAL)::DATE,
+              NULL, NULL, NULL, 'pending', 'Installment ' || v_i || ' of ' || v_installments, NULL
+            );
+          END LOOP;
+        END IF;
+      ELSE
+        -- Zero first payment: all installments pending
+        FOR v_i IN 1..v_installments LOOP
+          IF v_i = v_installments THEN
+            v_cur_amt := v_final_fee - v_alloc;
+          ELSE
+            v_cur_amt := ROUND(v_final_fee::NUMERIC / v_installments)::INTEGER;
+            v_alloc := v_alloc + v_cur_amt;
+          END IF;
+
+          INSERT INTO payments (
+            entity_id, entity_type, installment_number, total_installments, amount, due_date,
+            paid_date, method, reference_number, status, description, notes
+          ) VALUES (
+            v_admission.id, 'student', v_i, v_installments, v_cur_amt, (v_first_payment_date + ((v_i - 1) || ' months')::INTERVAL)::DATE,
+            NULL, NULL, NULL, 'pending', 'Installment ' || v_i || ' of ' || v_installments, NULL
+          );
+        END LOOP;
+      END IF;
+    END;
+  END IF;
+
+  -- Close primary inquiry
   IF v_inquiry_id IS NOT NULL THEN
     v_note := jsonb_build_object(
       'note', 'Student enrolled by counsellor.',
@@ -181,6 +260,16 @@ BEGIN
     INSERT INTO inquiry_notes (inquiry_id, note, status_changed_to, added_by)
     VALUES (v_inquiry_id, 'Student enrolled by counsellor.', 'enrolled', COALESCE(NULLIF(payload->>'counsellorName', ''), 'Counsellor'));
   END IF;
+
+  -- Auto-close any duplicate open inquiries for this candidate and course
+  UPDATE inquiries
+  SET status = 'enrolled',
+      admission_id = v_admission.id,
+      last_updated = NOW()
+  WHERE (id <> v_inquiry_id OR v_inquiry_id IS NULL)
+    AND (cnic = v_cnic OR (email = v_admission.email AND v_admission.email IS NOT NULL))
+    AND course_interest = v_course
+    AND status IN ('new', 'contacted', 'follow_up');
 
   IF NULLIF(payload->>'referralCode', '') IS NOT NULL THEN
     SELECT * INTO v_ref FROM referral_codes WHERE code = NULLIF(payload->>'referralCode', '');
@@ -212,3 +301,33 @@ BEGIN
   );
 END;
 $$;
+
+-- Allow student admissions to be cleanly deleted without foreign key constraint violations
+ALTER TABLE inquiries 
+  DROP CONSTRAINT IF EXISTS inquiries_admission_id_fkey,
+  ADD CONSTRAINT inquiries_admission_id_fkey 
+    FOREIGN KEY (admission_id) 
+    REFERENCES admissions(id) 
+    ON DELETE SET NULL;
+
+ALTER TABLE fee_plans 
+  DROP CONSTRAINT IF EXISTS fee_plans_student_id_fkey,
+  ADD CONSTRAINT fee_plans_student_id_fkey 
+    FOREIGN KEY (student_id) 
+    REFERENCES admissions(id) 
+    ON DELETE CASCADE;
+
+ALTER TABLE payments 
+  DROP CONSTRAINT IF EXISTS payments_entity_id_fkey,
+  ADD CONSTRAINT payments_entity_id_fkey 
+    FOREIGN KEY (entity_id) 
+    REFERENCES admissions(id) 
+    ON DELETE CASCADE;
+
+ALTER TABLE referrals 
+  DROP CONSTRAINT IF EXISTS referrals_referred_id_fkey,
+  ADD CONSTRAINT referrals_referred_id_fkey 
+    FOREIGN KEY (referred_id) 
+    REFERENCES admissions(id) 
+    ON DELETE SET NULL;
+

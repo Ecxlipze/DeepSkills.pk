@@ -16,10 +16,14 @@ const StudentFinance = () => {
   const fetchFeeData = useCallback(async () => {
     try {
       if (!user?.cnic) return;
+      const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
       const response = await fetch('/api/student/finance.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cnic: user.cnic })
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+        },
+        body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
@@ -31,7 +35,7 @@ const StudentFinance = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.cnic]);
+  }, [user?.cnic, user?.sessionToken]);
 
   useEffect(() => {
     fetchFeeData();

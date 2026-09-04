@@ -1,6 +1,8 @@
 <?php
 function otp_respond($status, $payload) {
-    http_response_code($status);
+    if (!headers_sent()) {
+        http_response_code($status);
+    }
     echo json_encode($payload);
     exit();
 }
@@ -99,7 +101,7 @@ function otp_bootstrap() {
     header('Content-Type: application/json');
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
     if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         http_response_code(200);
@@ -141,5 +143,114 @@ function otp_send_mail($email, $name, $code) {
     $headers .= "Reply-To: {$fromEmail}\r\n";
 
     return mail($email, $subject, $message, $headers);
+}
+
+function otp_get_bearer_token() {
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (preg_match('/^Bearer\s+(.+)$/i', trim($authHeader), $matches)) {
+        return trim($matches[1]);
+    }
+    return '';
+}
+
+function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride = null) {
+    $token = $tokenOverride ?: otp_get_bearer_token();
+    if (!$token) {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (is_array($input) && !empty($input['token'])) {
+            $token = trim((string)$input['token']);
+        } elseif (is_array($input) && !empty($input['sessionToken'])) {
+            $token = trim((string)$input['sessionToken']);
+        }
+    }
+
+    if (!$token) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'missing_token',
+            'message' => 'Authentication token is required. Please log in again.'
+        ]);
+    }
+
+    $parts = explode('.', $token, 2);
+    if (count($parts) !== 2 || empty($parts[0]) || empty($parts[1])) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'invalid_token_format',
+            'message' => 'Invalid authentication token format. Please log in again.'
+        ]);
+    }
+
+    $rowId = $parts[0];
+    $rawSecret = $parts[1];
+
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $rowId)) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'invalid_token_format',
+            'message' => 'Invalid authentication token format. Please log in again.'
+        ]);
+    }
+
+    $now = gmdate('c');
+    $rows = otp_supabase_request(
+        'GET',
+        'login_otps?select=id,cnic,role,token_hash,token_expires_at&id=eq.' . rawurlencode($rowId) . '&limit=1'
+    );
+
+    $row = is_array($rows) ? ($rows[0] ?? null) : null;
+    if (!$row || empty($row['token_hash'])) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'session_not_found',
+            'message' => 'Session not found or expired. Please log in again.'
+        ]);
+    }
+
+    if (!empty($row['token_expires_at']) && $row['token_expires_at'] < $now) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'session_expired',
+            'message' => 'Session expired. Please log in again.'
+        ]);
+    }
+
+    if (!password_verify($rawSecret, $row['token_hash'])) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'invalid_token',
+            'message' => 'Invalid authentication token. Please log in again.'
+        ]);
+    }
+
+    if ($expectedRole && ($row['role'] ?? '') !== $expectedRole) {
+        otp_respond(403, [
+            'status' => 'error',
+            'code' => 'role_mismatch',
+            'message' => 'Access denied: token role does not match required role.'
+        ]);
+    }
+
+    $sessionCnic = otp_normalize_cnic($row['cnic'] ?? '');
+    if (!$sessionCnic) {
+        otp_respond(403, [
+            'status' => 'error',
+            'code' => 'invalid_session_cnic',
+            'message' => 'Session record is missing a valid CNIC.'
+        ]);
+    }
+
+    if ($requestedCnic) {
+        $normRequested = otp_normalize_cnic($requestedCnic);
+        if ($normRequested && $normRequested !== $sessionCnic) {
+            otp_respond(403, [
+                'status' => 'error',
+                'code' => 'ownership_violation',
+                'message' => 'Access denied: token does not belong to the requested user.'
+            ]);
+        }
+    }
+
+    return $sessionCnic;
 }
 ?>

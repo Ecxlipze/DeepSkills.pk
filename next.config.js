@@ -109,6 +109,19 @@ const nextConfig = {
         permanent: true
       }
     ];
+  },
+  async rewrites() {
+    if (isExport) return [];
+    return [
+      {
+        source: '/api/admin/enroll-counsellor-student.php',
+        destination: '/api/admin/enroll-counsellor-student'
+      },
+      {
+        source: '/api/admission-email.php',
+        destination: '/api/admission-email'
+      }
+    ];
   }
 };
 

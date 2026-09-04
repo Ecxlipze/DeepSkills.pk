@@ -138,14 +138,23 @@ if (!$row || !password_verify($token, $row['token_hash'] ?? '')) {
     otp_respond(401, ['status' => 'error', 'message' => 'OTP verification expired. Please request a new code.']);
 }
 
+$sessionTokenSecret = bin2hex(random_bytes(32));
+$fullSessionToken = $row['id'] . '.' . $sessionTokenSecret;
+$sessionExpiry = gmdate('c', time() + (86400 * 30));
+
 otp_supabase_request(
     'PATCH',
     'login_otps?id=eq.' . rawurlencode($row['id']),
-    ['token_used_at' => $now],
+    [
+        'token_used_at' => $now,
+        'token_hash' => password_hash($sessionTokenSecret, PASSWORD_DEFAULT),
+        'token_expires_at' => $sessionExpiry,
+    ],
     'return=minimal'
 );
 
 $user = auth_build_user($cnic);
+$user['sessionToken'] = $fullSessionToken;
 
 otp_supabase_request(
     'PATCH',
@@ -168,5 +177,10 @@ otp_supabase_request(
     'return=minimal'
 );
 
-otp_respond(200, ['status' => 'success', 'message' => 'Login verified.', 'user' => $user]);
+otp_respond(200, [
+    'status' => 'success',
+    'message' => 'Login verified.',
+    'user' => $user,
+    'sessionToken' => $fullSessionToken
+]);
 ?>

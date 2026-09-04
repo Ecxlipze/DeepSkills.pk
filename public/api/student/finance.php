@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../auth/_otp_common.php';
+
 function student_finance_respond($status, $payload) {
     http_response_code($status);
     echo json_encode($payload);
@@ -85,7 +87,7 @@ function student_finance_normalize_cnic($value) {
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -97,15 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
-$cnic = student_finance_normalize_cnic($data['cnic'] ?? '');
-if (!$cnic) {
-    student_finance_respond(400, ['status' => 'error', 'message' => 'Valid student CNIC is required.']);
-}
-
-$allowed = student_finance_first(student_finance_supabase_request('GET', 'allowed_cnics?select=role&cnic=eq.' . rawurlencode($cnic) . '&limit=1'));
-if (!$allowed || ($allowed['role'] ?? '') !== 'student') {
-    student_finance_respond(403, ['status' => 'error', 'message' => 'Student access is required.']);
-}
+$requestedCnic = !empty($data['cnic']) ? student_finance_normalize_cnic($data['cnic']) : null;
+$cnic = otp_verify_session('student', $requestedCnic);
 
 $student = student_finance_first(student_finance_supabase_request(
     'GET',

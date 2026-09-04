@@ -22,21 +22,38 @@ export async function sendAdmissionEmail(event, payload = {}) {
 
   try {
     const requestBody = JSON.stringify({ event, ...payload });
-    let response = await fetch(EMAIL_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: requestBody
-    });
+    let response;
+    let result;
 
-    if (response.status === 405 && EMAIL_ENDPOINT !== FALLBACK_EMAIL_ENDPOINT) {
-      response = await fetch(FALLBACK_EMAIL_ENDPOINT, {
+    const isLocalhost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // 1. Try Next.js API route first (native on localhost and Node.js environments)
+    try {
+      response = await fetch('/api/admission-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: requestBody
       });
+      result = await response.json().catch(() => ({}));
+    } catch (e) {
+      // Fallback
     }
 
-    const result = await response.json().catch(() => ({}));
+    // 2. Fall back to PHP endpoint ONLY if not on localhost and Next route is not present (404)
+    if (!isLocalhost && (!response || response.status === 404)) {
+      const targetEndpoint = EMAIL_ENDPOINT || FALLBACK_EMAIL_ENDPOINT;
+      try {
+        response = await fetch(targetEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestBody
+        });
+        result = await response.json().catch(() => ({}));
+      } catch (e) {
+        // Fallback failed
+      }
+    }
 
     if (!response.ok || result.status === 'error') {
       return {

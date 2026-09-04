@@ -526,6 +526,8 @@ export const DashboardLayout = ({ children, navItems }) => {
         { section: 'OVERVIEW' },
         { label: 'Dashboard', path: '/teacher/dashboard', icon: <FaHome /> },
         { section: 'TEACHING' },
+        { label: 'My Students', path: '/teacher/students', icon: <FaUserGraduate /> },
+        { label: 'Attendance', path: '/teacher/attendance', icon: <FaCalendarCheck /> },
         { 
           label: 'Tasks', 
           icon: <FaTasks />, 

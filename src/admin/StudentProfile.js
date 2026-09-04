@@ -648,11 +648,28 @@ const StudentProfile = ({ studentId }) => {
     setConfirmConfig({
       isOpen: true,
       title: "Delete Student",
-      message: "Are you absolutely sure? This will permanently delete the student and their access.",
+      message: "Are you absolutely sure? This will permanently delete the student and their associated fee records and access.",
       onConfirm: async () => {
         setProcessing(true);
         try {
-          await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
+          // 1. Unlink any inquiry records pointing to this admission (prevents inquiries_admission_id_fkey violation)
+          await supabase.from('inquiries').update({ admission_id: null }).eq('admission_id', id);
+
+          // 2. Delete payments and fee plans associated with this student
+          await supabase.from('payments').delete().eq('entity_id', id);
+          await supabase.from('fee_plans').delete().eq('student_id', id);
+
+          // 3. Unlink any referral rewards pointing to this admission
+          await supabase.from('referrals').update({ referred_id: null }).eq('referred_id', id);
+
+          // 4. Delete student access and academic records
+          if (student?.cnic) {
+            await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
+            await supabase.from('attendance').delete().eq('cnic', student.cnic);
+            await supabase.from('task_submissions').delete().eq('cnic', student.cnic);
+          }
+
+          // 5. Delete admission record
           const { error: delError } = await supabase.from('admissions').delete().eq('id', id);
           if (delError) throw delError;
 

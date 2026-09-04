@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../auth/_otp_common.php';
+
 function finance_respond($status, $payload) {
     http_response_code($status);
     echo json_encode($payload);
@@ -85,7 +87,7 @@ function finance_normalize_cnic($value) {
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -97,15 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
-$cnic = finance_normalize_cnic($data['cnic'] ?? '');
-if (!$cnic) {
-    finance_respond(400, ['status' => 'error', 'message' => 'Valid teacher CNIC is required.']);
-}
-
-$allowed = finance_first(finance_supabase_request('GET', 'allowed_cnics?select=role&cnic=eq.' . rawurlencode($cnic) . '&limit=1'));
-if (!$allowed || ($allowed['role'] ?? '') !== 'teacher') {
-    finance_respond(403, ['status' => 'error', 'message' => 'Teacher access is required.']);
-}
+$requestedCnic = !empty($data['cnic']) ? finance_normalize_cnic($data['cnic']) : null;
+$cnic = otp_verify_session('teacher', $requestedCnic);
 
 $teacher = finance_first(finance_supabase_request('GET', 'teachers?select=id,status&cnic=eq.' . rawurlencode($cnic) . '&limit=1'));
 if (!$teacher || ($teacher['status'] ?? '') !== 'Active') {

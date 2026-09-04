@@ -18,14 +18,17 @@ const TeacherHRPage = dynamic(() => import('../../src/teacher/TeacherHRPage'), {
 const AssignTask = dynamic(() => import('../../src/teacher/AssignTask'), { ssr: false });
 const ViewTasks = dynamic(() => import('../../src/teacher/ViewTasks'), { ssr: false });
 const ReferralPage = dynamic(() => import('../../src/components/ReferralPage'), { ssr: false });
+const TeacherStudents = dynamic(() => import('../../src/teacher/TeacherStudents'), { ssr: false });
+const TeacherAttendance = dynamic(() => import('../../src/teacher/TeacherAttendance'), { ssr: false });
 
 function getTeacherPage(path = []) {
   const [section, child] = path;
 
   if (!section || section === 'dashboard') return <TeacherDashboard />;
+  if (section === 'students') return <TeacherStudents />;
+  if (section === 'attendance') return <TeacherAttendance />;
   if (section === 'complaints') return <TeacherComplaints />;
   if (section === 'finance') return <TeacherFinance />;
-  if (section === 'attendance') return <TeacherDashboard />;
   if (section === 'referral') return <ReferralPage />;
   if (section === 'group-chat') return <TeacherGroupChat />;
   if (section === 'announcements') return <TeacherAnnouncements />;

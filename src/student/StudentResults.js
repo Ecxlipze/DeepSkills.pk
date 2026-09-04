@@ -149,10 +149,14 @@ const StudentResults = () => {
       if (!user) return;
       setLoading(true);
       try {
+        const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
         const response = await fetch('/api/student/results.php', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cnic: user.cnic, examType })
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+          },
+          body: JSON.stringify({ cnic: user.cnic, examType, token: sessionToken })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.status === 'error') {
@@ -169,7 +173,7 @@ const StudentResults = () => {
       }
     };
     fetchResult();
-  }, [user, examType]);
+  }, [user, user?.sessionToken, examType]);
 
   const toggleExpand = (section) => {
     setExpanded(prev => ({ ...prev, [section]: !prev[section] }));

@@ -164,8 +164,14 @@ export const AuthProvider = ({ children }) => {
       if (!userData) {
         throw new Error('Login verified, but no user session was returned.');
       }
+      if (sessionResult.sessionToken && !userData.sessionToken) {
+        userData.sessionToken = sessionResult.sessionToken;
+      }
       setUser(userData);
       localStorage.setItem('deepskill_user', JSON.stringify(userData));
+      if (sessionResult.sessionToken) {
+        localStorage.setItem('deepskill_session_token', sessionResult.sessionToken);
+      }
       return userData;
     } catch (error) {
       throw error;
@@ -221,6 +227,7 @@ export const AuthProvider = ({ children }) => {
     }
     setUser(null);
     localStorage.removeItem('deepskill_user');
+    localStorage.removeItem('deepskill_session_token');
   };
 
   const updateProfile = (updatedData) => {

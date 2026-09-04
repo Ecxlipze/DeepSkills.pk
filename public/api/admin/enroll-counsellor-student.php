@@ -131,6 +131,25 @@ if (!empty($payload['firstPaymentMethod'])) {
     $payload['firstPaymentMethod'] = 'cash';
 }
 
+// Validate and sanitize numeric fees to strictly prevent negative numbers
+$totalFee = max(0, (int)($payload['totalFee'] ?? 0));
+$discountAmount = max(0, (int)($payload['discountAmount'] ?? 0));
+if ($totalFee <= 0) {
+    enroll_respond(400, ['status' => 'error', 'message' => 'Total fee must be greater than 0.']);
+}
+if ($discountAmount > $totalFee) {
+    enroll_respond(400, ['status' => 'error', 'message' => 'Discount cannot exceed total fee.']);
+}
+$finalFee = max(0, $totalFee - $discountAmount);
+$firstPayment = max(0, (int)($payload['firstPayment'] ?? 0));
+if ($firstPayment > $finalFee) {
+    enroll_respond(400, ['status' => 'error', 'message' => 'First payment cannot exceed final fee.']);
+}
+$payload['totalFee'] = $totalFee;
+$payload['discountAmount'] = $discountAmount;
+$payload['finalFee'] = $finalFee;
+$payload['firstPayment'] = $firstPayment;
+
 [$status, $result] = enroll_http_json('POST', $supabaseUrl . '/rest/v1/rpc/enroll_counsellor_student', [
     'apikey: ' . $serviceKey,
     'Authorization: Bearer ' . $serviceKey,

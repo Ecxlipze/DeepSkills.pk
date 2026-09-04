@@ -687,6 +687,28 @@ export const TeacherDashboard = () => {
             </SectionTitle>
 
             <QuickToolsGrid>
+              <QuickToolCard to="/teacher/attendance" $color="#ec4899">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaCalendarCheck />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">Take Attendance</span>
+                <span className="desc">Daily class register</span>
+              </QuickToolCard>
+
+              <QuickToolCard to="/teacher/students" $color="#6366f1">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaUserGraduate />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">My Students</span>
+                <span className="desc">View enrolled roster</span>
+              </QuickToolCard>
+
               <QuickToolCard to="/teacher/tasks/assign" $color="#3b82f6">
                 <div className="tool-top">
                   <div className="icon-box">
