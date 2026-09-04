@@ -1,44 +1,357 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { 
   FaUserGraduate, FaChalkboardTeacher, FaGraduationCap, 
-  FaMoneyBillWave, FaArrowUp, FaChevronRight 
+  FaMoneyBillWave, FaArrowRight, FaChevronRight, FaUserPlus,
+  FaCalendarCheck, FaIdBadge, FaChartBar, FaBullhorn, FaServer, FaCheckCircle
 } from 'react-icons/fa';
-import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import { supabase } from '../supabaseClient';
 import AdminLayout from '../components/AdminLayout';
-import { Skeleton, SkeletonCard } from '../components/Skeleton';
+import { portalTheme } from '../components/portal/PortalTheme';
+import { PortalCard } from '../components/portal/PortalCard';
+import { MetricCard } from '../components/portal/MetricCard';
+import { StatusPill } from '../components/portal/StatusPill';
 
-const AdminDashboard = () => {
-  const [stats, setStats] = React.useState({
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 1380px;
+  margin: 0 auto;
+`;
+
+const HeaderBanner = styled(PortalCard)`
+  background: linear-gradient(135deg, rgba(123, 31, 46, 0.22) 0%, rgba(17, 19, 26, 0.85) 60%, rgba(17, 19, 26, 0.95) 100%);
+  border: 1px solid rgba(123, 31, 46, 0.35);
+  box-shadow: ${portalTheme.shadows.glow}, ${portalTheme.shadows.card};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 26px 32px;
+
+  .left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .tag {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #ff8a99;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h2 {
+      font-size: clamp(1.5rem, 2.2vw, 2rem);
+      font-weight: 800;
+      color: #fff;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    p {
+      font-size: 0.92rem;
+      color: ${portalTheme.colors.textSecondary};
+      margin: 0;
+    }
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+`;
+
+const ActionButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: ${portalTheme.radii.md};
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: ${portalTheme.transitions.default};
+  white-space: nowrap;
+
+  ${props => props.$primary ? `
+    background: ${portalTheme.colors.primaryGradient};
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 14px rgba(123, 31, 46, 0.4);
+
+    &:hover {
+      box-shadow: 0 6px 20px rgba(123, 31, 46, 0.6);
+      transform: translateY(-2px);
+    }
+  ` : `
+    background: rgba(255, 255, 255, 0.05);
+    color: ${portalTheme.colors.textSecondary};
+    border: 1px solid ${portalTheme.colors.borderSubtle};
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+  `}
+`;
+
+// Metrics Row
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+// Department Shortcuts
+const DeptSection = styled(PortalCard)`
+  padding: 24px;
+`;
+
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .icon {
+      color: ${portalTheme.colors.primary};
+      font-size: 1rem;
+    }
+  }
+
+  a {
+    font-size: 0.82rem;
+    color: #ff8a99;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: ${portalTheme.transitions.default};
+
+    &:hover {
+      color: #fff;
+      transform: translateX(2px);
+    }
+  }
+`;
+
+const DeptGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (max-width: 700px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const DeptCard = styled(Link)`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: ${portalTheme.radii.md};
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+  text-decoration: none;
+  transition: ${portalTheme.transitions.default};
+
+  .dept-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: ${portalTheme.radii.sm};
+      background: ${props => `${props.$color || portalTheme.colors.primary}18`};
+      color: ${props => props.$color || '#ff8a99'};
+      border: 1px solid ${props => `${props.$color || portalTheme.colors.primary}35`};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .arrow {
+      color: ${portalTheme.colors.textDim};
+      font-size: 0.8rem;
+      transition: ${portalTheme.transitions.default};
+    }
+  }
+
+  .dept-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .dept-desc {
+    font-size: 0.76rem;
+    color: ${portalTheme.colors.textMuted};
+    line-height: 1.4;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: ${props => `${props.$color || portalTheme.colors.primary}50`};
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px ${props => `${props.$color || portalTheme.colors.primary}20`};
+
+    .arrow {
+      color: #fff;
+      transform: translateX(3px);
+    }
+  }
+`;
+
+// Content 2-Column Grid
+const MainGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ModernTable = styled.div`
+  width: 100%;
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      color: ${portalTheme.colors.textMuted};
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid ${portalTheme.colors.borderSubtle};
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: ${portalTheme.colors.textSecondary};
+
+      strong {
+        color: #fff;
+        font-weight: 600;
+      }
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  }
+`;
+
+const HealthList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0;
+`;
+
+const HealthItem = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+  border-radius: ${portalTheme.radii.md};
+
+  .item-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+
+    span {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+    }
+  }
+
+  .status-text {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #10B981;
+  }
+`;
+
+export const AdminDashboard = () => {
+  const [stats, setStats] = useState({
     totalStudents: 0,
     totalTeachers: 0,
     activeBatches: 0,
     newStudentsThisMonth: 0,
   });
-  const [recentStudents, setRecentStudents] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const [recentStudents, setRecentStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
     try {
-      // 1. Get Totals
       const { count: studentCount } = await supabase.from('admissions').select('*', { count: 'exact', head: true });
       const { count: teacherCount } = await supabase.from('teachers').select('*', { count: 'exact', head: true });
       const { count: batchCount } = await supabase.from('batches').select('*', { count: 'exact', head: true });
 
-      // 2. Get recent registrations
       const { data: recent } = await supabase
         .from('admissions')
         .select('*')
         .order('submitted_at', { ascending: false })
-        .limit(5);
+        .limit(6);
 
-      // 3. Count new students this month
       const firstDayOfMonth = new Date();
       firstDayOfMonth.setDate(1);
       firstDayOfMonth.setHours(0, 0, 0, 0);
@@ -62,274 +375,233 @@ const AdminDashboard = () => {
     }
   };
 
-  const statsCards = [
-    { label: 'Total Students', value: stats.totalStudents, icon: <FaUserGraduate />, color: '#4F8EF7', change: `+${stats.newStudentsThisMonth}` },
-    { label: 'Total Teachers', value: stats.totalTeachers, icon: <FaChalkboardTeacher />, color: '#10B981', change: 'Live' },
-    { label: 'Active Batches', value: stats.activeBatches, icon: <FaGraduationCap />, color: '#8B5CF6', change: 'Live' },
-    { label: 'Revenue (month)', value: `Rs. 0`, icon: <FaMoneyBillWave />, color: '#F59E0B', change: `Coming Soon`, trend: 'up' },
-  ];
-
-  // No more full screen loading, we use skeletons inside the layout
-
   return (
     <AdminLayout>
-      <DashboardGrid>
-        {/* Stats Section */}
-        <StatsRow>
-          {loading ? (
-            [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-          ) : (
-            statsCards.map((stat, idx) => (
-              <StatCard 
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                color={stat.color}
-              >
-                <div className="card-top">
-                  <div className="icon-box" style={{ background: `${stat.color}20`, color: stat.color }}>
-                    {stat.icon}
-                  </div>
-                  <div className="change-indicator" style={{ color: stat.trend === 'up' || stat.change.includes('+') ? '#10B981' : '#6b7280' }}>
-                    {stat.trend === 'up' && <FaArrowUp size={10} />}
-                    <span>{stat.change}</span>
-                  </div>
-                </div>
-                <div className="card-bottom">
-                  <h3>{stat.value}</h3>
-                  <p>{stat.label}</p>
-                </div>
-              </StatCard>
-            ))
-          )}
-        </StatsRow>
+      <Container>
 
-        {/* Content Row */}
-        <ContentRow>
-          <TableCard
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <div className="card-header">
-              <h3>Recent Students</h3>
-              <Link to="/admin/management/students" className="view-all">View all <FaChevronRight size={10} /></Link>
-            </div>
-            <TableContainer>
+        {/* 1. Header Banner */}
+        <HeaderBanner
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div className="left">
+            <span className="tag">DeepSkills ERP</span>
+            <h2>Super Admin Dashboard</h2>
+            <p>Complete operational overview across academic, admissions, HR, and finance departments.</p>
+          </div>
+          <div className="actions">
+            <ActionButton to="/admin/counsellor/enroll" $primary>
+              <FaUserPlus /> New Enrollment
+            </ActionButton>
+            <ActionButton to="/admin/reports">
+              <FaChartBar /> Export Reports
+            </ActionButton>
+          </div>
+        </HeaderBanner>
+
+        {/* 2. Key Metrics Row */}
+        <MetricsGrid>
+          <MetricCard
+            icon={<FaUserGraduate />}
+            label="Total Students"
+            value={stats.totalStudents}
+            badgeText={`+${stats.newStudentsThisMonth} This Month`}
+            badgeType="primary"
+            accentColor="#ff8a99"
+          />
+
+          <MetricCard
+            icon={<FaChalkboardTeacher />}
+            label="Active Faculty"
+            value={stats.totalTeachers}
+            badgeText="Verified"
+            badgeType="success"
+            accentColor={portalTheme.colors.success}
+          />
+
+          <MetricCard
+            icon={<FaGraduationCap />}
+            label="Active Batches"
+            value={stats.activeBatches}
+            badgeText="In Session"
+            badgeType="info"
+            accentColor={portalTheme.colors.info}
+          />
+
+          <MetricCard
+            icon={<FaUserPlus />}
+            label="New Admissions"
+            value={stats.newStudentsThisMonth}
+            badgeText="Current Month"
+            badgeType="warning"
+            accentColor={portalTheme.colors.warning}
+          />
+        </MetricsGrid>
+
+        {/* 3. Department Quick Jump */}
+        <DeptSection>
+          <SectionHeader>
+            <h3>
+              <span className="icon"><FaServer /></span>
+              Institute Departments
+            </h3>
+          </SectionHeader>
+
+          <DeptGrid>
+            <DeptCard to="/admin/counsellor" $color="#378ADD">
+              <div className="dept-top">
+                <div className="icon-box">🎓</div>
+                <span className="arrow">→</span>
+              </div>
+              <span className="dept-title">Counsellor</span>
+              <span className="dept-desc">Lead pipeline, inquiries & direct enrollment</span>
+            </DeptCard>
+
+            <DeptCard to="/admin/hr" $color="#8B5CF6">
+              <div className="dept-top">
+                <div className="icon-box">👔</div>
+                <span className="arrow">→</span>
+              </div>
+              <span className="dept-title">HR & Faculty</span>
+              <span className="dept-desc">Teacher hiring, documents & contracts</span>
+            </DeptCard>
+
+            <DeptCard to="/admin/finance" $color="#10B981">
+              <div className="dept-top">
+                <div className="icon-box">💰</div>
+                <span className="arrow">→</span>
+              </div>
+              <span className="dept-title">Finance</span>
+              <span className="dept-desc">Fee collection, payroll & revenue statements</span>
+            </DeptCard>
+
+            <DeptCard to="/admin/academic" $color="#F59E0B">
+              <div className="dept-top">
+                <div className="icon-box">📚</div>
+                <span className="arrow">→</span>
+              </div>
+              <span className="dept-title">Academics</span>
+              <span className="dept-desc">Attendance geofencing, tasks & exams</span>
+            </DeptCard>
+
+            <DeptCard to="/admin/management" $color="#EF4444">
+              <div className="dept-top">
+                <div className="icon-box">🏢</div>
+                <span className="arrow">→</span>
+              </div>
+              <span className="dept-title">Management</span>
+              <span className="dept-desc">Courses, certificates, users & blogs</span>
+            </DeptCard>
+          </DeptGrid>
+        </DeptSection>
+
+        {/* 4. Main 2-Column Content */}
+        <MainGrid>
+          
+          {/* Left: Recent Registrations */}
+          <PortalCard>
+            <SectionHeader>
+              <h3>
+                <span className="icon"><FaUserGraduate /></span>
+                Recent Admissions
+              </h3>
+              <Link to="/admin/management/students">
+                Manage Students <FaArrowRight size={10} />
+              </Link>
+            </SectionHeader>
+
+            <ModernTable>
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
+                    <th>Student</th>
                     <th>Course</th>
                     <th>Batch</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
-                    [...Array(5)].map((_, i) => (
-                      <tr key={i}>
-                        <td><Skeleton height="35px" width="120px" /></td>
-                        <td><Skeleton height="20px" width="100px" /></td>
-                        <td><Skeleton height="20px" width="80px" /></td>
-                        <td><Skeleton height="24px" width="70px" radius="12px" /></td>
-                      </tr>
-                    ))
-                  ) : (
-                    <>
-                      {recentStudents.map((student, idx) => (
-                        <tr key={idx}>
-                          <td>
-                            <div className="user-info">
-                              <span className="name">{student.name}</span>
-                              <span className="cnic">{student.cnic}</span>
-                            </div>
-                          </td>
-                          <td>{student.course}</td>
-                          <td>{student.batch || 'Pending'}</td>
-                          <td>
-                            <StatusBadge $active={student.status === 'Active'}>
-                              {student.status}
-                            </StatusBadge>
-                          </td>
-                        </tr>
-                      ))}
-                      {recentStudents.length === 0 && (
-                        <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>No students found in database.</td></tr>
-                      )}
-                    </>
+                  {recentStudents.map((student, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <strong>{student.name}</strong><br />
+                        <small style={{ color: portalTheme.colors.textMuted }}>{student.cnic}</small>
+                      </td>
+                      <td>{student.course}</td>
+                      <td>{student.batch || 'Pending Batch'}</td>
+                      <td>
+                        <StatusPill status={student.status || 'Active'} />
+                      </td>
+                    </tr>
+                  ))}
+                  {recentStudents.length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '32px' }}>
+                        No admission records found.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
-            </TableContainer>
-          </TableCard>
+            </ModernTable>
+          </PortalCard>
 
-          <TableCard
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <div className="card-header">
-              <h3>System Health</h3>
-              <div className="view-all" style={{ color: '#10B981' }}>All Systems Online</div>
+          {/* Right: System Status & Health */}
+          <PortalCard>
+            <SectionHeader>
+              <h3>
+                <span className="icon"><FaCheckCircle /></span>
+                System & Cloud Health
+              </h3>
+            </SectionHeader>
+
+            <HealthList>
+              <HealthItem>
+                <div className="item-left">
+                  <span className="dot" />
+                  <span>Supabase Database</span>
+                </div>
+                <span className="status-text">Connected</span>
+              </HealthItem>
+
+              <HealthItem>
+                <div className="item-left">
+                  <span className="dot" />
+                  <span>Auth & OTP Gateways</span>
+                </div>
+                <span className="status-text">Operational</span>
+              </HealthItem>
+
+              <HealthItem>
+                <div className="item-left">
+                  <span className="dot" />
+                  <span>Geofenced Attendance</span>
+                </div>
+                <span className="status-text">Active (Lahore)</span>
+              </HealthItem>
+
+              <HealthItem>
+                <div className="item-left">
+                  <span className="dot" />
+                  <span>Document Storage</span>
+                </div>
+                <span className="status-text">Healthy</span>
+              </HealthItem>
+            </HealthList>
+
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${portalTheme.colors.borderSubtle}` }}>
+              <ActionButton to="/admin/users/activity" style={{ width: '100%', justifyContent: 'center' }}>
+                View Audit Activity Logs →
+              </ActionButton>
             </div>
-            <div style={{ padding: '25px', color: '#6b7280', fontSize: '0.9rem' }}>
-              <p>Everything is running smoothly. Your real-time connection to Supabase is active.</p>
-              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>DB Connection</span>
-                  <span style={{ color: '#10B981' }}>Stable</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Auth Service</span>
-                  <span style={{ color: '#10B981' }}>Active</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Storage</span>
-                  <span style={{ color: '#10B981' }}>Ready</span>
-                </div>
-              </div>
-            </div>
-          </TableCard>
-        </ContentRow>
-      </DashboardGrid>
+          </PortalCard>
+
+        </MainGrid>
+
+      </Container>
     </AdminLayout>
   );
 };
-
-// ----- Styled Components ----- //
-
-const DashboardGrid = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-`;
-
-const StatsRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-
-  @media (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 600px) { grid-template-columns: 1fr; }
-`;
-
-const StatCard = styled(motion.div)`
-  background: #111318;
-  padding: 25px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-bottom: 3px solid ${props => props.color};
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-
-  .card-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 20px;
-  }
-
-  .icon-box {
-    width: 45px;
-    height: 45px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-  }
-
-  .change-indicator {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .card-bottom {
-    h3 { margin: 0; font-size: 1.6rem; color: #fff; margin-bottom: 5px; }
-    p { margin: 0; font-size: 0.85rem; color: #6b7280; font-weight: 500; }
-  }
-`;
-
-const ContentRow = styled.div`
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 25px;
-
-  @media (max-width: 1100px) { grid-template-columns: 1fr; }
-`;
-
-const TableCard = styled(motion.div)`
-  background: #111318;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-
-  .card-header {
-    padding: 20px 25px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-
-    h3 { margin: 0; font-size: 1.1rem; color: #fff; }
-    .view-all { 
-      font-size: 0.8rem; 
-      color: #4F8EF7; 
-      text-decoration: none; 
-      display: flex; 
-      align-items: center; 
-      gap: 5px; 
-      &:hover { text-decoration: underline; }
-    }
-  }
-`;
-
-const TableContainer = styled.div`
-  overflow-x: auto;
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    
-    th {
-      text-align: left;
-      padding: 15px 25px;
-      font-size: 0.75rem;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      background: rgba(255, 255, 255, 0.02);
-    }
-    
-    td {
-      padding: 15px 25px;
-      font-size: 0.9rem;
-      color: #eee;
-      border-top: 1px solid rgba(255, 255, 255, 0.03);
-    }
-  }
-
-  .user-info {
-    display: flex;
-    flex-direction: column;
-    .name { font-weight: 500; color: #fff; }
-    .cnic { font-size: 0.75rem; color: #6b7280; }
-  }
-
-  .time { font-size: 0.8rem; color: #6b7280; }
-`;
-
-const StatusBadge = styled.span`
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: ${props => props.$active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)'};
-  color: ${props => props.$active ? '#10B981' : '#9ca3af'};
-`;
 
 export default AdminDashboard;

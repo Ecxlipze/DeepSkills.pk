@@ -1,335 +1,385 @@
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import {
+  FaChalkboardTeacher, FaTasks, FaUserGraduate,
+  FaCalendarCheck, FaClock, FaCheckCircle, FaBullhorn,
+  FaArrowRight, FaClipboardCheck, FaIdBadge, FaWallet,
+  FaComments, FaUserFriends, FaExclamationCircle
+} from 'react-icons/fa';
 import DashboardLayout from './components/DashboardLayout';
 import { useAuth } from './context/AuthContext';
 import { supabase } from './supabaseClient';
 import { getAssignedTeacherBatches, getTeacherByCnic } from './utils/teacherUtils';
 import { formatAttendanceDate } from './utils/autoAttendance';
-
-// ----- Styled Components ----- //
+import { portalTheme } from './components/portal/PortalTheme';
+import { PortalCard } from './components/portal/PortalCard';
+import { MetricCard } from './components/portal/MetricCard';
+import { StatusPill } from './components/portal/StatusPill';
 
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 30px;
-  max-width: 1200px;
+  gap: 28px;
+  max-width: 1280px;
   margin: 0 auto;
 `;
 
-const Card = styled(motion.div)`
-  background: #111;
-  border-radius: 12px;
-  padding: 25px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-`;
-
-// 1. Header Card
-const HeaderCard = styled(Card)`
+// Hero Welcome Card
+const WelcomeBanner = styled(PortalCard)`
+  background: linear-gradient(135deg, rgba(123, 31, 46, 0.22) 0%, rgba(17, 19, 26, 0.85) 60%, rgba(17, 19, 26, 0.95) 100%);
+  border: 1px solid rgba(123, 31, 46, 0.35);
+  box-shadow: ${portalTheme.shadows.glow}, ${portalTheme.shadows.card};
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  align-items: start;
-  gap: 28px;
-  overflow: hidden;
-  
-  @media (max-width: 768px) {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 28px 32px;
+
+  @media (max-width: 900px) {
     grid-template-columns: 1fr;
+    text-align: center;
     gap: 20px;
   }
 `;
 
-const Avatar = styled.div`
-  width: 96px;
-  height: 96px;
+const TeacherAvatar = styled.div`
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1f427b, #2d55b3);
+  background: ${portalTheme.colors.primaryGradient};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: 2.2rem;
+  font-weight: 800;
   color: #fff;
-  box-shadow: 0 4px 15px rgba(31, 66, 123, 0.4);
+  box-shadow: 0 0 25px rgba(123, 31, 46, 0.5), inset 0 0 10px rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
 
-  @media (max-width: 768px) {
-    width: 76px;
-    height: 76px;
-    font-size: 2rem;
+  @media (max-width: 900px) {
+    margin: 0 auto;
   }
 `;
 
-const InfoBlock = styled.div`
+const TeacherInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   min-width: 0;
-  width: 100%;
-`;
 
-const TeacherName = styled.h2`
-  margin: 0;
-  font-size: clamp(1.45rem, 2vw, 1.8rem);
-  color: #fff;
-`;
-
-const DetailRow = styled.div`
-  display: flex;
-  gap: 20px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.95rem;
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    justify-content: flex-start;
+  .greeting {
+    font-size: 0.85rem;
+    color: #ff8a99;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
-  span {
+  .name {
+    font-size: clamp(1.5rem, 2.2vw, 2rem);
+    font-weight: 800;
+    color: #fff;
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .meta-chips {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+
+    @media (max-width: 900px) {
+      justify-content: center;
+    }
+  }
+
+  .meta-item {
+    font-size: 0.85rem;
+    color: ${portalTheme.colors.textSecondary};
     display: flex;
     align-items: center;
     gap: 6px;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    
+
     strong {
-      color: #ccc;
+      color: #fff;
       font-weight: 600;
     }
   }
 `;
 
-const AssignmentHeader = styled.div`
+const BannerActions = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
 
-  .label {
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+  @media (max-width: 900px) {
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 `;
 
-const ScopeList = styled.div`
+const ActionButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: ${portalTheme.radii.md};
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: ${portalTheme.transitions.default};
+  white-space: nowrap;
+
+  ${props => props.$primary ? `
+    background: ${portalTheme.colors.primaryGradient};
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 14px rgba(123, 31, 46, 0.4);
+
+    &:hover {
+      box-shadow: 0 6px 20px rgba(123, 31, 46, 0.6);
+      transform: translateY(-2px);
+    }
+  ` : `
+    background: rgba(255, 255, 255, 0.05);
+    color: ${portalTheme.colors.textSecondary};
+    border: 1px solid ${portalTheme.colors.borderSubtle};
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+  `}
+`;
+
+// Batch Scope Switcher
+const ScopeSection = styled(PortalCard)`
+  padding: 20px 24px;
+`;
+
+const ScopeHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+
+  span.label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: ${portalTheme.colors.textMuted};
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+`;
+
+const ScopeGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 8px;
+  gap: 12px;
 `;
 
 const ScopeOption = styled.button`
   width: 100%;
-  background: ${props => props.$active ? 'rgba(77, 166, 255, 0.14)' : 'rgba(255, 255, 255, 0.035)'};
-  border: 1px solid ${props => props.$active ? 'rgba(77, 166, 255, 0.45)' : 'rgba(255, 255, 255, 0.08)'};
-  border-radius: 10px;
-  color: ${props => props.$active ? '#fff' : 'rgba(255, 255, 255, 0.72)'};
+  background: ${props => props.$active ? 'rgba(123, 31, 46, 0.22)' : 'rgba(255, 255, 255, 0.025)'};
+  border: 1px solid ${props => props.$active ? portalTheme.colors.primary : portalTheme.colors.borderSubtle};
+  border-radius: ${portalTheme.radii.md};
+  color: #fff;
   cursor: pointer;
   font-family: inherit;
-  padding: 12px;
+  padding: 14px 16px;
   text-align: left;
-  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+  transition: ${portalTheme.transitions.default};
+  box-shadow: ${props => props.$active ? portalTheme.shadows.glow : 'none'};
 
   &:hover {
-    background: rgba(77, 166, 255, 0.1);
-    border-color: #4da6ff;
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.65;
-  }
-
-  &:disabled:hover {
-    background: rgba(255, 255, 255, 0.035);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-
-  &:focus-visible {
-    outline: 2px solid rgba(77, 166, 255, 0.55);
-    outline-offset: 2px;
+    background: rgba(123, 31, 46, 0.16);
+    border-color: rgba(123, 31, 46, 0.4);
+    transform: translateY(-2px);
   }
 
   .course {
     display: block;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 700;
     margin-bottom: 4px;
-    overflow-wrap: anywhere;
+    color: ${props => props.$active ? '#ff8a99' : '#fff'};
   }
 
   .batch {
     display: block;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.8rem;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
+    color: ${portalTheme.colors.textMuted};
+    font-size: 0.82rem;
   }
 `;
 
-// 2. Stats Row
-const StatsGrid = styled.div`
+// Metrics Grid
+const MetricsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 20px;
 `;
 
-const StatCard = styled(Card)`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 10px;
-  padding: 30px 20px;
-`;
-
-const StatLabel = styled.div`
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-`;
-
-const StatValue = styled.div`
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: #fff;
-`;
-
-const StatSub = styled.div`
-  color: #4da6ff;
-  font-size: 0.85rem;
-  font-weight: 500;
-`;
-
-// 3. Bottom Two-Column Layout
-const BottomGrid = styled.div`
+// Main 2-Column Grid
+const MainGrid = styled.div`
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 30px;
-`;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
 
-const SectionTitle = styled.h3`
-  margin: 0 0 20px 0;
-  font-size: 1.2rem;
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 12px;
-`;
-
-const AttendanceTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.92rem;
-
-  th, td {
-    text-align: left;
-    padding: 14px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  th {
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 0.78rem;
-    text-transform: uppercase;
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
   }
 `;
 
-const StatusBadge = styled.span`
-  display: inline-flex;
-  border-radius: 999px;
-  padding: 5px 10px;
-  font-size: 0.76rem;
-  font-weight: 800;
-  background: ${props => {
-    if (props.$status === 'present') return 'rgba(46, 204, 113, 0.14)';
-    if (props.$status === 'late') return 'rgba(241, 196, 15, 0.14)';
-    if (props.$status === 'absent') return 'rgba(231, 76, 60, 0.14)';
-    return 'rgba(156, 163, 175, 0.12)';
-  }};
-  color: ${props => {
-    if (props.$status === 'present') return '#2ecc71';
-    if (props.$status === 'late') return '#f1c40f';
-    if (props.$status === 'absent') return '#e74c3c';
-    return '#aaa';
-  }};
-`;
-
-// Progress Rings
-const RingsContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-`;
-
-const RingRow = styled.div`
+const SectionTitle = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 18px;
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .icon {
+      color: ${portalTheme.colors.primary};
+      font-size: 1rem;
+    }
+  }
+
+  span.date-tag {
+    font-size: 0.8rem;
+    color: ${portalTheme.colors.textMuted};
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 10px;
+    border-radius: ${portalTheme.radii.pill};
+  }
 `;
 
-const RingLabel = styled.div`
-  color: #ccc;
-  font-size: 0.95rem;
-  flex: 1;
+const ModernTable = styled.div`
+  width: 100%;
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+
+    th {
+      text-align: left;
+      padding: 12px 14px;
+      color: ${portalTheme.colors.textMuted};
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid ${portalTheme.colors.borderSubtle};
+    }
+
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: ${portalTheme.colors.textSecondary};
+
+      strong {
+        color: #fff;
+        font-weight: 600;
+      }
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  }
 `;
 
-const RingValue = styled.div`
-  color: #fff;
-  font-weight: bold;
-  font-size: 1.1rem;
-  width: 50px;
-  text-align: right;
+const EmptyRow = styled.div`
+  text-align: center;
+  padding: 32px 16px;
+  color: ${portalTheme.colors.textMuted};
+  font-size: 0.9rem;
 `;
 
-// SVG Circle Component
-const ProgressRing = ({ radius, stroke, progress, color }) => {
-  const [offset, setOffset] = useState(0);
-  const normalizedRadius = radius - stroke * 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
+const QuickToolsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 
-  useEffect(() => {
-    const strokeDashoffset = circumference - (progress / 100) * circumference;
-    const timer = setTimeout(() => {
-      setOffset(strokeDashoffset);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [progress, circumference]);
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+`;
 
-  return (
-    <div style={{ position: 'relative', width: radius * 2, height: radius * 2, margin: '0 15px' }}>
-      <svg
-        height={radius * 2}
-        width={radius * 2}
-        style={{ transform: 'rotate(-90deg)' }}
-      >
-        <circle
-          stroke="rgba(255,255,255,0.1)"
-          fill="transparent"
-          strokeWidth={stroke}
-          r={normalizedRadius}
-          cx={radius}
-          cy={radius}
-        />
-        <circle
-          stroke={color}
-          fill="transparent"
-          strokeWidth={stroke}
-          strokeDasharray={circumference + ' ' + circumference}
-          style={{ strokeDashoffset: offset, transition: 'stroke-dashoffset 1s ease-in-out' }}
-          strokeLinecap="round"
-          r={normalizedRadius}
-          cx={radius}
-          cy={radius}
-        />
-      </svg>
-    </div>
-  );
-};
+const QuickToolCard = styled(Link)`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+  border-radius: ${portalTheme.radii.md};
+  text-decoration: none;
+  transition: ${portalTheme.transitions.default};
 
-// ----- Dashboard Component ----- //
-const TeacherDashboard = () => {
+  .tool-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: ${portalTheme.radii.sm};
+      background: ${props => `${props.$color || portalTheme.colors.primary}18`};
+      color: ${props => props.$color || '#ff8a99'};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .arrow {
+      color: ${portalTheme.colors.textDim};
+      font-size: 0.8rem;
+      transition: ${portalTheme.transitions.default};
+    }
+  }
+
+  .title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .desc {
+    font-size: 0.75rem;
+    color: ${portalTheme.colors.textMuted};
+    line-height: 1.4;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: ${props => `${props.$color || portalTheme.colors.primary}40`};
+    transform: translateY(-2px);
+
+    .arrow {
+      color: #fff;
+      transform: translateX(3px);
+    }
+  }
+`;
+
+export const TeacherDashboard = () => {
   const { user } = useAuth();
   const [selectedBatchId, setSelectedBatchId] = useState('');
   const [todayAttendance, setTodayAttendance] = useState([]);
@@ -451,14 +501,11 @@ const TeacherDashboard = () => {
   }, [selectedBatchId, stats.assignedBatches]);
 
   const teacher = {
-    name: user?.name || "Loading...",
+    name: user?.name || "Faculty Member",
     cnic: user?.cnic || "---",
     totalStudents: stats.totalStudents,
     classesConducted: stats.classesConducted,
-    totalClasses: stats.classesConducted,
     classAverage: stats.classAverage,
-    assignmentsGraded: 0,
-    courseProgress: stats.overallAttendance,
   };
 
   const getInitials = (name) => {
@@ -472,166 +519,221 @@ const TeacherDashboard = () => {
     <DashboardLayout>
       <Container>
         
-        {/* 1. Header Card */}
-        <HeaderCard
-          initial={{ opacity: 0, y: 20 }}
+        {/* 1. Hero Welcome Card */}
+        <WelcomeBanner
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.4 }}
         >
-          <Avatar>{getInitials(teacher.name)}</Avatar>
-          <InfoBlock>
-            <TeacherName>{teacher.name}</TeacherName>
-            <DetailRow>
-              <span><strong>CNIC:</strong> {teacher.cnic}</span>
-            </DetailRow>
-            <AssignmentHeader>
-              <div className="label">Course & Batch Scope</div>
-              {stats.assignedBatches.length > 0 && (
-                <ScopeList aria-label="Select dashboard batch">
-                  {stats.assignedBatches.map((batch) => {
-                    const timing = batch.time_shift || batch.batch_timing;
+          <TeacherAvatar>{getInitials(teacher.name)}</TeacherAvatar>
+          
+          <TeacherInfo>
+            <span className="greeting">Faculty Portal</span>
+            <h2 className="name">{teacher.name}</h2>
+            <div className="meta-chips">
+              <StatusPill status="Faculty" />
+              <div className="meta-item">
+                <FaChalkboardTeacher />
+                <strong>{selectedBatch?.course || 'General Course'}</strong>
+              </div>
+              <div className="meta-item">
+                <FaClock />
+                <span>{selectedBatch?.batch_name || 'Batch'} {selectedTiming ? `— ${selectedTiming}` : ''}</span>
+              </div>
+            </div>
+          </TeacherInfo>
+
+          <BannerActions>
+            <ActionButton to="/teacher/tasks/assign" $primary>
+              <FaTasks /> Assign Task
+            </ActionButton>
+            <ActionButton to="/teacher/tasks/view">
+              <FaClipboardCheck /> View Submissions
+            </ActionButton>
+          </BannerActions>
+        </WelcomeBanner>
+
+        {/* 2. Course & Batch Scope Switcher */}
+        {stats.assignedBatches.length > 0 && (
+          <ScopeSection>
+            <ScopeHeader>
+              <span className="label">Your Assigned Batches</span>
+              <span style={{ fontSize: '0.8rem', color: portalTheme.colors.textMuted }}>
+                Select a batch to inspect roster and metrics
+              </span>
+            </ScopeHeader>
+            <ScopeGrid>
+              {stats.assignedBatches.map((batch) => {
+                const timing = batch.time_shift || batch.batch_timing;
+                const isSelected = selectedBatch?.id === batch.id;
+                return (
+                  <ScopeOption
+                    key={batch.id}
+                    type="button"
+                    $active={isSelected}
+                    onClick={() => setSelectedBatchId(batch.id)}
+                  >
+                    <span className="course">{batch.course || 'General Course'}</span>
+                    <span className="batch">
+                      {batch.batch_name || 'Unnamed batch'}{timing ? ` — ${timing}` : ''}
+                    </span>
+                  </ScopeOption>
+                );
+              })}
+            </ScopeGrid>
+          </ScopeSection>
+        )}
+
+        {/* 3. Key Metrics */}
+        <MetricsGrid>
+          <MetricCard
+            icon={<FaUserGraduate />}
+            label="Enrolled Students"
+            value={teacher.totalStudents}
+            badgeText={selectedBatch?.batch_name || 'Active'}
+            badgeType="primary"
+            accentColor="#ff8a99"
+          />
+
+          <MetricCard
+            icon={<FaCalendarCheck />}
+            label="Classes Conducted"
+            value={teacher.classesConducted}
+            badgeText="This Term"
+            badgeType="info"
+            accentColor={portalTheme.colors.info}
+          />
+
+          <MetricCard
+            icon={<FaClipboardCheck />}
+            label="Assignments Graded"
+            value={`${stats.assignmentsGraded}%`}
+            badgeText={`${stats.tasksAssigned} Tasks`}
+            badgeType={stats.assignmentsGraded >= 75 ? 'success' : 'warning'}
+            progress={stats.assignmentsGraded}
+            accentColor={stats.assignmentsGraded >= 75 ? portalTheme.colors.success : portalTheme.colors.warning}
+          />
+
+          <MetricCard
+            icon={<FaCheckCircle />}
+            label="Class Attendance Rate"
+            value={`${stats.overallAttendance}%`}
+            badgeText="Average"
+            badgeType={stats.overallAttendance >= 75 ? 'success' : 'default'}
+            progress={stats.overallAttendance}
+            accentColor={portalTheme.colors.success}
+          />
+        </MetricsGrid>
+
+        {/* 4. Bottom 2-Column Content */}
+        <MainGrid>
+
+          {/* Left: Today's Attendance */}
+          <PortalCard>
+            <SectionTitle>
+              <h3>
+                <span className="icon"><FaCalendarCheck /></span>
+                Today&apos;s Class Attendance
+              </h3>
+              <span className="date-tag">{formatAttendanceDate()}</span>
+            </SectionTitle>
+
+            <ModernTable>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Status</th>
+                    <th>Marked By</th>
+                    <th>Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayAttendance.map((student) => {
+                    const row = student.attendance;
                     return (
-                      <ScopeOption
-                        key={batch.id}
-                        type="button"
-                        $active={selectedBatch?.id === batch.id}
-                        onClick={() => setSelectedBatchId(batch.id)}
-                      >
-                        <span className="course">{batch.course || 'General Course'}</span>
-                        <span className="batch">
-                          {batch.batch_name || 'Unnamed batch'}{timing ? ` - ${timing}` : ''}
-                        </span>
-                      </ScopeOption>
+                      <tr key={student.id}>
+                        <td>
+                          <strong>{student.name}</strong><br />
+                          <small style={{ color: portalTheme.colors.textMuted }}>{student.cnic}</small>
+                        </td>
+                        <td>
+                          <StatusPill status={row?.status || 'Pending'} />
+                        </td>
+                        <td>{row?.marked_by || 'Auto Pending'}</td>
+                        <td>{row?.distance_meters ? `${row.distance_meters}m` : '—'}</td>
+                      </tr>
                     );
                   })}
-                </ScopeList>
-              )}
-              {stats.assignedBatches.length === 0 && (
-                <ScopeOption type="button" disabled>
-                  <span className="course">No assignments</span>
-                  <span className="batch">No course or batch assigned yet.</span>
-                </ScopeOption>
-              )}
-            </AssignmentHeader>
-          </InfoBlock>
-        </HeaderCard>
-
-        {/* 2. Stats Row */}
-        <StatsGrid>
-          <StatCard
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <StatLabel>Active Batch</StatLabel>
-            <StatValue>{stats.assignedBatches.length}</StatValue>
-            <StatSub>{selectedBatch?.batch_name || 'none selected'}</StatSub>
-          </StatCard>
-
-          <StatCard
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-          >
-            <StatLabel>Total Students</StatLabel>
-            <StatValue>{teacher.totalStudents}</StatValue>
-            <StatSub>{selectedBatch?.course || 'selected course'}</StatSub>
-          </StatCard>
-          
-          <StatCard
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
-          >
-            <StatLabel>Classes Conducted</StatLabel>
-            <StatValue style={{ fontSize: '2rem', lineHeight: '1.2' }}>{teacher.classesConducted}</StatValue>
-            <StatSub>{selectedTiming || 'timing not set'}</StatSub>
-          </StatCard>
-          
-          <StatCard
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.35 }}
-          >
-            <StatLabel>Class Average</StatLabel>
-            <StatValue style={{ fontSize: '2.5rem' }}>{teacher.classAverage}%</StatValue>
-            <StatSub>student performance</StatSub>
-          </StatCard>
-        </StatsGrid>
-
-        {/* 3. Bottom Two-Column Layout */}
-        <BottomGrid>
-
-          {/* Right Column - Performance Overview */}
-          <Card
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-          >
-            <SectionTitle>Course Overview</SectionTitle>
-            <RingsContainer>
-              <RingRow>
-                <RingLabel>Course Progress</RingLabel>
-                <ProgressRing radius={25} stroke={4} progress={teacher.courseProgress} color="#4da6ff" />
-                <RingValue>{teacher.courseProgress}%</RingValue>
-              </RingRow>
-              
-              <RingRow>
-                <RingLabel>Assignments Graded</RingLabel>
-                <ProgressRing radius={25} stroke={4} progress={stats.assignmentsGraded} color="#00e676" />
-                <RingValue>{stats.assignmentsGraded}%</RingValue>
-              </RingRow>
-              
-              <RingRow>
-                <RingLabel>Overall Attendance</RingLabel>
-                <ProgressRing radius={25} stroke={4} progress={stats.overallAttendance} color="#ffab00" />
-                <RingValue>{stats.overallAttendance}%</RingValue>
-              </RingRow>
-            </RingsContainer>
-          </Card>
-
-          <Card
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.55 }}
-          >
-            <SectionTitle>Today&apos;s Attendance</SectionTitle>
-            <AttendanceTable>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Status</th>
-                  <th>Marked By</th>
-                  <th>Distance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {todayAttendance.map((student) => {
-                  const row = student.attendance;
-                  return (
-                    <tr key={student.id}>
-                      <td>
-                        <strong>{student.name}</strong><br />
-                        <small style={{ color: 'rgba(255,255,255,0.42)' }}>{student.cnic}</small>
+                  {todayAttendance.length === 0 && (
+                    <tr>
+                      <td colSpan="4">
+                        <EmptyRow>No students found for the selected batch.</EmptyRow>
                       </td>
-                      <td><StatusBadge $status={row?.status}>{row?.status || 'not marked'}</StatusBadge></td>
-                      <td>{row?.marked_by || 'auto pending'}</td>
-                      <td>{row?.distance_meters ? `${row.distance_meters}m` : '-'}</td>
                     </tr>
-                  );
-                })}
-                {todayAttendance.length === 0 && (
-                  <tr>
-                    <td colSpan="4" style={{ color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 28 }}>
-                      No active students found for the selected batch.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </AttendanceTable>
-          </Card>
+                  )}
+                </tbody>
+              </table>
+            </ModernTable>
+          </PortalCard>
 
-        </BottomGrid>
+          {/* Right: Faculty Quick Actions & Links */}
+          <PortalCard>
+            <SectionTitle>
+              <h3>
+                <span className="icon"><FaChalkboardTeacher /></span>
+                Faculty Shortcuts
+              </h3>
+            </SectionTitle>
+
+            <QuickToolsGrid>
+              <QuickToolCard to="/teacher/tasks/assign" $color="#3b82f6">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaTasks />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">Assign Task</span>
+                <span className="desc">Create new assignments</span>
+              </QuickToolCard>
+
+              <QuickToolCard to="/teacher/tasks/view" $color="#10b981">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaClipboardCheck />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">Grade Tasks</span>
+                <span className="desc">Review submitted work</span>
+              </QuickToolCard>
+
+              <QuickToolCard to="/teacher/announcements" $color="#f59e0b">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaBullhorn />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">Announcements</span>
+                <span className="desc">Broadcast to your class</span>
+              </QuickToolCard>
+
+              <QuickToolCard to="/teacher/hr" $color="#8b5cf6">
+                <div className="tool-top">
+                  <div className="icon-box">
+                    <FaIdBadge />
+                  </div>
+                  <span className="arrow">→</span>
+                </div>
+                <span className="title">HR Profile</span>
+                <span className="desc">Documents & contract</span>
+              </QuickToolCard>
+            </QuickToolsGrid>
+          </PortalCard>
+
+        </MainGrid>
 
       </Container>
     </DashboardLayout>

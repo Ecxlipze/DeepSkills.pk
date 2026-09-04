@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FaHome, FaUserGraduate, FaChalkboardTeacher, FaBook, 
-  FaMoneyBillWave, FaLink, FaChartBar, FaCog, FaChevronDown, 
-  FaChevronRight, FaBars, FaTimes, FaClipboardList,
-  FaExclamationCircle, FaBullhorn, FaUserPlus,
-  FaGraduationCap, FaPen, FaHeadset
+  FaChevronDown, FaChevronRight, FaBars, FaTimes, FaSignOutAlt
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useComplaints } from '../context/ComplaintsContext';
@@ -20,10 +16,471 @@ import {
   normalizeAdminPath
 } from '../utils/departments';
 import NotificationBell from './NotificationBell';
+import { portalTheme } from './portal/PortalTheme';
 import logoImg from '../logo.svg';
 
-const AdminLayout = ({ children }) => {
-  const { user } = useAuth();
+const LayoutWrapper = styled.div`
+  display: flex;
+  height: 100vh;
+  background-color: ${portalTheme.colors.bgBase};
+  background-image: 
+    radial-gradient(circle at 10% 15%, rgba(123, 31, 46, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 90% 85%, rgba(123, 31, 46, 0.06) 0%, transparent 40%);
+  color: ${portalTheme.colors.textPrimary};
+  overflow: hidden;
+  font-family: ${portalTheme.fonts.body};
+`;
+
+const Overlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 998;
+`;
+
+const Sidebar = styled.aside`
+  width: 260px;
+  background: ${portalTheme.colors.bgSidebar};
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid ${portalTheme.colors.borderSubtle};
+  display: flex;
+  flex-direction: column;
+  z-index: 999;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+    transform: translateX(${props => props.$isOpen ? '0' : '-100%'});
+  }
+`;
+
+const SidebarHeader = styled.div`
+  padding: 20px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid ${portalTheme.colors.borderSubtle};
+
+  img {
+    height: 36px;
+    filter: drop-shadow(0 2px 8px rgba(123, 31, 46, 0.3));
+  }
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  color: ${portalTheme.colors.textSecondary};
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: none;
+  padding: 6px;
+  border-radius: ${portalTheme.radii.sm};
+  transition: ${portalTheme.transitions.default};
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+`;
+
+const DepartmentHeader = styled.div`
+  padding: 14px 18px;
+  background: linear-gradient(135deg, ${props => `${props.$color}18`} 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-bottom: 1px solid ${props => `${props.$color}30`};
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: ${portalTheme.radii.sm};
+    background: ${props => `${props.$color}25`};
+    border: 1px solid ${props => `${props.$color}40`};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    box-shadow: 0 0 10px ${props => `${props.$color}25`};
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    small {
+      color: ${portalTheme.colors.textMuted};
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+
+    strong {
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+`;
+
+const NavList = styled.nav`
+  flex: 1;
+  padding: 14px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+`;
+
+const NavLabel = styled.div`
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: ${portalTheme.colors.textMuted};
+  padding: 14px 10px 6px;
+  user-select: none;
+`;
+
+const NavItem = styled(Link)`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  color: ${props => props.$active ? '#fff' : portalTheme.colors.textSecondary};
+  background: ${props => props.$active 
+    ? `linear-gradient(90deg, ${props.$accent || portalTheme.colors.primary}30 0%, ${props.$accent || portalTheme.colors.primary}08 100%)` 
+    : 'transparent'};
+  border-left: 3px solid ${props => props.$active ? (props.$accent || portalTheme.colors.primary) : 'transparent'};
+  text-decoration: none;
+  border-radius: 0 ${portalTheme.radii.sm} ${portalTheme.radii.sm} 0;
+  transition: ${portalTheme.transitions.default};
+  font-size: 0.88rem;
+  font-weight: ${props => props.$active ? '600' : '500'};
+  position: relative;
+
+  .content-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .icon {
+      font-size: 1rem;
+      color: ${props => props.$active ? (props.$accent || '#ff8a99') : portalTheme.colors.textMuted};
+      transition: ${portalTheme.transitions.default};
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  &:hover {
+    color: #fff;
+    background: ${props => `${props.$accent || portalTheme.colors.primary}18`};
+
+    .icon {
+      color: ${props => props.$accent || '#ff8a99'};
+    }
+  }
+
+  .red-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+  }
+`;
+
+const DropdownContent = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  padding-left: 28px;
+  margin-top: 2px;
+  gap: 2px;
+  overflow: hidden;
+`;
+
+const DropdownItem = styled(Link)`
+  padding: 8px 12px;
+  color: ${props => props.$active ? '#fff' : portalTheme.colors.textMuted};
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: ${props => props.$active ? '600' : '400'};
+  transition: ${portalTheme.transitions.default};
+  border-left: 1px solid ${props => props.$active ? portalTheme.colors.primary : 'rgba(255,255,255,0.08)'};
+  border-radius: 0 ${portalTheme.radii.sm} ${portalTheme.radii.sm} 0;
+
+  &:hover {
+    color: #fff;
+    background: rgba(123, 31, 46, 0.1);
+    border-left-color: ${portalTheme.colors.primary};
+  }
+`;
+
+const SidebarFooter = styled.div`
+  padding: 16px;
+  border-top: 1px solid ${portalTheme.colors.borderSubtle};
+  background: rgba(0, 0, 0, 0.2);
+`;
+
+const UserBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: ${portalTheme.radii.md};
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: ${portalTheme.colors.primaryGradient};
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    box-shadow: 0 2px 8px rgba(123, 31, 46, 0.4);
+    flex-shrink: 0;
+  }
+
+  .info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+
+    p {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    span {
+      font-size: 0.72rem;
+      color: ${portalTheme.colors.textMuted};
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+`;
+
+const MainArea = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  min-width: 0;
+`;
+
+const Topbar = styled.header`
+  min-height: 68px;
+  background: ${portalTheme.colors.bgTopbar};
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid ${portalTheme.colors.borderSubtle};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  flex-shrink: 0;
+  z-index: 10;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+  }
+`;
+
+const TopbarLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+`;
+
+const MenuToggle = styled.button`
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: none;
+  width: 38px;
+  height: 38px;
+  border-radius: ${portalTheme.radii.sm};
+  align-items: center;
+  justify-content: center;
+  transition: ${portalTheme.transitions.default};
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  @media (max-width: 768px) {
+    display: flex;
+  }
+`;
+
+const BreadcrumbArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const Breadcrumbs = styled.div`
+  font-size: 0.72rem;
+  color: ${portalTheme.colors.textMuted};
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+`;
+
+const PageTitle = styled.div`
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+`;
+
+const DepartmentSelector = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  border-radius: ${portalTheme.radii.pill};
+  border: 1px solid ${portalTheme.colors.borderSubtle};
+  overflow-x: auto;
+  max-width: 100%;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 1024px) {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+`;
+
+const DeptPill = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: ${portalTheme.radii.pill};
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: ${portalTheme.transitions.default};
+  border: 1px solid ${props => props.$active ? `${props.$color}60` : 'transparent'};
+  background: ${props => props.$active ? `${props.$color}25` : 'transparent'};
+  color: ${props => props.$active ? '#fff' : portalTheme.colors.textMuted};
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${props => props.$color};
+    box-shadow: ${props => props.$active ? `0 0 8px ${props.$color}` : 'none'};
+  }
+
+  &:hover {
+    color: #fff;
+    background: ${props => `${props.$color}18`};
+  }
+`;
+
+const TopbarRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const LogoutBtn = styled.button`
+  background: rgba(123, 31, 46, 0.12);
+  color: #ff8a99;
+  border: 1px solid rgba(123, 31, 46, 0.28);
+  padding: 8px 12px;
+  border-radius: ${portalTheme.radii.md};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: ${portalTheme.transitions.default};
+
+  &:hover {
+    background: ${portalTheme.colors.primary};
+    color: #fff;
+    border-color: ${portalTheme.colors.primary};
+    box-shadow: 0 0 16px rgba(123, 31, 46, 0.4);
+  }
+`;
+
+const ContentArea = styled.main`
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+  position: relative;
+
+  @media (max-width: 768px) {
+    padding: 20px 16px;
+  }
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+  }
+`;
+
+export const AdminLayout = ({ children }) => {
+  const { user, logout } = useAuth();
   const { visibleDepartments, activeDepartment, setActiveDepartment } = useDepartment();
   const { complaints } = useComplaints();
   const location = useLocation();
@@ -48,6 +505,7 @@ const AdminLayout = ({ children }) => {
     pendingHR: false,
     pendingPayouts: false
   };
+
   const normalizedPath = normalizeAdminPath(location.pathname);
   const currentDepartment = getDepartmentByPath(normalizedPath);
   const activeDepartmentMeta = DEPARTMENTS.find((department) => department.id === (currentDepartment?.id || activeDepartment)) || DEPARTMENTS[0];
@@ -60,9 +518,17 @@ const AdminLayout = ({ children }) => {
     setIsMobileMenuOpen(false);
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/admin');
+  };
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
   return (
     <LayoutWrapper>
-      {/* Mobile Hamburger Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <Overlay 
@@ -74,20 +540,24 @@ const AdminLayout = ({ children }) => {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
       <Sidebar $isOpen={isMobileMenuOpen}>
         <SidebarHeader>
-          <LogoBox>
-            <img src={logoImg} alt="DeepSkill Admin" />
-          </LogoBox>
+          <Link to="/">
+            <img src={logoImg} alt="DeepSkills Admin" />
+          </Link>
           <CloseButton onClick={() => setIsMobileMenuOpen(false)}>
             <FaTimes />
           </CloseButton>
         </SidebarHeader>
 
         <DepartmentHeader $color={activeDepartmentMeta.color}>
-          <small>Department</small>
-          <strong><span>{activeDepartmentMeta.icon}</span> {activeDepartmentMeta.label}</strong>
+          <div className="icon-wrap">
+            {activeDepartmentMeta.icon}
+          </div>
+          <div className="text">
+            <small>Department</small>
+            <strong>{activeDepartmentMeta.label}</strong>
+          </div>
         </DepartmentHeader>
 
         <NavList>
@@ -104,13 +574,14 @@ const AdminLayout = ({ children }) => {
                     as="div" 
                     onClick={item.onToggle} 
                     $active={isChildActive}
+                    $accent={activeDepartmentMeta.color}
                     style={{ cursor: 'pointer' }}
                   >
-                    <span className="icon">{item.icon}</span>
-                    <span className="label">{item.label}</span>
-                    <span className="arrow">
-                      {item.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />}
-                    </span>
+                    <div className="content-left">
+                      <span className="icon">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </div>
+                    {item.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />}
                   </NavItem>
                   <AnimatePresence>
                     {item.isOpen && (
@@ -122,7 +593,7 @@ const AdminLayout = ({ children }) => {
                         {item.items.map((child, cIdx) => (
                           <DropdownItem 
                             key={`child-${cIdx}`} 
-                            to={child.path}
+                            to={child.path} 
                             $active={location.pathname === child.path}
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
@@ -143,11 +614,12 @@ const AdminLayout = ({ children }) => {
                 to={item.path} 
                 $active={isActive}
                 $accent={activeDepartmentMeta.color}
-                $activeBg={activeDepartmentMeta.activeBg}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <span className="icon">{item.icon}</span>
-                <span className="label">{item.label}</span>
+                <div className="content-left">
+                  <span className="icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
                 {item.badge && <span className="red-dot" />}
               </NavItem>
             );
@@ -156,52 +628,55 @@ const AdminLayout = ({ children }) => {
 
         <SidebarFooter>
           <UserBadge>
-            <Avatar>{user?.name?.[0] || 'A'}</Avatar>
+            <div className="avatar">{user?.name?.[0] || 'A'}</div>
             <div className="info">
               <p>{user?.name || 'Administrator'}</p>
-              <span>{user?.email || 'admin@deepskill.com'}</span>
+              <span>{user?.email || 'admin@deepskills.pk'}</span>
             </div>
           </UserBadge>
         </SidebarFooter>
       </Sidebar>
 
-      {/* Main Content */}
       <MainArea>
         <Topbar>
-          <div className="left">
+          <TopbarLeft>
             <MenuToggle onClick={() => setIsMobileMenuOpen(true)}>
               <FaBars />
             </MenuToggle>
-            <div className="breadcrumb-area">
-              <Breadcrumbs>{routeMeta.breadcrumbs}</Breadcrumbs>
-              <PageTitle>{routeMeta.title}</PageTitle>
-            </div>
-          </div>
-          <div className="right">
+            <BreadcrumbArea>
+              <Breadcrumbs>{routeMeta.breadcrumbs || 'Admin / Portal'}</Breadcrumbs>
+              <PageTitle>{routeMeta.title || 'Dashboard'}</PageTitle>
+            </BreadcrumbArea>
+          </TopbarLeft>
+
+          <DepartmentSelector>
+            {visibleDepartments.map((department) => {
+              const isActive = activeDepartmentMeta.id === department.id;
+              return (
+                <DeptPill
+                  key={department.id}
+                  type="button"
+                  $active={isActive}
+                  $color={department.color}
+                  onClick={() => handleDepartmentSwitch(department)}
+                >
+                  <span className="dot" />
+                  <span>{department.icon}</span>
+                  <span>{department.shortLabel || department.label}</span>
+                </DeptPill>
+              );
+            })}
+          </DepartmentSelector>
+
+          <TopbarRight>
             <NotificationBell />
-            <AvatarCircle onClick={() => navigate('/profile')}>
-              {user?.name?.[0] || 'A'}
-            </AvatarCircle>
-          </div>
+            <LogoutBtn onClick={handleLogout} title="Log Out">
+              <FaSignOutAlt />
+              <span>Logout</span>
+            </LogoutBtn>
+          </TopbarRight>
         </Topbar>
-        <DepartmentTabs>
-          {visibleDepartments.map((department) => {
-            const isActive = activeDepartmentMeta.id === department.id;
-            return (
-              <DeptTab
-                key={department.id}
-                type="button"
-                $active={isActive}
-                $color={department.color}
-                onClick={() => handleDepartmentSwitch(department)}
-              >
-                <span className="dot" />
-                <span>{department.icon}</span>
-                {department.shortLabel || department.label}
-              </DeptTab>
-            );
-          })}
-        </DepartmentTabs>
+
         <ContentArea>
           {children}
         </ContentArea>
@@ -209,356 +684,5 @@ const AdminLayout = ({ children }) => {
     </LayoutWrapper>
   );
 };
-
-// ----- Styled Components ----- //
-
-const LayoutWrapper = styled.div`
-  display: flex;
-  height: 100vh;
-  background: #000;
-  overflow: hidden;
-`;
-
-const Overlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  z-index: 998;
-  backdrop-filter: blur(4px);
-`;
-
-const Sidebar = styled.div`
-  width: 260px;
-  background: #111318;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-  transition: transform 0.3s ease;
-  z-index: 999;
-
-  @media (max-width: 768px) {
-    position: fixed;
-    height: 100%;
-    transform: translateX(${props => props.$isOpen ? '0' : '-100%'});
-  }
-`;
-
-const SidebarHeader = styled.div`
-  padding: 25px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const LogoBox = styled.div`
-  display: flex;
-  align-items: center;
-  
-  img {
-    height: 35px;
-    width: auto;
-    display: block;
-  }
-`;
-
-const DepartmentHeader = styled.div`
-  margin: 0 16px 12px;
-  padding: 14px 16px;
-  border: 1px solid ${({ $color }) => `${$color}40`};
-  border-radius: 14px;
-  background: ${({ $color }) => `${$color}14`};
-
-  small {
-    display: block;
-    color: #6b7280;
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-bottom: 6px;
-  }
-
-  strong {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #f9fafb;
-    font-size: 0.95rem;
-  }
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  display: none;
-  @media (max-width: 768px) { display: block; }
-`;
-
-const NavList = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 0;
-  
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
-`;
-
-const NavLabel = styled.div`
-  padding: 25px 20px 10px;
-  font-size: 9px;
-  font-weight: 700;
-  color: #4b5563;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-`;
-
-const NavItem = styled(Link)`
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  color: ${props => props.$active ? '#fff' : '#9ca3af'};
-  background: ${props => props.$active ? (props.$activeBg || '#1f2127') : 'transparent'};
-  text-decoration: none;
-  transition: all 0.2s;
-  position: relative;
-  gap: 12px;
-  font-size: 0.95rem;
-
-  &:hover {
-    color: #e5e7eb;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  ${props => props.$active && `
-    &::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 20px;
-      width: 3px;
-      background: ${props.$accent || '#4F8EF7'};
-      border-radius: 0 4px 4px 0;
-    }
-  `}
-
-  .icon { font-size: 1.1rem; }
-  .arrow { margin-left: auto; color: #4b5563; }
-  
-  .red-dot {
-    width: 6px;
-    height: 6px;
-    background: #ef4444;
-    border-radius: 50%;
-    margin-left: auto;
-    box-shadow: 0 0 10px #ef4444;
-  }
-`;
-
-const DropdownContent = styled(motion.div)`
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.1);
-`;
-
-const DropdownItem = styled(Link)`
-  display: block;
-  padding: 10px 20px 10px 52px;
-  color: ${props => props.$active ? '#4F8EF7' : '#9ca3af'};
-  text-decoration: none;
-  font-size: 0.85rem;
-  transition: all 0.2s;
-
-  &:hover {
-    color: #e5e7eb;
-    background: rgba(255, 255, 255, 0.02);
-  }
-`;
-
-const SidebarFooter = styled.div`
-  padding: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-`;
-
-const UserBadge = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  .info {
-    p { margin: 0; font-size: 0.85rem; color: #fff; font-weight: 500; }
-    span { font-size: 0.7rem; color: #6b7280; }
-  }
-`;
-
-const Avatar = styled.div`
-  width: 36px;
-  height: 36px;
-  background: #1f2127;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #4F8EF7;
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-`;
-
-const MainArea = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #000;
-`;
-
-const Topbar = styled.div`
-  height: 70px;
-  background: #0a0a0a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 30px;
-  position: sticky;
-  top: 0;
-  z-index: 900;
-
-  @media (max-width: 768px) { padding: 0 20px; }
-`;
-
-const DepartmentTabs = styled.div`
-  min-height: 50px;
-  background: #0a0a0a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 30px;
-  overflow-x: auto;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (max-width: 768px) {
-    padding: 0 20px;
-  }
-`;
-
-const DeptTab = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid ${({ $active, $color }) => $active ? `${$color}66` : 'rgba(255,255,255,0.07)'};
-  background: ${({ $active, $color }) => $active ? `${$color}18` : 'transparent'};
-  color: ${({ $active }) => $active ? '#f9fafb' : '#9ca3af'};
-  font-size: 0.78rem;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: ${({ $color }) => $color};
-    box-shadow: 0 0 12px ${({ $color }) => $color};
-  }
-
-  &:hover {
-    color: #fff;
-    border-color: ${({ $color }) => `${$color}66`};
-  }
-`;
-
-const MenuToggle = styled.button`
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-  margin-right: 20px;
-  display: none;
-  @media (max-width: 768px) { display: block; }
-`;
-
-const Breadcrumbs = styled.div`
-  font-size: 0.7rem;
-  color: #6b7280;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`;
-
-const PageTitle = styled.h2`
-  margin: 0;
-  font-size: 1.2rem;
-  color: #fff;
-  font-weight: 600;
-`;
-
-const IconButton = styled.button`
-  background: none;
-  border: none;
-  color: #6b7280;
-  font-size: 1.1rem;
-  cursor: pointer;
-  position: relative;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
-
-  &:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .notif-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 8px;
-    height: 8px;
-    background: #ef4444;
-    border-radius: 50%;
-    border: 2px solid #0a0a0a;
-  }
-`;
-
-const AvatarCircle = styled.div`
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #4F8EF7, #2D5CFE);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-  margin-left: 10px;
-  transition: transform 0.2s;
-
-  &:hover { transform: scale(1.05); }
-`;
-
-const ContentArea = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 30px;
-  
-  @media (max-width: 768px) { padding: 20px; }
-`;
 
 export default AdminLayout;
