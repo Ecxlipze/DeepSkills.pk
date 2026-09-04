@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
+import { syncTeacherAccess } from '../utils/adminAccessApi';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -443,13 +444,12 @@ const TeacherProfile = () => {
     const assignedBatchNames = assignedBatches.map(batch => batch.batch_name);
     const assignedCourses = Array.from(new Set(assignedBatches.map(batch => batch.course).filter(Boolean)));
 
-    await supabase
-      .from('allowed_cnics')
-      .update({
-        assigned_course: assignedCourses.join(', '),
-        batch: assignedBatchNames.join(', ')
-      })
-      .eq('cnic', teacher.cnic);
+    await syncTeacherAccess({
+      cnic: teacher.cnic,
+      name: teacher.name,
+      assignedCourse: assignedCourses.join(', '),
+      batch: assignedBatchNames.join(', ')
+    });
   };
 
   useEffect(() => {

@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { Skeleton } from '../components/Skeleton';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { createNotification } from '../utils/notifications';
+import { syncStudentAccess } from '../utils/adminAccessApi';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -535,18 +536,13 @@ const EnrollmentManager = () => {
         if (admError) throw admError;
       }
 
-      // 2. Add to allowed_cnics to unlock dashboard
-      const { error: authError } = await supabase
-        .from('allowed_cnics')
-        .upsert({
-          cnic: selectedApp.cnic,
-          name: selectedApp.name,
-          role: 'student',
-          assigned_course: selectedApp.course || selectedApp.selectedCourse,
-          batch: batch.batch_name
-        }, { onConflict: 'cnic' });
-
-      if (authError) throw authError;
+      // 2. Synchronize student login access to unlock dashboard
+      await syncStudentAccess({
+        cnic: selectedApp.cnic,
+        name: selectedApp.name,
+        course: selectedApp.course || selectedApp.selectedCourse,
+        batch: batch.batch_name
+      });
 
       // 3. Automate Fee Generation
       const normalizedPlan = planType === 'full' ? 'full' : 'installment';

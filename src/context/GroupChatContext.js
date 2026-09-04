@@ -99,27 +99,57 @@ export const GroupChatProvider = ({ children }) => {
     }
   }, [availableBatches, activeBatch]);
 
-  const batchMatches = useCallback((memberBatchValue) => {
-    if (!activeBatch || !memberBatchValue) return false;
-    return memberBatchValue
-      .split(',')
-      .map((batch) => batch.trim())
-      .includes(activeBatch);
-  }, [activeBatch]);
-
   const fetchMembers = useCallback(async () => {
     if (!activeBatch) return;
     try {
-      const { data, error } = await supabase
-        .from('allowed_cnics')
-        .select('cnic, name, role, batch');
+      // 1. Fetch active students in this batch
+      const { data: studentsData, error: studentsError } = await supabase
+        .from('admissions')
+        .select('cnic, name, batch')
+        .eq('batch', activeBatch)
+        .in('status', ['Active', 'Graduated']);
 
-      if (error) throw error;
-      setMembers((data || []).filter((member) => batchMatches(member.batch)));
+      if (studentsError) throw studentsError;
+
+      // 2. Fetch instructors assigned to this batch
+      const { data: batchData } = await supabase
+        .from('batches')
+        .select('id')
+        .eq('batch_name', activeBatch)
+        .maybeSingle();
+
+      let instructors = [];
+      if (batchData?.id) {
+        const { data: teacherBatches, error: tbError } = await supabase
+          .from('teacher_batches')
+          .select('teachers(cnic, name, status)')
+          .eq('batch_id', batchData.id);
+
+        if (!tbError && teacherBatches) {
+          instructors = teacherBatches
+            .map((tb) => tb.teachers)
+            .filter((t) => t && t.status === 'Active')
+            .map((t) => ({
+              cnic: t.cnic,
+              name: t.name,
+              role: 'teacher',
+              batch: activeBatch
+            }));
+        }
+      }
+
+      const studentMembers = (studentsData || []).map((s) => ({
+        cnic: s.cnic,
+        name: s.name,
+        role: 'student',
+        batch: s.batch
+      }));
+
+      setMembers([...instructors, ...studentMembers]);
     } catch (err) {
       console.error('Error fetching members:', err);
     }
-  }, [activeBatch, batchMatches]);
+  }, [activeBatch]);
 
   const fetchMutes = useCallback(async () => {
     if (!activeBatch) return;
@@ -175,7 +205,7 @@ export const GroupChatProvider = ({ children }) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_mutes', filter: `batch=eq.${activeBatch}` }, () => {
         fetchMutes();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'allowed_cnics' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admissions', filter: `batch=eq.${activeBatch}` }, () => {
         fetchMembers();
       })
       .subscribe();

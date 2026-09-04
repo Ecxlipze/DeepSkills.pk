@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
+import { syncStudentAccess, revokeStudentAccess } from '../utils/adminAccessApi';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -484,9 +485,9 @@ const StudentProfile = ({ studentId }) => {
           
           if (admError) throw admError;
 
-          // 2. Sync allowed_cnics
+          // 2. Sync student access
           if (newStatus === 'Inactive') {
-            await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
+            await revokeStudentAccess(student.cnic);
             const emailResult = await sendAdmissionEmail(EMAIL_EVENTS.ADMISSION_INACTIVE, {
               email: student.email,
               name: student.name,
@@ -495,13 +496,12 @@ const StudentProfile = ({ studentId }) => {
             });
             if (!emailResult.ok) toast.error(`Status updated, but email failed: ${emailResult.message}`);
           } else {
-            await supabase.from('allowed_cnics').upsert({
+            await syncStudentAccess({
               cnic: student.cnic,
               name: student.name,
-              role: 'student',
-              assigned_course: student.course,
+              course: student.course,
               batch: student.batch
-            }, { onConflict: 'cnic' });
+            });
           }
 
           setStudent(prev => ({ ...prev, status: newStatus }));
@@ -525,7 +525,7 @@ const StudentProfile = ({ studentId }) => {
         setProcessing(true);
         try {
           await supabase.from('admissions').update({ status: 'Inactive' }).eq('id', id);
-          await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
+          await revokeStudentAccess(student.cnic);
           const emailResult = await sendAdmissionEmail(EMAIL_EVENTS.ADMISSION_INACTIVE, {
             email: student.email,
             name: student.name,
@@ -568,15 +568,14 @@ const StudentProfile = ({ studentId }) => {
       
       if (admError) throw admError;
 
-      // 2. Sync allowed_cnics (if they are active)
+      // 2. Sync student access (if they are active)
       if (student.status === 'Active') {
-        await supabase
-          .from('allowed_cnics')
-          .update({
-            batch: nextBatchName,
-            assigned_course: student.course
-          })
-          .eq('cnic', student.cnic);
+        await syncStudentAccess({
+          cnic: student.cnic,
+          name: student.name,
+          course: student.course,
+          batch: nextBatchName
+        });
       }
 
       setStudent(prev => ({ 
@@ -612,25 +611,23 @@ const StudentProfile = ({ studentId }) => {
       
       if (admError) throw admError;
 
-      // 2. Sync allowed_cnics
+      // 2. Sync student access
       if (student.status === 'Active') {
         if (editFormData.cnic !== student.cnic) {
-            // Delete old CNIC
-            await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
-            // Insert new CNIC
-            await supabase.from('allowed_cnics').insert({
-                cnic: editFormData.cnic,
-                name: editFormData.name,
-                role: 'student',
-                assigned_course: editFormData.course,
-                batch: student.batch
-            });
+          await revokeStudentAccess(student.cnic);
+          await syncStudentAccess({
+            cnic: editFormData.cnic,
+            name: editFormData.name,
+            course: editFormData.course,
+            batch: student.batch
+          });
         } else {
-            // Update name/course
-            await supabase.from('allowed_cnics').update({ 
-                name: editFormData.name,
-                assigned_course: editFormData.course
-            }).eq('cnic', student.cnic);
+          await syncStudentAccess({
+            cnic: student.cnic,
+            name: editFormData.name,
+            course: editFormData.course,
+            batch: student.batch
+          });
         }
       }
 
@@ -664,7 +661,7 @@ const StudentProfile = ({ studentId }) => {
 
           // 4. Delete student access and academic records
           if (student?.cnic) {
-            await supabase.from('allowed_cnics').delete().eq('cnic', student.cnic);
+            await revokeStudentAccess(student.cnic);
             await supabase.from('attendance').delete().eq('cnic', student.cnic);
             await supabase.from('task_submissions').delete().eq('cnic', student.cnic);
           }

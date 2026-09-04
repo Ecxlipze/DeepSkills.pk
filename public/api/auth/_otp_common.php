@@ -45,12 +45,15 @@ function otp_normalize_cnic($value) {
     return substr($digits, 0, 5) . '-' . substr($digits, 5, 7) . '-' . substr($digits, 12, 1);
 }
 
-function otp_supabase_request($method, $path, $payload = null, $prefer = '') {
+function otp_supabase_request($method, $path, $payload = null, $prefer = '', $throwOnError = false) {
     $env = otp_load_env_file();
     $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
     $key = $env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
 
     if (!$url || !$key) {
+        if ($throwOnError) {
+            throw new Exception('Supabase service configuration is missing.');
+        }
         otp_respond(500, ['status' => 'error', 'message' => 'Supabase service configuration is missing.']);
     }
 
@@ -83,6 +86,9 @@ function otp_supabase_request($method, $path, $payload = null, $prefer = '') {
     $decoded = json_decode($response ?: 'null', true);
     if ($status >= 400) {
         $message = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? 'Supabase request failed.') : 'Supabase request failed.';
+        if ($throwOnError) {
+            throw new Exception($message, $status);
+        }
         otp_respond($status, ['status' => 'error', 'message' => $message]);
     }
 
@@ -97,10 +103,10 @@ function otp_json_input() {
     return $data;
 }
 
-function otp_bootstrap() {
+function otp_bootstrap($allowedMethods = ['POST']) {
     header('Content-Type: application/json');
     header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Methods: ' . implode(', ', array_unique(array_merge($allowedMethods, ['OPTIONS']))));
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
     if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -108,7 +114,7 @@ function otp_bootstrap() {
         exit();
     }
 
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    if (!in_array($_SERVER['REQUEST_METHOD'], $allowedMethods, true)) {
         otp_respond(405, ['status' => 'error', 'message' => 'Method not allowed.']);
     }
 }
@@ -153,7 +159,185 @@ function otp_get_bearer_token() {
     return '';
 }
 
-function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride = null) {
+function auth_first($rows) {
+    return is_array($rows) ? ($rows[0] ?? null) : null;
+}
+
+function auth_permissions($permissions) {
+    $moduleKeys = [
+        'dashboard', 'counsellor', 'students', 'teachers', 'courses', 'attendance',
+        'tasks', 'results', 'finance', 'complaints', 'announcements', 'blog',
+        'referral', 'reports', 'hr', 'users', 'settings'
+    ];
+    $source = is_array($permissions) ? $permissions : [];
+    $normalized = [];
+    foreach ($moduleKeys as $key) {
+        $normalized[$key] = $source[$key] ?? 'none';
+    }
+    return $normalized;
+}
+
+function auth_build_user($cnic) {
+    $roleData = auth_first(otp_supabase_request(
+        'GET',
+        'allowed_cnics?select=*&cnic=eq.' . rawurlencode($cnic) . '&limit=1'
+    ));
+
+    if (!$roleData) {
+        $latestAdmission = auth_first(otp_supabase_request(
+            'GET',
+            'admissions?select=status&cnic=eq.' . rawurlencode($cnic) . '&order=submitted_at.desc&limit=1'
+        ));
+
+        if (!empty($latestAdmission['status'])) {
+            $status = strtolower($latestAdmission['status']);
+            if ($status === 'pending') {
+                otp_respond(403, ['status' => 'error', 'message' => 'Your registration is pending admin approval. You can log in after your admission is approved.']);
+            }
+            otp_respond(403, ['status' => 'error', 'message' => 'Your admission is ' . $status . '. Please contact the administrator.']);
+        }
+
+        otp_respond(403, ['status' => 'error', 'message' => 'Access denied. No account found for this CNIC.']);
+    }
+
+    $role = $roleData['role'] ?? '';
+    if ($role === 'teacher') {
+        $teacher = auth_first(otp_supabase_request(
+            'GET',
+            'teachers?select=id,status&cnic=eq.' . rawurlencode($cnic) . '&limit=1'
+        ));
+        if (!$teacher) {
+            otp_respond(404, ['status' => 'error', 'message' => 'Teacher profile not found.']);
+        }
+        if (($teacher['status'] ?? '') !== 'Active') {
+            otp_respond(403, ['status' => 'error', 'message' => 'Your account is ' . strtolower($teacher['status'] ?? 'inactive') . '. Please contact the administrator.']);
+        }
+        return array_merge($roleData, [
+            'id' => $teacher['id'] ?? ($roleData['id'] ?? null),
+            'name' => $roleData['name'] ?? '',
+            'status' => $teacher['status'],
+            'authType' => 'cnic',
+            'permissions' => (object) [],
+        ]);
+    }
+
+    if ($role === 'student') {
+        $admission = auth_first(otp_supabase_request(
+            'GET',
+            'admissions?select=*&cnic=eq.' . rawurlencode($cnic) . '&status=in.(Active,Graduated)&order=submitted_at.desc&limit=1'
+        ));
+        if (!$admission) {
+            otp_respond(404, ['status' => 'error', 'message' => 'Student admission record not found.']);
+        }
+        return array_merge($roleData, [
+            'id' => $admission['id'] ?? ($roleData['id'] ?? null),
+            'name' => $roleData['name'] ?? ($admission['name'] ?? ''),
+            'assigned_course' => $admission['course'] ?? ($roleData['assigned_course'] ?? null),
+            'course' => $admission['course'] ?? ($roleData['assigned_course'] ?? null),
+            'batch' => $admission['batch'] ?? ($roleData['batch'] ?? null),
+            'batch_timing' => $admission['batch_timing'] ?? ($roleData['batch_timing'] ?? null),
+            'status' => $admission['status'],
+            'authType' => 'cnic',
+            'permissions' => (object) [],
+        ]);
+    }
+
+    $directoryUser = auth_first(otp_supabase_request(
+        'GET',
+        'users?select=*,custom_roles(id,name,color,icon,permissions)&cnic=eq.' . rawurlencode($cnic) . '&limit=1'
+    ));
+    if (!$directoryUser) {
+        otp_respond(404, ['status' => 'error', 'message' => 'User directory record not found.']);
+    }
+    if (($directoryUser['status'] ?? '') !== 'active') {
+        otp_respond(403, ['status' => 'error', 'message' => 'Your account is ' . ($directoryUser['status'] ?? 'inactive') . '. Please contact the administrator.']);
+    }
+
+    $customRole = is_array($directoryUser['custom_roles'] ?? null) ? $directoryUser['custom_roles'] : null;
+    $permissions = $role === 'admin' ? null : auth_permissions($customRole['permissions'] ?? ($directoryUser['permissions'] ?? []));
+    if ($role === 'admin') {
+        $permissions = [];
+        foreach (auth_permissions([]) as $key => $_) {
+            $permissions[$key] = 'full';
+        }
+    }
+
+    return [
+        'id' => $directoryUser['id'],
+        'cnic' => $directoryUser['cnic'],
+        'email' => $directoryUser['email'] ?? null,
+        'phone' => $directoryUser['phone'] ?? null,
+        'name' => $directoryUser['full_name'],
+        'role' => $directoryUser['role'],
+        'status' => $directoryUser['status'],
+        'customRoleId' => $directoryUser['custom_role_id'] ?? null,
+        'permissions' => $permissions,
+        'authType' => 'cnic',
+    ];
+}
+
+function portal_create_session($cnic, $role, $actorId = null, $actorType = 'user') {
+    $sessionSecret = bin2hex(random_bytes(32));
+    $tokenHash = password_hash($sessionSecret, PASSWORD_DEFAULT);
+    $now = gmdate('c');
+    $sessionExpiry = gmdate('c', time() + (86400 * 30)); // 30 days
+    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500);
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    $row = [
+        'token_hash' => $tokenHash,
+        'cnic' => $cnic,
+        'role' => $role,
+        'actor_id' => $actorId,
+        'actor_type' => $actorType,
+        'created_at' => $now,
+        'expires_at' => $sessionExpiry,
+        'user_agent' => $userAgent,
+        'ip_address' => $ipAddress,
+    ];
+
+    try {
+        $inserted = otp_supabase_request('POST', 'portal_sessions', [$row], 'return=representation', true);
+        if (is_array($inserted) && isset($inserted[0]['id'])) {
+            $sessionId = $inserted[0]['id'];
+            return [
+                'sessionId' => $sessionId,
+                'sessionSecret' => $sessionSecret,
+                'fullSessionToken' => $sessionId . '.' . $sessionSecret,
+                'expiresAt' => $sessionExpiry,
+                'table' => 'portal_sessions'
+            ];
+        }
+    } catch (Exception $e) {
+        // Table may not exist yet in live DB during transition; fallback to login_otps
+    }
+
+    // Backwards-compatible fallback
+    $fallbackRow = [
+        'cnic' => $cnic,
+        'email' => 'session_' . substr(md5($cnic), 0, 8) . '@deepskills.pk',
+        'role' => $role,
+        'otp_hash' => password_hash(bin2hex(random_bytes(6)), PASSWORD_DEFAULT),
+        'expires_at' => $now,
+        'consumed_at' => $now,
+        'token_hash' => $tokenHash,
+        'token_expires_at' => $sessionExpiry,
+        'token_used_at' => $now,
+        'user_agent' => $userAgent,
+        'ip_address' => $ipAddress,
+    ];
+    $inserted = otp_supabase_request('POST', 'login_otps', [$fallbackRow], 'return=representation');
+    $sessionId = $inserted[0]['id'] ?? '';
+    return [
+        'sessionId' => $sessionId,
+        'sessionSecret' => $sessionSecret,
+        'fullSessionToken' => $sessionId . '.' . $sessionSecret,
+        'expiresAt' => $sessionExpiry,
+        'table' => 'login_otps'
+    ];
+}
+
+function portal_require_session($allowedRoles = [], $requestedCnic = null, $tokenOverride = null) {
     $token = $tokenOverride ?: otp_get_bearer_token();
     if (!$token) {
         $input = json_decode(file_get_contents('php://input'), true);
@@ -193,12 +377,41 @@ function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride
     }
 
     $now = gmdate('c');
-    $rows = otp_supabase_request(
-        'GET',
-        'login_otps?select=id,cnic,role,token_hash,token_expires_at&id=eq.' . rawurlencode($rowId) . '&limit=1'
-    );
+    $row = null;
+    $isPortalSession = false;
 
-    $row = is_array($rows) ? ($rows[0] ?? null) : null;
+    // 1. Check portal_sessions first
+    try {
+        $rows = otp_supabase_request(
+            'GET',
+            'portal_sessions?select=*&id=eq.' . rawurlencode($rowId) . '&limit=1',
+            null,
+            '',
+            true
+        );
+        if (is_array($rows) && !empty($rows[0])) {
+            $row = $rows[0];
+            $isPortalSession = true;
+        }
+    } catch (Exception $e) {
+        // Fallback if portal_sessions table not yet present in schema
+    }
+
+    // 2. Check login_otps fallback
+    if (!$row) {
+        $rows = otp_supabase_request(
+            'GET',
+            'login_otps?select=id,cnic,role,token_hash,token_expires_at&id=eq.' . rawurlencode($rowId) . '&limit=1'
+        );
+        $row = is_array($rows) ? ($rows[0] ?? null) : null;
+        if ($row) {
+            $row['expires_at'] = $row['token_expires_at'] ?? null;
+            $row['revoked_at'] = null;
+            $row['actor_id'] = null;
+            $row['actor_type'] = $row['role'] === 'student' ? 'student' : ($row['role'] === 'teacher' ? 'teacher' : 'user');
+        }
+    }
+
     if (!$row || empty($row['token_hash'])) {
         otp_respond(401, [
             'status' => 'error',
@@ -207,7 +420,15 @@ function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride
         ]);
     }
 
-    if (!empty($row['token_expires_at']) && $row['token_expires_at'] < $now) {
+    if (!empty($row['revoked_at'])) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'session_revoked',
+            'message' => 'Session has been logged out or revoked. Please log in again.'
+        ]);
+    }
+
+    if (!empty($row['expires_at']) && $row['expires_at'] < $now) {
         otp_respond(401, [
             'status' => 'error',
             'code' => 'session_expired',
@@ -223,7 +444,8 @@ function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride
         ]);
     }
 
-    if ($expectedRole && ($row['role'] ?? '') !== $expectedRole) {
+    $roles = is_array($allowedRoles) ? $allowedRoles : (is_string($allowedRoles) && $allowedRoles !== '' ? [$allowedRoles] : []);
+    if (!empty($roles) && !in_array($row['role'] ?? '', $roles, true)) {
         otp_respond(403, [
             'status' => 'error',
             'code' => 'role_mismatch',
@@ -251,6 +473,141 @@ function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride
         }
     }
 
-    return $sessionCnic;
+    if ($isPortalSession) {
+        $lastSeen = !empty($row['last_seen_at']) ? strtotime($row['last_seen_at']) : 0;
+        if (time() - $lastSeen > 300) {
+            otp_supabase_request('PATCH', 'portal_sessions?id=eq.' . rawurlencode($row['id']), [
+                'last_seen_at' => $now
+            ], 'return=minimal');
+        }
+    }
+
+    return [
+        'id' => $row['id'],
+        'cnic' => $sessionCnic,
+        'role' => $row['role'],
+        'actor_id' => $row['actor_id'] ?? null,
+        'actor_type' => $row['actor_type'] ?? ($row['role'] === 'student' ? 'student' : ($row['role'] === 'teacher' ? 'teacher' : 'user')),
+        'expires_at' => $row['expires_at'],
+        'table' => $isPortalSession ? 'portal_sessions' : 'login_otps',
+    ];
+}
+
+function otp_verify_session($expectedRole, $requestedCnic = null, $tokenOverride = null) {
+    $roles = $expectedRole ? [$expectedRole] : [];
+    $session = portal_require_session($roles, $requestedCnic, $tokenOverride);
+    return $session['cnic'];
+}
+
+function portal_authorize_admin_operation($requiredPermissionKey = null) {
+    $token = otp_get_bearer_token();
+    if (!$token) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'missing_token',
+            'message' => 'Authentication token is required for this operation.'
+        ]);
+    }
+
+    $segments = explode('.', $token);
+
+    // 1. Supabase JWT (Super Admin)
+    if (count($segments) === 3) {
+        $env = otp_load_env_file();
+        $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
+        $anonKey = $env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? $env['REACT_APP_SUPABASE_ANON_KEY'] ?? '';
+
+        $ch = curl_init($url . '/auth/v1/user');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'apikey: ' . $anonKey,
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code === 200) {
+            $user = json_decode($res, true);
+            if (is_array($user) && !empty($user['id'])) {
+                return [
+                    'type' => 'supabase_admin',
+                    'user' => $user,
+                    'role' => 'admin',
+                    'permissions' => ['all' => 'full']
+                ];
+            }
+        }
+
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'invalid_admin_token',
+            'message' => 'Invalid or expired Super Admin credentials.'
+        ]);
+    }
+
+    // 2. Portal Session Token (<uuid>.<secret>)
+    if (count($segments) === 2 && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $segments[0])) {
+        $session = portal_require_session(['admin', 'custom'], null, $token);
+        $role = $session['role'];
+
+        if ($role === 'admin') {
+            return [
+                'type' => 'portal_session',
+                'session' => $session,
+                'role' => 'admin',
+                'permissions' => ['all' => 'full']
+            ];
+        }
+
+        $directoryUser = auth_first(otp_supabase_request(
+            'GET',
+            'users?select=*,custom_roles(permissions)&cnic=eq.' . rawurlencode($session['cnic']) . '&limit=1'
+        ));
+
+        if (!$directoryUser || ($directoryUser['status'] ?? '') !== 'active') {
+            otp_respond(403, [
+                'status' => 'error',
+                'code' => 'account_inactive',
+                'message' => 'User account is inactive or not found in directory.'
+            ]);
+        }
+
+        $customRole = is_array($directoryUser['custom_roles'] ?? null) ? $directoryUser['custom_roles'] : null;
+        $permissions = auth_permissions($customRole['permissions'] ?? ($directoryUser['permissions'] ?? []));
+
+        if ($requiredPermissionKey) {
+            $requiredKeys = is_array($requiredPermissionKey) ? $requiredPermissionKey : [$requiredPermissionKey];
+            $hasPermission = false;
+            foreach ($requiredKeys as $key) {
+                if (($permissions[$key] ?? 'none') === 'full') {
+                    $hasPermission = true;
+                    break;
+                }
+            }
+            if (!$hasPermission) {
+                $keyList = implode(' or ', $requiredKeys);
+                otp_respond(403, [
+                    'status' => 'error',
+                    'code' => 'insufficient_permissions',
+                    'message' => "Insufficient permissions (requires 'full' on {$keyList})."
+                ]);
+            }
+        }
+
+        return [
+            'type' => 'portal_session',
+            'session' => $session,
+            'role' => 'custom',
+            'permissions' => $permissions
+        ];
+    }
+
+    otp_respond(401, [
+        'status' => 'error',
+        'code' => 'invalid_token_format',
+        'message' => 'Invalid token format. Bearer token must be either Supabase JWT or Portal Session Token.'
+    ]);
 }
 ?>

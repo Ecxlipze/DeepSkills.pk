@@ -100,7 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
 $requestedCnic = !empty($data['cnic']) ? student_finance_normalize_cnic($data['cnic']) : null;
-$cnic = otp_verify_session('student', $requestedCnic);
+$session = portal_require_session(['student'], $requestedCnic);
+$cnic = $session['cnic'];
 
 $student = student_finance_first(student_finance_supabase_request(
     'GET',

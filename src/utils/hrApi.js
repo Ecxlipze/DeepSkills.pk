@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { buildJdDraft } from './hrJdBuilder';
 import { uploadHrAsset, uploadHrBlob } from './hrStorage';
 import { createNotification } from './notifications';
+import { syncTeacherAccess } from './adminAccessApi';
 
 const nowIso = () => new Date().toISOString();
 
@@ -345,15 +346,11 @@ export const finalizeHiring = async ({
     throw profileError;
   }
 
-  const { error: accessError } = await supabase.from('allowed_cnics').upsert([{
+  await syncTeacherAccess({
     cnic: teacher.cnic,
     name: teacher.name,
-    role: 'teacher',
-    assigned_course: teacher.specialization || jd?.position_title || 'Teacher'
-  }], { onConflict: 'cnic' });
-  if (accessError) {
-    throw accessError;
-  }
+    assignedCourse: teacher.specialization || jd?.position_title || 'Teacher'
+  });
 
   await fetch('/api/admin/hr/finalize.php', {
     method: 'POST',

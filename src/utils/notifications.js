@@ -145,19 +145,6 @@ export async function getAdminRecipients() {
     });
   });
 
-  const { data: allowedAdmins } = await supabase
-    .from('allowed_cnics')
-    .select('id, name, role')
-    .eq('role', 'admin');
-
-  (allowedAdmins || []).forEach((admin) => {
-    recipients.push({
-      id: admin.id,
-      role: 'admin',
-      name: admin.name
-    });
-  });
-
   const unique = new Map();
   recipients.forEach((recipient) => {
     if (recipient.id) unique.set(String(recipient.id), recipient);

@@ -120,6 +120,18 @@ const nextConfig = {
       {
         source: '/api/admission-email.php',
         destination: '/api/admission-email'
+      },
+      {
+        source: '/api/admin/student-access.php',
+        destination: '/api/admin/student-access'
+      },
+      {
+        source: '/api/admin/teacher-access.php',
+        destination: '/api/admin/teacher-access'
+      },
+      {
+        source: '/api/admin/staff-access.php',
+        destination: '/api/admin/staff-access'
       }
     ];
   }

@@ -100,7 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
 $requestedCnic = !empty($data['cnic']) ? finance_normalize_cnic($data['cnic']) : null;
-$cnic = otp_verify_session('teacher', $requestedCnic);
+$session = portal_require_session(['teacher'], $requestedCnic);
+$cnic = $session['cnic'];
 
 $teacher = finance_first(finance_supabase_request('GET', 'teachers?select=id,status&cnic=eq.' . rawurlencode($cnic) . '&limit=1'));
 if (!$teacher || ($teacher['status'] ?? '') !== 'Active') {

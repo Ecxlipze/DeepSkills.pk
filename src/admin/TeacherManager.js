@@ -8,6 +8,7 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { syncTeacherAccess } from '../utils/adminAccessApi';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -434,14 +435,13 @@ const TeacherManager = () => {
       const assignedBatchNames = assignedBatches.map(batch => batch.batch_name);
       const assignedCourses = Array.from(new Set(assignedBatches.map(batch => batch.course).filter(Boolean)));
 
-      // 2. Add/Update allowed_cnics (Upsert to prevent duplicate key error)
-      await supabase.from('allowed_cnics').upsert([{
+      // 2. Add/Update teacher access (Upsert via authorized server API)
+      await syncTeacherAccess({
         cnic: formData.cnic,
         name: formData.name,
-        role: 'teacher',
-        assigned_course: assignedCourses.join(', '),
+        assignedCourse: assignedCourses.join(', '),
         batch: assignedBatchNames.join(', ')
-      }], { onConflict: 'cnic' });
+      });
 
       // 3. Add Batch Assignments
       if (formData.selectedBatches.length > 0) {

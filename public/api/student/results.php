@@ -105,7 +105,8 @@ if (!in_array($examType, ['midterm', 'finalterm'], true)) {
 }
 
 $requestedCnic = !empty($data['cnic']) ? student_results_normalize_cnic($data['cnic']) : null;
-$cnic = otp_verify_session('student', $requestedCnic);
+$session = portal_require_session(['student'], $requestedCnic);
+$cnic = $session['cnic'];
 
 $student = student_results_first(student_results_supabase_request(
     'GET',

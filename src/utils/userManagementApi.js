@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { MODULE_KEYS } from './permissions';
 import { logActivity } from './activityLogger';
+import { syncStaffAccess, revokeStaffAccess } from './adminAccessApi';
 
 const nowIso = () => new Date().toISOString();
 
@@ -41,16 +42,16 @@ const fetchSingleByCnic = async (table, cnic) => {
 };
 
 const ensureAllowedAccess = async ({ cnic, fullName, role, assignedCourse = '', batch = '' }) => {
-  return supabase.from('allowed_cnics').upsert([{
+  return syncStaffAccess({
     cnic,
     name: fullName,
     role,
-    assigned_course: assignedCourse,
+    assignedCourse,
     batch
-  }], { onConflict: 'cnic' });
+  });
 };
 
-const removeAllowedAccess = async (cnic) => supabase.from('allowed_cnics').delete().eq('cnic', cnic);
+const removeAllowedAccess = async (cnic) => revokeStaffAccess(cnic);
 
 const ensureStudentRecord = async (payload) => {
   const existing = await fetchSingleByCnic('admissions', payload.cnic);

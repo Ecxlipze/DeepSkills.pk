@@ -40,17 +40,57 @@ export const AuthProvider = ({ children }) => {
     const checkSession = async () => {
       const currentPath = window.location.pathname;
       const storedUser = localStorage.getItem('deepskill_user');
+      const sessionToken = localStorage.getItem('deepskill_session_token');
 
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.authType !== 'supabase_admin') {
-          setUser(parsed);
-          setLoading(false);
-          return;
+      // 1. Check for CNIC Session Token (Server-side validation)
+      if (sessionToken) {
+        try {
+          const response = await fetch('/api/auth/validate-session.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            }
+          });
+          const result = await response.json().catch(() => ({}));
+          if (response.ok && result.status === 'success' && result.user) {
+            const freshUser = result.user;
+            if (!freshUser.sessionToken) {
+              freshUser.sessionToken = sessionToken;
+            }
+            setUser(freshUser);
+            localStorage.setItem('deepskill_user', JSON.stringify(freshUser));
+            setLoading(false);
+            return;
+          } else {
+            // Server rejected session
+            localStorage.removeItem('deepskill_user');
+            localStorage.removeItem('deepskill_session_token');
+            setUser(null);
+          }
+        } catch (err) {
+          console.error('Session validation error:', err);
+          localStorage.removeItem('deepskill_user');
+          localStorage.removeItem('deepskill_session_token');
+          setUser(null);
         }
       }
 
-      const shouldCheckSupabaseSession = currentPath.startsWith('/admin') || storedUser;
+      // If storedUser had authType === 'cnic' without valid session token, wipe it
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.authType === 'cnic') {
+            localStorage.removeItem('deepskill_user');
+          }
+        } catch {
+          localStorage.removeItem('deepskill_user');
+        }
+      }
+
+      const shouldCheckSupabaseSession = currentPath.startsWith('/admin') || (storedUser && (() => {
+        try { return JSON.parse(storedUser)?.authType === 'supabase_admin'; } catch { return false; }
+      })());
 
       if (!shouldCheckSupabaseSession) {
         setLoading(false);
@@ -60,7 +100,7 @@ export const AuthProvider = ({ children }) => {
       const supabase = await getSupabase();
       const { ADMIN_FULL_PERMISSIONS } = await getPermissions();
 
-      // 1. Check Supabase session first (for Admin)
+      // 2. Check Supabase session (for Super Admin)
       let session = null;
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -88,16 +128,8 @@ export const AuthProvider = ({ children }) => {
         setUser(adminUser);
         localStorage.setItem('deepskill_user', JSON.stringify(adminUser));
       } else {
-        // 2. If no Supabase session, check for CNIC session in localStorage
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.authType === 'supabase_admin') {
-            setUser(null);
-            localStorage.removeItem('deepskill_user');
-          } else {
-            setUser(parsed);
-          }
-        }
+        setUser(null);
+        localStorage.removeItem('deepskill_user');
       }
       setLoading(false);
     };
@@ -209,6 +241,7 @@ export const AuthProvider = ({ children }) => {
 
 
   const logout = async () => {
+    const sessionToken = localStorage.getItem('deepskill_session_token');
     const { logActivity } = await getActivityLogger();
 
     if (user) {
@@ -224,7 +257,20 @@ export const AuthProvider = ({ children }) => {
     if (user?.authType === 'supabase_admin') {
       const supabase = await getSupabase();
       await supabase.auth.signOut();
+    } else if (sessionToken) {
+      try {
+        await fetch('/api/auth/logout.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+          }
+        });
+      } catch (err) {
+        console.warn('Server logout error:', err);
+      }
     }
+
     setUser(null);
     localStorage.removeItem('deepskill_user');
     localStorage.removeItem('deepskill_session_token');
