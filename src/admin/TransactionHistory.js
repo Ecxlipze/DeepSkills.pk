@@ -9,6 +9,7 @@ import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
 import { downloadCsv } from '../utils/csvExport';
+import { getAuthHeaders } from '../utils/adminAccessApi';
 
 const TransactionHistory = () => {
   const router = useRouter();
@@ -31,6 +32,27 @@ const TransactionHistory = () => {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
+      // 0. Try server transactions endpoint first (handles staff portal_sessions + teacher_payments unification)
+      try {
+        const headers = await getAuthHeaders();
+        let response = await fetch('/api/admin/finance/transactions', { headers });
+        if (response.status === 404) {
+          response = await fetch('/api/admin/finance/transactions.php', { headers });
+        }
+        if (response.ok) {
+          const resData = await response.json().catch(() => null);
+          if (resData?.status === 'success' && resData.data) {
+            setTransactions(resData.data.transactions || []);
+            setSummary(resData.data.summary || { totalIn: 0, totalOut: 0, net: 0 });
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        // Fall through to direct Supabase query
+      }
+
+      // 1. Direct Supabase fallback
       const { data, error } = await supabase
         .from('payments')
         .select('*')
@@ -39,10 +61,38 @@ const TransactionHistory = () => {
 
       if (error) throw error;
 
-      setTransactions(data || []);
+      let allTxns = data || [];
+      try {
+        const { data: tpData } = await supabase
+          .from('teacher_payments')
+          .select('id, teacher_id, amount, month, paid_on, method, reference, status, teachers(name)')
+          .eq('status', 'Paid')
+          .order('paid_on', { ascending: false });
+
+        if (tpData && tpData.length > 0) {
+          const teacherRows = tpData.map(tp => ({
+            id: tp.id,
+            paid_date: tp.paid_on,
+            entity_type: 'teacher',
+            entity_id: tp.teacher_id,
+            teacher_name: tp.teachers?.name || 'Faculty',
+            person_name: tp.teachers?.name || 'Faculty',
+            description: `Salary - ${tp.teachers?.name || 'Faculty'} (${tp.month})`,
+            method: tp.method || 'bank_transfer',
+            amount: Number(tp.amount) || 0,
+            reference_number: tp.reference || '—',
+            status: tp.status
+          }));
+          allTxns = [...allTxns, ...teacherRows].sort((a, b) => new Date(b.paid_date || '1970-01-01') - new Date(a.paid_date || '1970-01-01'));
+        }
+      } catch (tpErr) {
+        // Ignore fallback teacher payments error
+      }
+
+      setTransactions(allTxns);
       
-      const totalIn = data?.filter(p => p.entity_type === 'student').reduce((sum, p) => sum + p.amount, 0) || 0;
-      const totalOut = data?.filter(p => p.entity_type === 'teacher').reduce((sum, p) => sum + p.amount, 0) || 0;
+      const totalIn = allTxns.filter(p => p.entity_type === 'student').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const totalOut = allTxns.filter(p => p.entity_type === 'teacher').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       
       setSummary({
         totalIn,
@@ -63,7 +113,9 @@ const TransactionHistory = () => {
     const matchesSearch = !search ||
       t.description?.toLowerCase().includes(search) ||
       t.reference_number?.toLowerCase().includes(search) ||
-      t.method?.toLowerCase().includes(search);
+      t.method?.toLowerCase().includes(search) ||
+      t.person_name?.toLowerCase().includes(search) ||
+      t.teacher_name?.toLowerCase().includes(search);
     return matchesType && matchesSearch;
   });
 
@@ -77,7 +129,7 @@ const TransactionHistory = () => {
     const rows = listToExport.map(t => [
       t.paid_date || '',
       t.entity_type === 'student' ? 'Fee' : 'Salary',
-      t.description || 'System Transaction',
+      t.description || (t.teacher_name ? `Salary - ${t.teacher_name}` : 'System Transaction'),
       t.method ? t.method.replace('_', ' ') : '',
       t.amount ?? '',
       t.reference_number || '—'

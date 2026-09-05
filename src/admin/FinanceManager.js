@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { Skeleton, SkeletonCard, SkeletonTable } from '../components/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import { getAuthHeaders } from '../utils/adminAccessApi';
 
 const FinanceManager = () => {
   const router = useRouter();
@@ -49,6 +50,27 @@ const FinanceManager = () => {
   const fetchFinanceData = async () => {
     setLoading(true);
     try {
+      // 0. Try server overview endpoint first (handles portal session auth + service-role reads)
+      try {
+        const headers = await getAuthHeaders();
+        let overviewRes = await fetch('/api/admin/finance/overview', { headers });
+        if (overviewRes.status === 404) {
+          overviewRes = await fetch('/api/admin/finance/overview.php', { headers });
+        }
+        if (overviewRes.ok) {
+          const resData = await overviewRes.json().catch(() => null);
+          if (resData?.status === 'success' && resData.data) {
+            setStats(resData.data.stats || { totalRevenue: 0, outstandingFees: 0, teacherSalaries: 0, netBalance: 0 });
+            setStudentFees(resData.data.studentFees || []);
+            setTeacherSalaries(resData.data.teacherSalaries || []);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        // Fall through to direct Supabase query
+      }
+
       // 1. Fetch Stats
       const { data: allPayments } = await supabase.from('payments').select('amount, status, entity_type');
       const { data: allTeacherPayments } = await supabase.from('teacher_payments').select('amount, status');
@@ -198,40 +220,41 @@ const FinanceManager = () => {
     try {
       const currentMonth = formData.month || new Date().toISOString().slice(0, 7);
 
-      // Check duplicate payment for the same teacher and month
-      const { data: existingTPay } = await supabase
-        .from('teacher_payments')
-        .select('id')
-        .eq('teacher_id', selectedTeacherForPay.id)
-        .eq('month', currentMonth)
-        .maybeSingle();
+      const headers = await getAuthHeaders();
+      const payload = {
+        teacherId: selectedTeacherForPay.id,
+        amount: Number(formData.amount),
+        month: currentMonth,
+        paidDate: formData.paidDate,
+        method: formData.method,
+        reference: formData.reference || null
+      };
 
-      if (existingTPay) {
-        toast.error(`Salary for ${currentMonth} has already been recorded for ${selectedTeacherForPay.name}.`);
-        return;
+      let response = await fetch('/api/admin/finance/pay-teacher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.status === 404) {
+        response = await fetch('/api/admin/finance/pay-teacher.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify(payload)
+        });
       }
 
-      // Record in teacher_payments
-      const { error: tpError } = await supabase
-        .from('teacher_payments')
-        .insert({
-          teacher_id: selectedTeacherForPay.id,
-          amount: Number(formData.amount),
-          month: currentMonth,
-          paid_on: formData.paidDate,
-          method: formData.method,
-          reference: formData.reference || null,
-          status: 'Paid'
-        });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || 'Failed to record salary payment');
+      }
 
-      if (tpError) throw tpError;
-
-      toast.success(`Salary paid successfully for ${selectedTeacherForPay.name}!`);
+      toast.success(result.message || `Salary paid successfully for ${selectedTeacherForPay.name}!`);
       setIsSalaryModalOpen(false);
       setSelectedTeacherForPay(null);
       fetchFinanceData();
     } catch (err) {
-      toast.error("Failed to record salary payment");
+      toast.error(err.message || "Failed to record salary payment");
     }
   };
 
