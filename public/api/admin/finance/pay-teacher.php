@@ -58,39 +58,87 @@ $methodMap = [
 ];
 $cleanMethod = $methodMap[$rawMethod] ?? 'cash';
 
-// 6. Enforce Duplicate Protection
-$existingCheck = otp_supabase_request('GET', 'teacher_payments?select=id&teacher_id=eq.' . rawurlencode($teacherId) . '&month=eq.' . rawurlencode($month) . '&limit=1');
-$existing = auth_first($existingCheck);
-if ($existing) {
-    $teacherName = $teacher['name'] ?? 'this teacher';
-    otp_respond(409, [
-        'status' => 'error',
-        'message' => "Salary for {$month} has already been recorded for {$teacherName}."
+// 6. Enforce Duplicate Protection with Concurrency Lock
+$lockFile = sys_get_temp_dir() . '/salary_' . md5($teacherId . '_' . $month) . '.lock';
+$lockFp = fopen($lockFile, 'c+');
+if ($lockFp) {
+    flock($lockFp, LOCK_EX);
+}
+
+try {
+    $existingCheck = otp_supabase_request('GET', 'teacher_payments?select=id&teacher_id=eq.' . rawurlencode($teacherId) . '&month=eq.' . rawurlencode($month) . '&limit=1', null, '', true);
+    $existing = auth_first($existingCheck);
+    if ($existing) {
+        if ($lockFp) {
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+            $lockFp = null;
+        }
+        otp_respond(409, [
+            'status' => 'error',
+            'message' => 'Salary for this teacher and month has already been recorded.'
+        ]);
+    }
+
+    // 7. Insert Record into teacher_payments
+    $payload = [
+        'teacher_id' => $teacherId,
+        'amount' => $amount,
+        'month' => $month,
+        'paid_on' => $paidDate,
+        'method' => $cleanMethod,
+        'reference' => $reference,
+        'notes' => $notes,
+        'status' => 'Paid'
+    ];
+
+    try {
+        $insertResult = otp_supabase_request('POST', 'teacher_payments', $payload, 'return=representation', true);
+    } catch (Exception $e) {
+        $errCode = (int)$e->getCode();
+        $errMsg = strtolower($e->getMessage());
+        if (
+            $errCode === 409 ||
+            strpos($errMsg, '23505') !== false ||
+            strpos($errMsg, 'duplicate') !== false ||
+            strpos($errMsg, 'unique') !== false
+        ) {
+            if ($lockFp) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+                $lockFp = null;
+            }
+            otp_respond(409, [
+                'status' => 'error',
+                'message' => 'Salary for this teacher and month has already been recorded.'
+            ]);
+        }
+        if ($lockFp) {
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+            $lockFp = null;
+        }
+        otp_respond(500, ['status' => 'error', 'message' => 'Failed to record salary payment.']);
+    }
+
+    if ($lockFp) {
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+        $lockFp = null;
+    }
+
+    $record = is_array($insertResult) ? ($insertResult[0] ?? $insertResult) : $payload;
+
+    otp_respond(200, [
+        'status' => 'success',
+        'message' => 'Salary paid successfully for ' . ($teacher['name'] ?? 'teacher') . '!',
+        'data' => $record
     ]);
+} catch (Exception $outerErr) {
+    if ($lockFp) {
+        flock($lockFp, LOCK_UN);
+        fclose($lockFp);
+    }
+    otp_respond(500, ['status' => 'error', 'message' => 'Failed to process salary payment.']);
 }
-
-// 7. Insert Record into teacher_payments
-$payload = [
-    'teacher_id' => $teacherId,
-    'amount' => $amount,
-    'month' => $month,
-    'paid_on' => $paidDate,
-    'method' => $cleanMethod,
-    'reference' => $reference,
-    'notes' => $notes,
-    'status' => 'Paid'
-];
-
-$insertResult = otp_supabase_request('POST', 'teacher_payments', $payload, 'return=representation');
-if (is_array($insertResult) && isset($insertResult['ok']) && $insertResult['ok'] === false) {
-    otp_respond(500, ['status' => 'error', 'message' => $insertResult['message'] ?? 'Failed to record salary payment.']);
-}
-
-$record = is_array($insertResult) ? ($insertResult[0] ?? $insertResult) : $payload;
-
-otp_respond(200, [
-    'status' => 'success',
-    'message' => 'Salary paid successfully for ' . ($teacher['name'] ?? 'teacher') . '!',
-    'data' => $record
-]);
 ?>

@@ -280,10 +280,69 @@ try {
 
     assert.strictEqual(res.status, 409, `Expected HTTP 409 Conflict, got ${res.status}`);
     assert.strictEqual(res.body.status, 'error');
-    assert.ok(
-      res.body.message.includes('already been recorded'),
-      `Error message should state already recorded, got: ${res.body.message}`
+    assert.strictEqual(
+      res.body.message,
+      'Salary for this teacher and month has already been recorded.',
+      `Error message must match clean duplicate message`
     );
+  });
+
+  await test('Case B.3.b: Two concurrent salary requests for same teacher/month: exactly one 200, one 409, exactly 1 row', async () => {
+    const CONCURRENT_MONTH = '2099-10';
+    await supabase.from('teacher_payments').delete().eq('teacher_id', teacher.id).eq('month', CONCURRENT_MONTH);
+
+    const [res1, res2] = await Promise.all([
+      mockApiCall(payTeacherHandler, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${testSessionToken}` },
+        body: {
+          teacherId: teacher.id,
+          amount: 85000,
+          month: CONCURRENT_MONTH,
+          paidDate: '2099-10-01',
+          method: 'bank_transfer',
+          reference: 'TXN-CONCURRENT-A'
+        }
+      }),
+      mockApiCall(payTeacherHandler, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${testSessionToken}` },
+        body: {
+          teacherId: teacher.id,
+          amount: 85000,
+          month: CONCURRENT_MONTH,
+          paidDate: '2099-10-01',
+          method: 'bank_transfer',
+          reference: 'TXN-CONCURRENT-B'
+        }
+      })
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+    assert.deepStrictEqual(statuses, [200, 409], `Expected statuses [200, 409], got [${res1.status}, ${res2.status}]`);
+
+    const okRes = res1.status === 200 ? res1 : res2;
+    const errRes = res1.status === 409 ? res1 : res2;
+
+    assert.strictEqual(okRes.body.status, 'success');
+    assert.strictEqual(errRes.body.status, 'error');
+    assert.strictEqual(
+      errRes.body.message,
+      'Salary for this teacher and month has already been recorded.',
+      `Rejected concurrent request must return clean 409 duplicate message`
+    );
+
+    const { data: dbRows, error: rowsErr } = await supabase
+      .from('teacher_payments')
+      .select('id, amount, month')
+      .eq('teacher_id', teacher.id)
+      .eq('month', CONCURRENT_MONTH);
+
+    assert.ifError(rowsErr);
+    assert.strictEqual(dbRows.length, 1, `Exactly 1 teacher_payments row must exist, found ${dbRows.length}`);
+
+    // Clean up concurrent test row
+    await supabase.from('teacher_payments').delete().eq('teacher_id', teacher.id).eq('month', CONCURRENT_MONTH);
   });
 
   await test('Case B.4: TransactionHistory visibility and search by teacher name', async () => {
@@ -385,6 +444,7 @@ try {
   }
   await supabase.from('teacher_payments').delete().eq('month', TEST_MONTH);
   await supabase.from('teacher_payments').delete().eq('month', '2099-09');
+  await supabase.from('teacher_payments').delete().eq('month', '2099-10');
 
   if (testSessionId) {
     await supabase.from('portal_sessions').delete().eq('id', testSessionId);
@@ -401,7 +461,7 @@ try {
     await supabase.from('custom_roles').delete().eq('id', testRoleId);
   }
 
-  const { data: remTp } = await supabase.from('teacher_payments').select('id').in('month', [TEST_MONTH, '2099-09']);
+  const { data: remTp } = await supabase.from('teacher_payments').select('id').in('month', [TEST_MONTH, '2099-09', '2099-10']);
   const { data: remSess } = await supabase.from('portal_sessions').select('id').eq('cnic', TEST_CNIC);
   const { data: remUsers } = await supabase.from('users').select('id').eq('cnic', TEST_CNIC);
 

@@ -1,6 +1,29 @@
 import { getSupabaseServerClient } from '../../../../lib/supabaseServer.js';
 import { authorizeAdminOperation } from '../../../../lib/portalAuthServer.js';
 
+const inFlightPaymentLocks = new Map();
+
+async function withPaymentLock(key, fn) {
+  while (inFlightPaymentLocks.has(key)) {
+    try {
+      await inFlightPaymentLocks.get(key);
+    } catch {
+      // ignore errors from previous holder
+    }
+  }
+  let release;
+  const lockPromise = new Promise((resolve) => {
+    release = resolve;
+  });
+  inFlightPaymentLocks.set(key, lockPromise);
+  try {
+    return await fn();
+  } finally {
+    inFlightPaymentLocks.delete(key);
+    release();
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -73,52 +96,67 @@ export default async function handler(req, res) {
   };
   const cleanMethod = methodMap[rawMethod] || 'cash';
 
+  const lockKey = `${teacherId}::${month}`;
+
   try {
-    // 6. Enforce Duplicate Protection
-    const { data: existingPayment, error: checkErr } = await supabase
-      .from('teacher_payments')
-      .select('id')
-      .eq('teacher_id', teacherId)
-      .eq('month', month)
-      .maybeSingle();
+    return await withPaymentLock(lockKey, async () => {
+      // 6. Enforce Duplicate Protection
+      const { data: existingPayment, error: checkErr } = await supabase
+        .from('teacher_payments')
+        .select('id')
+        .eq('teacher_id', teacherId)
+        .eq('month', month)
+        .maybeSingle();
 
-    if (checkErr) {
-      return res.status(500).json({ status: 'error', message: checkErr.message });
-    }
+      if (checkErr) {
+        return res.status(500).json({ status: 'error', message: 'Failed to verify existing payment records.' });
+      }
 
-    if (existingPayment) {
-      return res.status(409).json({
-        status: 'error',
-        message: `Salary for ${month} has already been recorded for ${teacher.name || 'this teacher'}.`
+      if (existingPayment) {
+        return res.status(409).json({
+          status: 'error',
+          message: `Salary for this teacher and month has already been recorded.`
+        });
+      }
+
+      // 7. Insert Record into teacher_payments
+      const { data: insertedRecord, error: insertErr } = await supabase
+        .from('teacher_payments')
+        .insert({
+          teacher_id: teacherId,
+          amount: numAmount,
+          month,
+          paid_on: paidDate,
+          method: cleanMethod,
+          reference,
+          notes,
+          status: 'Paid'
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        // Catch database-level unique constraint violation (code 23505)
+        if (
+          insertErr.code === '23505' ||
+          String(insertErr.message).toLowerCase().includes('duplicate') ||
+          String(insertErr.message).toLowerCase().includes('unique')
+        ) {
+          return res.status(409).json({
+            status: 'error',
+            message: `Salary for this teacher and month has already been recorded.`
+          });
+        }
+        return res.status(500).json({ status: 'error', message: 'Failed to record salary payment.' });
+      }
+
+      return res.status(200).json({
+        status: 'success',
+        message: `Salary paid successfully for ${teacher.name || 'teacher'}!`,
+        data: insertedRecord
       });
-    }
-
-    // 7. Insert Record into teacher_payments
-    const { data: insertedRecord, error: insertErr } = await supabase
-      .from('teacher_payments')
-      .insert({
-        teacher_id: teacherId,
-        amount: numAmount,
-        month,
-        paid_on: paidDate,
-        method: cleanMethod,
-        reference,
-        notes,
-        status: 'Paid'
-      })
-      .select()
-      .single();
-
-    if (insertErr) {
-      return res.status(500).json({ status: 'error', message: insertErr.message || 'Failed to record salary payment.' });
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      message: `Salary paid successfully for ${teacher.name || 'teacher'}!`,
-      data: insertedRecord
     });
   } catch (err) {
-    return res.status(500).json({ status: 'error', message: err.message || 'An unexpected error occurred.' });
+    return res.status(500).json({ status: 'error', message: 'An unexpected error occurred.' });
   }
 }
