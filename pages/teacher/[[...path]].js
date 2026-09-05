@@ -33,6 +33,7 @@ function getTeacherPage(path = []) {
   if (section === 'group-chat') return <TeacherGroupChat />;
   if (section === 'announcements') return <TeacherAnnouncements />;
   if (section === 'hr') return <TeacherHRPage />;
+  if (section === 'tasks' && !child) return <ViewTasks />;
   if (section === 'tasks' && child === 'assign') return <AssignTask />;
   if (section === 'tasks' && child === 'view') return <ViewTasks />;
 

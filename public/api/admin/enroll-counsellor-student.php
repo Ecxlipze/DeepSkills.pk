@@ -1,104 +1,12 @@
 <?php
-function enroll_respond($status, $payload) {
-    http_response_code($status);
-    echo json_encode($payload);
-    exit();
-}
+require_once __DIR__ . '/../auth/_otp_common.php';
+otp_bootstrap(['POST']);
 
-function enroll_load_env_file() {
-    $paths = [
-        __DIR__ . '/../.env',
-        __DIR__ . '/../.env.local',
-        __DIR__ . '/../../.env',
-        __DIR__ . '/../../.env.local',
-        __DIR__ . '/../../../.env',
-        __DIR__ . '/../../../.env.local',
-    ];
+$auth = portal_authorize_admin_operation(['students', 'counsellor']);
 
-    $env = [];
-    foreach ($paths as $path) {
-        if (!is_readable($path)) continue;
-        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-            $line = trim($line);
-            if ($line === '' || $line[0] === '#') continue;
-            $pos = strpos($line, '=');
-            if ($pos === false) continue;
-            $key = trim(substr($line, 0, $pos));
-            $value = trim(substr($line, $pos + 1));
-            $env[$key] = trim($value, "\"'");
-        }
-    }
-    return $env;
-}
-
-function enroll_http_json($method, $url, $headers, $payload = null) {
-    $context = [
-        'http' => [
-            'method' => $method,
-            'header' => implode("\r\n", $headers),
-            'ignore_errors' => true,
-        ],
-    ];
-    if ($payload !== null) {
-        $context['http']['content'] = json_encode($payload);
-    }
-
-    $response = file_get_contents($url, false, stream_context_create($context));
-    $status = 0;
-    $headersOut = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : ($http_response_header ?? []);
-    if (isset($headersOut[0]) && preg_match('/\s(\d{3})\s/', $headersOut[0], $matches)) {
-        $status = (int) $matches[1];
-    }
-
-    return [$status, json_decode($response ?: 'null', true)];
-}
-
-function enroll_require_admin_session($supabaseUrl, $anonKey) {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
-        enroll_respond(401, ['status' => 'error', 'message' => 'Admin session is required.']);
-    }
-
-    [$status, $user] = enroll_http_json('GET', $supabaseUrl . '/auth/v1/user', [
-        'apikey: ' . $anonKey,
-        'Authorization: Bearer ' . $matches[1],
-        'Content-Type: application/json',
-    ]);
-
-    if ($status >= 400 || !is_array($user) || empty($user['id'])) {
-        enroll_respond(401, ['status' => 'error', 'message' => 'Admin session is invalid or expired.']);
-    }
-
-    return $user;
-}
-
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Content-Type: application/json');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    enroll_respond(405, ['status' => 'error', 'message' => 'Method not allowed.']);
-}
-
-$env = enroll_load_env_file();
-$supabaseUrl = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
-$anonKey = $env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? $env['REACT_APP_SUPABASE_ANON_KEY'] ?? '';
-$serviceKey = $env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
-
-if (!$supabaseUrl || !$anonKey || !$serviceKey) {
-    enroll_respond(500, ['status' => 'error', 'message' => 'Supabase service configuration is missing.']);
-}
-
-enroll_require_admin_session($supabaseUrl, $anonKey);
-
-$data = json_decode(file_get_contents('php://input'), true);
+$data = otp_json_input();
 if (!is_array($data) || !is_array($data['payload'] ?? null)) {
-    enroll_respond(400, ['status' => 'error', 'message' => 'Enrollment payload is required.']);
+    otp_respond(400, ['status' => 'error', 'message' => 'Enrollment payload is required.']);
 }
 
 $payload = $data['payload'];
@@ -110,9 +18,8 @@ if ($rawPlan === 'full' || $rawPlan === 'one-time' || $rawPlan === '1') {
     $payload['installmentCount'] = 1;
 } else {
     $payload['paymentPlan'] = 'installment';
-    if (is_numeric($rawPlan) && (int)$rawPlan > 1 && empty($payload['installmentCount'])) {
-        $payload['installmentCount'] = (int)$rawPlan;
-    }
+    $count = !empty($payload['installmentCount']) ? (int)$payload['installmentCount'] : (is_numeric($rawPlan) && (int)$rawPlan > 1 ? (int)$rawPlan : 1);
+    $payload['installmentCount'] = max(1, $count);
 }
 
 // Normalize payment method to lowercase snake_case
@@ -135,31 +42,26 @@ if (!empty($payload['firstPaymentMethod'])) {
 $totalFee = max(0, (int)($payload['totalFee'] ?? 0));
 $discountAmount = max(0, (int)($payload['discountAmount'] ?? 0));
 if ($totalFee <= 0) {
-    enroll_respond(400, ['status' => 'error', 'message' => 'Total fee must be greater than 0.']);
+    otp_respond(400, ['status' => 'error', 'message' => 'Total fee must be greater than 0.']);
 }
 if ($discountAmount > $totalFee) {
-    enroll_respond(400, ['status' => 'error', 'message' => 'Discount cannot exceed total fee.']);
+    otp_respond(400, ['status' => 'error', 'message' => 'Discount cannot exceed total fee.']);
 }
 $finalFee = max(0, $totalFee - $discountAmount);
 $firstPayment = max(0, (int)($payload['firstPayment'] ?? 0));
 if ($firstPayment > $finalFee) {
-    enroll_respond(400, ['status' => 'error', 'message' => 'First payment cannot exceed final fee.']);
+    otp_respond(400, ['status' => 'error', 'message' => 'First payment cannot exceed final fee.']);
 }
 $payload['totalFee'] = $totalFee;
 $payload['discountAmount'] = $discountAmount;
 $payload['finalFee'] = $finalFee;
 $payload['firstPayment'] = $firstPayment;
 
-[$status, $result] = enroll_http_json('POST', $supabaseUrl . '/rest/v1/rpc/enroll_counsellor_student', [
-    'apikey: ' . $serviceKey,
-    'Authorization: Bearer ' . $serviceKey,
-    'Content-Type: application/json',
-], ['payload' => $payload]);
+$result = otp_supabase_request('POST', 'rpc/enroll_counsellor_student', ['payload' => $payload]);
 
-if ($status >= 400) {
-    $message = is_array($result) ? ($result['message'] ?? $result['error'] ?? 'Enrollment failed.') : 'Enrollment failed.';
-    enroll_respond($status, ['status' => 'error', 'message' => $message]);
+if (is_array($result) && isset($result['ok']) && $result['ok'] === false) {
+    otp_respond(400, ['status' => 'error', 'message' => $result['message'] ?? 'Enrollment failed.']);
 }
 
-echo json_encode($result);
+otp_respond(200, $result ?: ['ok' => true]);
 ?>

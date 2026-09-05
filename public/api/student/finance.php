@@ -132,8 +132,10 @@ foreach ($payments as $payment) {
     }
 }
 
+$payableAmount = isset($plan['final_fee']) && $plan['final_fee'] !== null ? (float) $plan['final_fee'] : (float) ($plan['total_fee'] ?? 0);
+$plan['payableAmount'] = $payableAmount;
 $plan['paidAmount'] = $paidAmount;
-$plan['remainingAmount'] = ((float) ($plan['total_fee'] ?? 0)) - $paidAmount;
+$plan['remainingAmount'] = max(0, $payableAmount - $paidAmount);
 $plan['installments'] = $payments;
 
 student_finance_respond(200, ['status' => 'success', 'data' => $plan]);

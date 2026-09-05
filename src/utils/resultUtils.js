@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 
 /**
  * Attendance Marks Calculation
@@ -9,7 +9,7 @@ function calcAttendanceMarks(records, weight) {
   if (totalSessions === 0) return 0;
   const present = records.filter(r => r.status === 'present' || r.status === 'late').length;
   const pct = present / totalSessions;
-  return Math.round(pct * weight * 100 * 10) / 100; // Return with 1 decimal place precision
+  return Math.round(pct * weight * 100 * 10) / 10; // Round to 1 decimal place
 }
 
 /**
@@ -19,7 +19,7 @@ function calcAssignmentMarks(tasks, weight) {
   const assignments = tasks.filter(t => t.category === 'Assignment' && t.marksObtained !== null);
   if (assignments.length === 0) return 0;
   const avg = assignments.reduce((s, t) => s + (t.marksObtained / (t.totalMarks || 100)), 0) / assignments.length;
-  return Math.round(avg * weight * 100 * 10) / 100;
+  return Math.round(avg * weight * 100 * 10) / 10;
 }
 
 /**
@@ -29,7 +29,7 @@ function calcQuizMarks(tasks, weight) {
   const quizzes = tasks.filter(t => t.category === 'Quiz' && t.marksObtained !== null);
   if (quizzes.length === 0) return 0;
   const avg = quizzes.reduce((s, t) => s + (t.marksObtained / (t.totalMarks || 100)), 0) / quizzes.length;
-  return Math.round(avg * weight * 100 * 10) / 100;
+  return Math.round(avg * weight * 100 * 10) / 10;
 }
 
 /**
@@ -40,7 +40,7 @@ function calcTaskCompletionMarks(tasks, weight) {
   if (assigned.length === 0) return 0;
   const submitted = assigned.filter(t => t.status === 'Submitted' || t.status === 'submitted').length;
   const pct = submitted / assigned.length;
-  return Math.round(pct * weight * 100 * 10) / 100;
+  return Math.round(pct * weight * 100 * 10) / 10;
 }
 
 /**
@@ -89,7 +89,7 @@ export function calcResult(attendance, tasks, examType) {
 /**
  * Compute and Cache Result for a student
  */
-export async function computeAndCacheResult(studentId, examType) {
+export async function computeAndCacheResult(studentId, examType, { updateRanks = false } = {}) {
   try {
     // 1. Fetch Student Info (to get batch)
     const { data: student } = await supabase.from('admissions').select('batch, cnic').eq('id', studentId).single();
@@ -116,12 +116,8 @@ export async function computeAndCacheResult(studentId, examType) {
 
     // 5. Calculate
     const result = calcResult(attendance || [], mergedTasks, examType);
-
-    // 6. Calculate Rank (simplified: fetch all results for this batch and type)
-    // Note: This part might be slightly inefficient, but works for individual triggers.
-    // In a real system, you might trigger rank updates for the whole batch.
     
-    // 7. Upsert to Results table
+    // 6. Upsert to Results table
     const { error: upsertError } = await supabase.from('results').upsert({
       student_id: studentId,
       batch_id: student.batch,
@@ -140,8 +136,10 @@ export async function computeAndCacheResult(studentId, examType) {
 
     if (upsertError) console.error('Error caching result:', upsertError);
 
-    // 8. Update ranks for the batch
-    await updateBatchRanks(student.batch, examType);
+    // 7. Update ranks for the batch (only when explicitly requested, e.g. Results workflow)
+    if (updateRanks) {
+      await updateBatchRanks(student.batch, examType);
+    }
 
     return result;
   } catch (error) {
@@ -149,7 +147,7 @@ export async function computeAndCacheResult(studentId, examType) {
   }
 }
 
-async function updateBatchRanks(batchId, examType) {
+export async function updateBatchRanks(batchId, examType) {
   const { data: batchResults } = await supabase
     .from('results')
     .select('id, total_marks')

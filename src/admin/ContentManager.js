@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
 import AdminLayout from '../components/AdminLayout';
 import { requestRevalidate } from '../utils/revalidatePublic';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -67,6 +71,9 @@ const SaveBtn = styled.button`
 `;
 
 const ContentManager = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'settings', 'full'));
   const [loading, setLoading] = useState(false);
   const [about, setAbout] = useState({
     title: 'About Deepskills',
@@ -97,12 +104,16 @@ const ContentManager = () => {
   };
 
   const handleSave = async (key, value) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to settings.');
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.from('settings').upsert({ key, value });
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
       requestRevalidate(['/']);
-      alert(`${key.replace('_', ' ')} saved!`);
+      toast.success(`${key.replace('_', ' ')} saved!`);
     }
     setLoading(false);
   };
@@ -111,7 +122,7 @@ const ContentManager = () => {
     <Container>
       <Header>
         <h1>Content Manager</h1>
-        <button onClick={() => window.location.href = '/admin/dashboard'}>Dashboard</button>
+        <button onClick={() => router.push('/admin/dashboard')}>Dashboard</button>
       </Header>
 
       <Section>
@@ -126,7 +137,11 @@ const ContentManager = () => {
           <Label>Full Description</Label>
           <TextArea value={hero.description} onChange={e => setHero({...hero, description: e.target.value})} />
         </FormGroup>
-        <SaveBtn onClick={() => handleSave('hero_content', hero)} disabled={loading}>Save Hero Content</SaveBtn>
+        {canMutate ? (
+          <SaveBtn onClick={() => handleSave('hero_content', hero)} disabled={loading}>Save Hero Content</SaveBtn>
+        ) : (
+          <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only access</span>
+        )}
       </Section>
 
       <Section>
@@ -147,7 +162,11 @@ const ContentManager = () => {
           <Label>Footer Tagline</Label>
           <Input value={about.footer} onChange={e => setAbout({...about, footer: e.target.value})} />
         </FormGroup>
-        <SaveBtn onClick={() => handleSave('about_content', about)} disabled={loading}>Save About Content</SaveBtn>
+        {canMutate ? (
+          <SaveBtn onClick={() => handleSave('about_content', about)} disabled={loading}>Save About Content</SaveBtn>
+        ) : (
+          <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only access</span>
+        )}
       </Section>
     </Container>
   );

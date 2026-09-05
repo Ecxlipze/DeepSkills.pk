@@ -22,7 +22,33 @@ export async function getAuthHeaders() {
 
 async function callAccessEndpoint(endpoint, payload) {
   const headers = await getAuthHeaders();
-  const response = await fetch(endpoint, {
+  const cleanEndpoint = endpoint.replace(/\.php$/i, '');
+  let response;
+
+  try {
+    response = await fetch(cleanEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify(payload)
+    });
+    if (response.status !== 404) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || 'Access synchronization failed.');
+      }
+      return result;
+    }
+  } catch (err) {
+    if (!err.message?.includes('404')) {
+      throw err;
+    }
+  }
+
+  // Fallback to PHP endpoint if Next route returns 404
+  const phpResponse = await fetch(`${cleanEndpoint}.php`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -31,11 +57,11 @@ async function callAccessEndpoint(endpoint, payload) {
     body: JSON.stringify(payload)
   });
 
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.status === 'error') {
-    throw new Error(result.message || 'Access synchronization failed.');
+  const phpResult = await phpResponse.json().catch(() => ({}));
+  if (!phpResponse.ok || phpResult.status === 'error') {
+    throw new Error(phpResult.message || 'Access synchronization failed.');
   }
-  return result;
+  return phpResult;
 }
 
 export async function syncStudentAccess({ cnic, name, course, batch }) {

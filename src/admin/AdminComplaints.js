@@ -9,6 +9,9 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { useComplaints } from '../context/ComplaintsContext';
 import { Skeleton } from '../components/Skeleton';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
+import toast from 'react-hot-toast';
 
 const Container = styled.div`
   display: flex;
@@ -280,6 +283,8 @@ const AdminComplaints = () => {
 
 const ComplaintsContent = () => {
   const { complaints, loading, sendMessage, closeComplaint, toggleUrgent } = useComplaints();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'full');
   
   const [activeId, setActiveId] = useState(null);
   const [filter, setFilter] = useState('All');
@@ -302,24 +307,43 @@ const ComplaintsContent = () => {
   }, [activeTicket?.messages, activeId]);
 
   const handleSendMessage = async () => {
+    if (!canMutate) {
+      toast.error("You have view-only access. Sending replies is not permitted.");
+      return;
+    }
     if (!newMessage.trim() || !activeId) return;
     try {
       await sendMessage(activeId, newMessage);
       setNewMessage('');
     } catch (err) {
-      alert("Failed to send message.");
+      toast.error("Failed to send message.");
     }
   };
 
   const handleResolve = async () => {
+    if (!canMutate) {
+      toast.error("You have view-only access. Resolving complaints is not permitted.");
+      return;
+    }
     if (!activeId) return;
     if (window.confirm("Mark this administrative complaint as resolved?")) {
       try {
         await sendMessage(activeId, "Administrative response: Your issue has been marked as resolved. Please reopen if the problem continues.");
         await closeComplaint(activeId);
+        toast.success("Ticket resolved");
       } catch (err) {
-        alert("Failed to resolve ticket.");
+        toast.error("Failed to resolve ticket.");
       }
+    }
+  };
+
+  const handleToggleUrgent = async () => {
+    if (!canMutate) {
+      toast.error("You have view-only access. Updating priority is not permitted.");
+      return;
+    }
+    if (activeTicket) {
+      await toggleUrgent(activeTicket.id, activeTicket.priority);
     }
   };
 
@@ -411,20 +435,22 @@ const ComplaintsContent = () => {
                     Student: {activeTicket.student_name} ({activeTicket.student_cnic})
                   </div>
                 </HeaderInfo>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <ControlBtn 
-                    className="urgent" 
-                    $active={activeTicket.priority === 'Urgent'}
-                    onClick={() => toggleUrgent(activeTicket.id, activeTicket.priority)}
-                  >
-                    <FaExclamationCircle /> {activeTicket.priority === 'Urgent' ? 'Priority: Urgent' : 'Set Urgent'}
-                  </ControlBtn>
-                  {activeTicket.status !== 'Closed' && (
-                    <ControlBtn className="resolve" onClick={handleResolve}>
-                      <FaCheckCircle /> Resolve
+                {canMutate && (
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <ControlBtn 
+                      className="urgent" 
+                      $active={activeTicket.priority === 'Urgent'}
+                      onClick={() => toggleUrgent(activeTicket.id, activeTicket.priority)}
+                    >
+                      <FaExclamationCircle /> {activeTicket.priority === 'Urgent' ? 'Priority: Urgent' : 'Set Urgent'}
                     </ControlBtn>
-                  )}
-                </div>
+                    {activeTicket.status !== 'Closed' && (
+                      <ControlBtn className="resolve" onClick={handleResolve}>
+                        <FaCheckCircle /> Resolve
+                      </ControlBtn>
+                    )}
+                  </div>
+                )}
               </ChatHeader>
               
               <ChatBody ref={chatBodyRef}>
@@ -442,17 +468,23 @@ const ComplaintsContent = () => {
 
               <InputArea>
                 {activeTicket.status !== 'Closed' ? (
-                  <InputRow>
-                    <ChatInput 
-                      placeholder="Type administrative reply..." 
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    />
-                    <SendBtn onClick={handleSendMessage} disabled={!newMessage.trim()}>
-                      <FaPaperPlane /> Admin Reply
-                    </SendBtn>
-                  </InputRow>
+                  canMutate ? (
+                    <InputRow>
+                      <ChatInput 
+                        placeholder="Type administrative reply..." 
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      />
+                      <SendBtn onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                        <FaPaperPlane /> Admin Reply
+                      </SendBtn>
+                    </InputRow>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
+                      View-only access: replies and resolution are disabled.
+                    </div>
+                  )
                 ) : (
                   <div style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
                     This administrative ticket is closed.

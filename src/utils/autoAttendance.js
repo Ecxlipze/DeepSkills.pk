@@ -293,8 +293,8 @@ export async function markAttendance(student, batch, status, meta = {}) {
   });
 
   await checkAttendanceThreshold(student);
-  await computeAndCacheResult(student.id, 'midterm');
-  await computeAndCacheResult(student.id, 'finalterm');
+  await computeAndCacheResult(student.id, 'midterm', { updateRanks: false });
+  await computeAndCacheResult(student.id, 'finalterm', { updateRanks: false });
 
   return data;
 }

@@ -299,7 +299,12 @@ const LoginPage = () => {
       if (!otpStep) {
         const result = await requestLoginOtp(cnic);
         setOtpStep(true);
-        setOtpInfo(result.email ? `OTP sent to ${result.email}` : 'OTP sent to your registered email.');
+        if (result.devOtp) {
+          setOtp(result.devOtp);
+          setOtpInfo(`OTP sent to ${result.email || 'registered email'}. (Local Test Code: ${result.devOtp})`);
+        } else {
+          setOtpInfo(result.email ? `OTP sent to ${result.email}` : 'OTP sent to your registered email.');
+        }
         return;
       }
 
@@ -330,7 +335,11 @@ const LoginPage = () => {
         navigate(from, { replace: true });
       } else {
         if (user.role === 'teacher') {
-          navigate('/teacher/dashboard', { replace: true });
+          if (user.status === 'Pending' || user.status === 'Onboarding') {
+            navigate('/teacher/hr', { replace: true });
+          } else {
+            navigate('/teacher/dashboard', { replace: true });
+          }
         } else {
           const adminPath = user.role === 'admin'
             ? '/admin/dashboard'
@@ -551,8 +560,13 @@ const LoginPage = () => {
                 setLoading(true);
                 try {
                   const result = await requestLoginOtp(cnic);
-                  setOtp('');
-                  setOtpInfo(result.email ? `New OTP sent to ${result.email}` : 'New OTP sent to your registered email.');
+                  if (result.devOtp) {
+                    setOtp(result.devOtp);
+                    setOtpInfo(`New OTP sent to ${result.email || 'registered email'}. (Local Test Code: ${result.devOtp})`);
+                  } else {
+                    setOtp('');
+                    setOtpInfo(result.email ? `New OTP sent to ${result.email}` : 'New OTP sent to your registered email.');
+                  }
                 } catch (err) {
                   setError(err.message || 'Unable to resend OTP.');
                 } finally {

@@ -138,13 +138,17 @@ const StudentAttendance = () => {
   useEffect(() => {
     const fetchAttendance = async () => {
       try {
-        const { data: student, error: studentError } = await supabase
+        const { data: studentRows, error: studentError } = await supabase
           .from('admissions')
           .select('id')
           .eq('cnic', user.cnic)
-          .single();
+          .in('status', ['Active', 'Graduated'])
+          .order('submitted_at', { ascending: false })
+          .limit(1);
 
         if (studentError) throw studentError;
+        const student = studentRows?.[0];
+        if (!student) return;
 
         const { data, error } = await supabase
           .from('attendance')

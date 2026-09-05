@@ -1,25 +1,59 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json");
+require_once __DIR__ . '/../../auth/_otp_common.php';
+otp_bootstrap(['POST']);
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
+$auth = portal_authorize_admin_operation('hr');
+
+$data = otp_json_input();
+$profileId = trim((string)($data['profileId'] ?? ''));
+$adminNote = trim((string)($data['adminNote'] ?? ''));
+
+if (!$profileId) {
+    otp_respond(400, ['status' => 'error', 'message' => 'HR Profile ID is required.']);
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(["status" => "error", "message" => "Method not allowed"]);
-    exit();
+// 1. Fetch HR profile
+$profile = auth_first(otp_supabase_request('GET', 'hr_profiles?id=eq.' . rawurlencode($profileId) . '&limit=1'));
+if (!$profile) {
+    otp_respond(404, ['status' => 'error', 'message' => 'HR profile not found.']);
 }
 
-$input = file_get_contents("php://input");
-$data = json_decode($input, true) ?: [];
-$profileId = $data['profileId'] ?? '';
-$adminNote = $data['adminNote'] ?? '';
+$now = gmdate('c');
 
+// 2. Update HR profile
+otp_supabase_request('PATCH', 'hr_profiles?id=eq.' . rawurlencode($profileId), [
+    'hr_status' => 'hired',
+    'hired_at' => $now,
+    'current_step' => 5,
+    'updated_at' => $now
+], 'return=minimal');
+
+// 3. Update teacher status to Active
+$teacherId = $profile['teacher_id'] ?? null;
+$teacher = null;
+if ($teacherId) {
+    $teacher = auth_first(otp_supabase_request('GET', 'teachers?id=eq.' . rawurlencode($teacherId) . '&limit=1'));
+    if ($teacher) {
+        otp_supabase_request('PATCH', 'teachers?id=eq.' . rawurlencode($teacherId), [
+            'status' => 'Active'
+        ], 'return=minimal');
+
+        // 4. Ensure allowed_cnics is active
+        if (!empty($teacher['cnic'])) {
+            $cnic = otp_normalize_cnic($teacher['cnic']);
+            if ($cnic) {
+                otp_supabase_request('POST', 'allowed_cnics?on_conflict=cnic', [[
+                    'cnic' => $cnic,
+                    'name' => $teacher['name'] ?? '',
+                    'role' => 'teacher',
+                    'assigned_course' => $teacher['specialization'] ?: 'Teacher'
+                ]], 'resolution=merge-duplicates,return=minimal');
+            }
+        }
+    }
+}
+
+// 5. Send notification email
 $to = "info@deepskills.pk";
 $subject = "DeepSkill HR: Hiring finalized";
 $body = "
@@ -29,7 +63,7 @@ $body = "
       <h2 style='margin:0;'>Hiring Finalized</h2>
     </div>
     <div style='padding: 20px;'>
-      <p>The HR process for profile <strong>" . htmlspecialchars($profileId) . "</strong> has been finalized and documents were generated.</p>
+      <p>The HR process for teacher <strong>" . htmlspecialchars($teacher['name'] ?? $profileId) . "</strong> has been finalized and status is now <strong>Active</strong>.</p>
       " . ($adminNote ? "<p><strong>Admin Note:</strong> " . nl2br(htmlspecialchars($adminNote)) . "</p>" : "") . "
     </div>
   </div>
@@ -40,5 +74,10 @@ $headers .= "MIME-Version: 1.0\r\n";
 $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
 
 @mail($to, $subject, $body, $headers);
-echo json_encode(["status" => "success"]);
+
+otp_respond(200, [
+    'status' => 'success',
+    'message' => 'Hiring process finalized and teacher activated.',
+    'teacherId' => $teacherId
+]);
 ?>

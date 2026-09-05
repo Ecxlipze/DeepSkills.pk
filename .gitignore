@@ -44,3 +44,7 @@ lint_output.txt
 # database schemas
 *.sql
 !supabase/**/*.sql
+
+# backups & audit logs
+scratch/backup_*.json
+scratch/*audit*.json

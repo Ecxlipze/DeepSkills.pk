@@ -133,15 +133,42 @@ const Banner = styled.div`
   padding: 15px 20px; border-radius: 12px; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; font-size: 0.9rem;
 `;
 
-const StudentResults = () => {
+const TabContainer = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-bottom: 25px;
+`;
+
+const TabButton = styled.button`
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 1px solid ${props => props.$active ? '#378ADD' : 'rgba(255,255,255,0.1)'};
+  background: ${props => props.$active ? 'rgba(55, 138, 221, 0.15)' : 'rgba(255,255,255,0.02)'};
+  color: ${props => props.$active ? '#378ADD' : '#888'};
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+`;
+
+const StudentResults = ({ type: propType }) => {
   const { user } = useAuth();
-  const { type } = useParams();
+  const params = useParams();
+  const rawType = propType || params?.type;
+  const initialType = (rawType === 'final' || rawType === 'finalterm') ? 'finalterm' : 'midterm';
+  const [examType, setExamType] = useState(initialType);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
   const [batchStats, setBatchStats] = useState({ avg: 0, highest: 0, count: 0 });
 
-  const examType = type === 'mid' ? 'midterm' : type === 'final' ? 'finalterm' : type;
+  useEffect(() => {
+    if (rawType) {
+      setExamType((rawType === 'final' || rawType === 'finalterm') ? 'finalterm' : 'midterm');
+    }
+  }, [rawType]);
+
   const examLabel = examType === 'midterm' ? 'Mid Term Result' : 'Final Term Result';
 
   useEffect(() => {
@@ -150,7 +177,7 @@ const StudentResults = () => {
       setLoading(true);
       try {
         const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
-        const response = await fetch('/api/student/results.php', {
+        let response = await fetch('/api/student/results', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -158,6 +185,18 @@ const StudentResults = () => {
           },
           body: JSON.stringify({ cnic: user.cnic, examType, token: sessionToken })
         });
+
+        if (response.status === 404) {
+          response = await fetch('/api/student/results.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+            },
+            body: JSON.stringify({ cnic: user.cnic, examType, token: sessionToken })
+          });
+        }
+
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.status === 'error') {
           throw new Error(payload.message || 'Failed to load result.');
@@ -179,12 +218,41 @@ const StudentResults = () => {
     setExpanded(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  if (loading) return <DashboardLayout><Container>Loading result...</Container></DashboardLayout>;
+  const renderTabs = () => (
+    <TabContainer>
+      <TabButton
+        type="button"
+        $active={examType === 'midterm'}
+        onClick={() => setExamType('midterm')}
+      >
+        Midterm Examination
+      </TabButton>
+      <TabButton
+        type="button"
+        $active={examType === 'finalterm'}
+        onClick={() => setExamType('finalterm')}
+      >
+        Finalterm Examination
+      </TabButton>
+    </TabContainer>
+  );
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <Container>
+          {renderTabs()}
+          <div style={{ color: '#888', padding: '20px 0' }}>Loading result...</div>
+        </Container>
+      </DashboardLayout>
+    );
+  }
 
   if (!result) {
     return (
       <DashboardLayout>
         <Container>
+          {renderTabs()}
           <HeroCard>
             <ResultHeader>
               <h2>{examLabel}</h2>
@@ -206,6 +274,7 @@ const StudentResults = () => {
   return (
     <DashboardLayout>
       <Container>
+        {renderTabs()}
         <HeroCard initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <ResultHeader>
             <h2>{examLabel}</h2>

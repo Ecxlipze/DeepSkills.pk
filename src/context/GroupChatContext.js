@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from '../supabaseClient';
 import { useAuth } from './AuthContext';
 import { getAssignedTeacherBatches, getTeacherByCnic } from '../utils/teacherUtils';
+import { canAccess } from '../utils/permissions';
 
 const GroupChatContext = createContext();
 
@@ -15,6 +16,8 @@ export const GroupChatProvider = ({ children }) => {
   const [teacherBatches, setTeacherBatches] = useState([]);
   const [adminBatches, setAdminBatches] = useState([]);
 
+  const hasAdminChatAccess = user?.role === 'admin' || (user?.role === 'custom' && canAccess(user?.permissions || {}, 'tasks', 'view'));
+
   useEffect(() => {
     const fetchTeacherBatches = async () => {
       if (user?.role !== 'teacher' || !user?.cnic) {
@@ -25,8 +28,13 @@ export const GroupChatProvider = ({ children }) => {
       setLoading(true);
       try {
         const teacher = await getTeacherByCnic(user.cnic);
-        const assignedBatches = await getAssignedTeacherBatches(teacher.id);
-        setTeacherBatches(assignedBatches.filter((batch) => batch.status === 'Active'));
+        if (!teacher) {
+          setTeacherBatches([]);
+          return;
+        }
+
+        const batches = await getAssignedTeacherBatches(teacher.id);
+        setTeacherBatches(batches.filter((batch) => batch.status === 'Active'));
       } catch (err) {
         console.error('Error fetching teacher chat batches:', err);
         setTeacherBatches([]);
@@ -40,7 +48,7 @@ export const GroupChatProvider = ({ children }) => {
 
   useEffect(() => {
     const fetchAdminBatches = async () => {
-      if (user?.role !== 'admin') {
+      if (!hasAdminChatAccess) {
         setAdminBatches([]);
         return;
       }
@@ -59,11 +67,11 @@ export const GroupChatProvider = ({ children }) => {
     };
 
     fetchAdminBatches();
-  }, [user?.role]);
+  }, [hasAdminChatAccess]);
 
   // Parse batches and courses (handle comma separated strings)
   const availableBatches = useMemo(() => {
-    if (user?.role === 'admin') {
+    if (hasAdminChatAccess) {
       return adminBatches.map((batch) => ({
         batch: batch.batch_name,
         course: batch.course || 'General Course'
@@ -85,7 +93,7 @@ export const GroupChatProvider = ({ children }) => {
       batch,
       course: courseList[index] || user.assigned_course || "General Course"
     }));
-  }, [adminBatches, teacherBatches, user?.role, user?.batch, user?.assigned_course]);
+  }, [hasAdminChatAccess, adminBatches, teacherBatches, user?.role, user?.batch, user?.assigned_course]);
 
   useEffect(() => {
     if (availableBatches.length === 0) {
@@ -216,7 +224,7 @@ export const GroupChatProvider = ({ children }) => {
   }, [activeBatch, fetchMembers, fetchMessages, fetchMutes]);
 
   const sendMessage = async (messageData) => {
-    if (!user || !activeBatch || (!['teacher', 'admin'].includes(user.role) && isMuted)) return;
+    if (!user || !activeBatch || (!['teacher', 'admin', 'custom'].includes(user.role) && isMuted)) return;
     try {
       const { error } = await supabase
         .from('group_chat_messages')

@@ -7,6 +7,8 @@ import {
   fetchAttendanceSettings,
   saveAttendanceSettings
 } from '../utils/autoAttendance';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   color: #fff;
@@ -195,6 +197,8 @@ const normalizeSettings = (settings) => ({
 });
 
 const AdminAttendanceSettings = () => {
+  const { user } = useAuth();
+  const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'full'));
   const [settings, setSettings] = useState(normalizeSettings(DEFAULT_ATTENDANCE_SETTINGS));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -220,9 +224,13 @@ const AdminAttendanceSettings = () => {
     return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}&layer=mapnik&marker=${lat}%2C${lng}`;
   }, [settings.latitude, settings.longitude]);
 
-  const update = (field, value) => setSettings((current) => ({ ...current, [field]: value }));
+  const update = (field, value) => {
+    if (!canMutate) return;
+    setSettings((current) => ({ ...current, [field]: value }));
+  };
 
   const toggleWeekendDay = (day) => {
+    if (!canMutate) return;
     setSettings((current) => {
       const currentDays = current.weekendDays || [];
       const nextDays = currentDays.includes(day)
@@ -233,6 +241,10 @@ const AdminAttendanceSettings = () => {
   };
 
   const useMyLocation = () => {
+    if (!canMutate) {
+      toast.error('You have view-only access to attendance settings.');
+      return;
+    }
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported in this browser');
       return;
@@ -251,6 +263,10 @@ const AdminAttendanceSettings = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!canMutate) {
+      toast.error('You have view-only access to attendance settings.');
+      return;
+    }
     setSaving(true);
     try {
       await saveAttendanceSettings(settings);
@@ -276,43 +292,45 @@ const AdminAttendanceSettings = () => {
             <FormGrid>
               <Field>
                 Institute Name
-                <input value={settings.instituteName} onChange={(e) => update('instituteName', e.target.value)} disabled={loading} />
+                <input value={settings.instituteName} onChange={(e) => update('instituteName', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 Allowed Radius (meters)
-                <input type="number" min="10" value={settings.radiusMeters} onChange={(e) => update('radiusMeters', e.target.value)} disabled={loading} />
+                <input type="number" min="10" value={settings.radiusMeters} onChange={(e) => update('radiusMeters', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 GPS Accuracy Buffer (meters)
-                <input type="number" min="0" max="500" value={settings.maxAccuracyBufferMeters} onChange={(e) => update('maxAccuracyBufferMeters', e.target.value)} disabled={loading} />
+                <input type="number" min="0" max="500" value={settings.maxAccuracyBufferMeters} onChange={(e) => update('maxAccuracyBufferMeters', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 Latitude
-                <input type="number" step="0.000001" value={settings.latitude} onChange={(e) => update('latitude', e.target.value)} disabled={loading} />
+                <input type="number" step="0.000001" value={settings.latitude} onChange={(e) => update('latitude', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 Longitude
-                <input type="number" step="0.000001" value={settings.longitude} onChange={(e) => update('longitude', e.target.value)} disabled={loading} />
+                <input type="number" step="0.000001" value={settings.longitude} onChange={(e) => update('longitude', e.target.value)} disabled={loading || !canMutate} />
               </Field>
             </FormGrid>
 
-            <ButtonRow>
-              <Button type="button" $secondary onClick={useMyLocation} disabled={loading}>Use My Current Location</Button>
-            </ButtonRow>
+            {canMutate && (
+              <ButtonRow>
+                <Button type="button" $secondary onClick={useMyLocation} disabled={loading}>Use My Current Location</Button>
+              </ButtonRow>
+            )}
 
             <SectionTitle style={{ marginTop: 30 }}>Time Windows</SectionTitle>
             <FormGrid>
               <Field>
                 On-time window before start (mins)
-                <input type="number" min="0" value={settings.onTimeWindowMins} onChange={(e) => update('onTimeWindowMins', e.target.value)} disabled={loading} />
+                <input type="number" min="0" value={settings.onTimeWindowMins} onChange={(e) => update('onTimeWindowMins', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 Late threshold after start (mins)
-                <input type="number" min="0" value={settings.lateThresholdMins} onChange={(e) => update('lateThresholdMins', e.target.value)} disabled={loading} />
+                <input type="number" min="0" value={settings.lateThresholdMins} onChange={(e) => update('lateThresholdMins', e.target.value)} disabled={loading || !canMutate} />
               </Field>
               <Field>
                 Absent cutoff after start (mins)
-                <input type="number" min="0" value={settings.absentCutoffMins} onChange={(e) => update('absentCutoffMins', e.target.value)} disabled={loading} />
+                <input type="number" min="0" value={settings.absentCutoffMins} onChange={(e) => update('absentCutoffMins', e.target.value)} disabled={loading || !canMutate} />
               </Field>
             </FormGrid>
 
@@ -321,7 +339,7 @@ const AdminAttendanceSettings = () => {
                 Weekend / no-class days
                 <DayGrid>
                   {days.map((day) => (
-                    <DayButton key={day} type="button" $active={(settings.weekendDays || []).includes(day)} onClick={() => toggleWeekendDay(day)}>
+                    <DayButton key={day} type="button" $active={(settings.weekendDays || []).includes(day)} onClick={() => toggleWeekendDay(day)} disabled={!canMutate}>
                       {day.slice(0, 3)}
                     </DayButton>
                   ))}
@@ -334,13 +352,17 @@ const AdminAttendanceSettings = () => {
                 <strong>Auto-attendance active</strong>
                 <div style={{ color: '#777', fontSize: '0.9rem', marginTop: 4 }}>When off, student login will not mark attendance.</div>
               </div>
-              <Toggle type="button" $active={settings.isActive} onClick={() => update('isActive', !settings.isActive)}>
+              <Toggle type="button" $active={settings.isActive} onClick={() => update('isActive', !settings.isActive)} disabled={!canMutate}>
                 <span />
               </Toggle>
             </ToggleRow>
 
             <ButtonRow>
-              <Button type="submit" disabled={saving || loading}>{saving ? 'Saving...' : 'Save Attendance Settings'}</Button>
+              {canMutate ? (
+                <Button type="submit" disabled={saving || loading}>{saving ? 'Saving...' : 'Save Attendance Settings'}</Button>
+              ) : (
+                <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only access: changes cannot be saved</span>
+              )}
             </ButtonRow>
           </Card>
 

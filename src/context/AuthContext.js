@@ -22,6 +22,42 @@ const postJson = async (url, payload) => {
   return result;
 };
 
+const postAuthJson = async (endpointBase, payload, headers = {}) => {
+  const cleanUrl = endpointBase.replace(/\.php$/i, '');
+  let response;
+  try {
+    response = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(payload)
+    });
+    if (response.status !== 404) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || 'Request failed.');
+      }
+      return result;
+    }
+  } catch (err) {
+    if (!err.message?.includes('404')) {
+      throw err;
+    }
+  }
+
+  // Fallback for Apache shared hosting export
+  const phpUrl = `${cleanUrl}.php`;
+  const phpResponse = await fetch(phpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(payload)
+  });
+  const phpResult = await phpResponse.json().catch(() => ({}));
+  if (!phpResponse.ok || phpResult.status === 'error') {
+    throw new Error(phpResult.message || 'Request failed.');
+  }
+  return phpResult;
+};
+
 const clearStoredSupabaseAuth = () => {
   if (typeof window === 'undefined') return;
 
@@ -45,13 +81,22 @@ export const AuthProvider = ({ children }) => {
       // 1. Check for CNIC Session Token (Server-side validation)
       if (sessionToken) {
         try {
-          const response = await fetch('/api/auth/validate-session.php', {
+          let response = await fetch('/api/auth/validate-session', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${sessionToken}`
             }
           });
+          if (response.status === 404) {
+            response = await fetch('/api/auth/validate-session.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`
+              }
+            });
+          }
           const result = await response.json().catch(() => ({}));
           if (response.ok && result.status === 'success' && result.user) {
             const freshUser = result.user;
@@ -177,9 +222,9 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const requestLoginOtp = async (cnic) => postJson('/api/auth/send-otp.php', { cnic });
+  const requestLoginOtp = async (cnic) => postAuthJson('/api/auth/send-otp', { cnic });
 
-  const verifyLoginOtp = async (cnic, otp) => postJson('/api/auth/verify-otp.php', { cnic, otp });
+  const verifyLoginOtp = async (cnic, otp) => postAuthJson('/api/auth/verify-otp', { cnic, otp });
 
   const login = async (cnic, options = {}) => {
     try {
@@ -187,7 +232,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Email OTP verification is required before login.');
       }
 
-      const sessionResult = await postJson('/api/auth/validate-token.php', {
+      const sessionResult = await postAuthJson('/api/auth/validate-token', {
         cnic,
         verificationToken: options.verificationToken
       });
@@ -239,7 +284,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-
   const logout = async () => {
     const sessionToken = localStorage.getItem('deepskill_session_token');
     const { logActivity } = await getActivityLogger();
@@ -259,13 +303,22 @@ export const AuthProvider = ({ children }) => {
       await supabase.auth.signOut();
     } else if (sessionToken) {
       try {
-        await fetch('/api/auth/logout.php', {
+        let res = await fetch('/api/auth/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${sessionToken}`
           }
         });
+        if (res.status === 404) {
+          await fetch('/api/auth/logout.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            }
+          });
+        }
       } catch (err) {
         console.warn('Server logout error:', err);
       }

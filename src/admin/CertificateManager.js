@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { supabase } from '../supabaseClient';
 import { FaTrash, FaEdit, FaCertificate } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -145,6 +149,9 @@ const ActionBtn = styled.button`
 `;
 
 const CertificateManager = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'full');
   const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -213,6 +220,10 @@ const CertificateManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canMutate) {
+      toast.error('You have view-only access. Modifying certificates is not permitted.');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -222,11 +233,13 @@ const CertificateManager = () => {
           .update(formData)
           .eq('id', editingId);
         if (error) throw error;
+        toast.success('Certificate updated');
       } else {
         const { error } = await supabase
           .from('certificates')
           .insert([formData]);
         if (error) throw error;
+        toast.success('Certificate issued');
       }
 
       setFormData({
@@ -245,13 +258,17 @@ const CertificateManager = () => {
       setEditingId(null);
       fetchData();
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message || 'Failed to save certificate');
     } finally {
       setLoading(false);
     }
   };
 
   const handleEdit = (cert) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Editing certificates is not permitted.');
+      return;
+    }
     setEditingId(cert.id);
     setFormData({
       certificate_no: cert.certificate_no,
@@ -270,14 +287,19 @@ const CertificateManager = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Deleting certificates is not permitted.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this certificate?')) return;
     
     try {
       const { error } = await supabase.from('certificates').delete().eq('id', id);
       if (error) throw error;
+      toast.success('Certificate deleted');
       fetchData();
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message || 'Failed to delete certificate');
     }
   };
 
@@ -286,13 +308,14 @@ const CertificateManager = () => {
       <Header>
         <h1><FaCertificate style={{ color: '#7B1F2E', marginRight: '15px' }} /> Certificate Manager</h1>
         <button 
-          onClick={() => window.location.href = '/admin/dashboard'}
+          onClick={() => navigate('/admin/dashboard')}
           style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
         >
           Back to Dashboard
         </button>
       </Header>
 
+      {canMutate && (
       <Form onSubmit={handleSubmit}>
         <InputGroup>
           <Label>Certificate Number</Label>
@@ -408,6 +431,7 @@ const CertificateManager = () => {
           {editingId ? 'Update Certificate' : 'Issue Certificate'}
         </SubmitBtn>
       </Form>
+      )}
 
       <TableContainer>
         <Table>
@@ -432,8 +456,14 @@ const CertificateManager = () => {
                 <Td>{cert.batch_name || '-'}</Td>
                 <Td>{cert.certificate_type}</Td>
                 <Td>
-                  <ActionBtn className="edit" onClick={() => handleEdit(cert)}><FaEdit /></ActionBtn>
-                  <ActionBtn className="delete" onClick={() => handleDelete(cert.id)}><FaTrash /></ActionBtn>
+                  {canMutate ? (
+                    <>
+                      <ActionBtn className="edit" onClick={() => handleEdit(cert)}><FaEdit /></ActionBtn>
+                      <ActionBtn className="delete" onClick={() => handleDelete(cert.id)}><FaTrash /></ActionBtn>
+                    </>
+                  ) : (
+                    <span style={{ color: '#666', fontSize: '0.8rem' }}>View only</span>
+                  )}
                 </Td>
               </tr>
             ))}

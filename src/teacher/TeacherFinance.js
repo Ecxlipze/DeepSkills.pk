@@ -11,12 +11,13 @@ const TeacherFinance = () => {
   const { user } = useAuth();
   const [financeData, setFinanceData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const fetchTeacherFinance = useCallback(async () => {
     try {
       if (!user?.cnic) return;
       const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
-      const response = await fetch('/api/teacher/finance.php', {
+      let response = await fetch('/api/teacher/finance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,6 +25,18 @@ const TeacherFinance = () => {
         },
         body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
       });
+
+      if (response.status === 404) {
+        response = await fetch('/api/teacher/finance.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+          },
+          body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
+        });
+      }
+
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
         throw new Error(result.message || 'Failed to load salary details.');
@@ -31,6 +44,7 @@ const TeacherFinance = () => {
       setFinanceData(result.data);
     } catch (err) {
       console.error("Teacher finance error:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -41,6 +55,27 @@ const TeacherFinance = () => {
   }, [fetchTeacherFinance]);
 
   if (loading) return <DashboardLayout><p>Loading salary details...</p></DashboardLayout>;
+
+  if (error || !financeData) return (
+    <DashboardLayout>
+      <Container>
+        <Header>
+          <div className="title-area">
+            <FaUserTie size={30} color="#7B1F2E" />
+            <div>
+              <h1>Salary &amp; Earnings</h1>
+              <p>View your monthly salary status and history.</p>
+            </div>
+          </div>
+        </Header>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#888' }}>
+          <FaExclamationCircle size={40} style={{ marginBottom: '15px', opacity: 0.5 }} />
+          <h3 style={{ color: '#fff', marginBottom: '10px' }}>Salary information has not been configured yet.</h3>
+          <p>Please contact the administration for your payroll setup.</p>
+        </div>
+      </Container>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -58,7 +93,7 @@ const TeacherFinance = () => {
         <SummaryRow>
           <SummaryCard>
             <span>Monthly Salary</span>
-            <h2>Rs. {financeData?.monthlyAmount.toLocaleString()}</h2>
+            <h2>Rs. {Number(financeData?.monthlyAmount || 0).toLocaleString()}</h2>
           </SummaryCard>
           <SummaryCard $status={financeData?.status}>
             <span>Status (This Month)</span>
@@ -91,10 +126,10 @@ const TeacherFinance = () => {
                 </tr>
               </thead>
               <tbody>
-                {financeData?.history.map((p) => (
+                {(financeData?.history || []).map((p) => (
                   <tr key={p.id}>
                     <td>{p.description || 'Monthly Salary'}</td>
-                    <td style={{ fontWeight: '700' }}>Rs. {p.amount.toLocaleString()}</td>
+                    <td style={{ fontWeight: '700' }}>Rs. {Number(p.amount || 0).toLocaleString()}</td>
                     <td>{p.paid_date || '—'}</td>
                     <td style={{ textTransform: 'capitalize' }}>{p.method?.replace('_', ' ')}</td>
                     <td style={{ color: '#6b7280', fontSize: '0.85rem' }}>{p.reference_number || '—'}</td>
@@ -103,7 +138,7 @@ const TeacherFinance = () => {
                     </td>
                   </tr>
                 ))}
-                {financeData?.history.length === 0 && (
+                {(financeData?.history || []).length === 0 && (
                   <tr><td colSpan="6" style={{ textAlign: 'center', padding: '50px', color: '#6b7280' }}>No payment records found.</td></tr>
                 )}
               </tbody>

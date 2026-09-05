@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../auth/_otp_common.php';
+
 function hr_respond($status, $payload) {
     http_response_code($status);
     echo json_encode($payload);
@@ -105,8 +107,9 @@ function hr_require_teacher($cnic) {
     }
 
     $teacher = hr_first(hr_supabase_request('GET', 'teachers?select=*&cnic=eq.' . rawurlencode($cnic) . '&limit=1'));
-    if (!$teacher || ($teacher['status'] ?? '') !== 'Active') {
-        hr_respond(403, ['status' => 'error', 'message' => 'Active teacher profile not found.']);
+    $status = $teacher['status'] ?? '';
+    if (!$teacher || !in_array($status, ['Active', 'Pending', 'Onboarding'])) {
+        hr_respond(403, ['status' => 'error', 'message' => 'Valid teacher profile not found or inactive.']);
     }
 
     return $teacher;
@@ -186,7 +189,7 @@ function hr_pick_profile_fields($profile, $teacher) {
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -199,7 +202,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data = hr_json_input();
 $action = $data['action'] ?? '';
-$teacher = hr_require_teacher($data['cnic'] ?? '');
+$requestedCnic = !empty($data['cnic']) ? hr_normalize_cnic($data['cnic']) : null;
+$session = portal_require_session(['teacher'], $requestedCnic);
+$teacher = hr_require_teacher($session['cnic']);
 $now = gmdate('c');
 
 if ($action === 'load') {

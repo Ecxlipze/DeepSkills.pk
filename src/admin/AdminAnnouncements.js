@@ -10,6 +10,8 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
 import AdminLayout from '../components/AdminLayout';
 import { useAnnouncements } from '../context/AnnouncementsContext';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 // ─── Styled Components ───
 
@@ -185,7 +187,9 @@ const EmptyState = styled.div`
 // ─── Component ───
 
 const AdminAnnouncements = () => {
-  const { announcements, togglePin, deleteAnnouncement, activateAnnouncement, createAnnouncement, updateAnnouncement } = useAnnouncements();
+  const { announcements, togglePin, deleteAnnouncement, activateAnnouncement, createAnnouncement, updateAnnouncement, fetchAnnouncements } = useAnnouncements();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'full');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [courses, setCourses] = useState([]);
@@ -217,9 +221,20 @@ const AdminAnnouncements = () => {
     setEditingId(null);
   };
 
-  const openNew = () => { resetForm(); setShowModal(true); };
+  const openNew = () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Creating announcements is not permitted.');
+      return;
+    }
+    resetForm();
+    setShowModal(true);
+  };
 
   const openEdit = (a) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Editing announcements is not permitted.');
+      return;
+    }
     setForm({
       title: a.title, body: a.body,
       audienceType: a.audience_type || 'broadcast',
@@ -235,6 +250,10 @@ const AdminAnnouncements = () => {
   };
 
   const handleSubmit = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Saving announcements is not permitted.');
+      return;
+    }
     if (!form.title.trim() || !form.body.trim()) return toast.error('Title and body are required');
     if (form.body.trim().length < 10) return toast.error('Body must be at least 10 characters');
 
@@ -265,6 +284,42 @@ const AdminAnnouncements = () => {
       resetForm();
     } catch {
       toast.error('Failed to save announcement');
+    }
+  };
+
+  const handleTogglePin = async (id, currentPinned) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Pinning announcements is not permitted.');
+      return;
+    }
+    await togglePin(id, currentPinned);
+  };
+
+  const handleToggleActive = async (id, isActive) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Changing announcement status is not permitted.');
+      return;
+    }
+    if (isActive) {
+      await deleteAnnouncement(id);
+    } else {
+      await activateAnnouncement(id);
+    }
+  };
+
+  const handleDeletePermanent = async (id) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Deleting announcements is not permitted.');
+      return;
+    }
+    if (!window.confirm('Delete this announcement permanently?')) return;
+    try {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Deleted permanently');
+      fetchAnnouncements();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete announcement');
     }
   };
 
@@ -328,7 +383,7 @@ const AdminAnnouncements = () => {
             <h1>📢 Announcements</h1>
             <p>Post and manage announcements for students and teachers</p>
           </div>
-          <PrimaryBtn onClick={openNew}><FaPlus /> New Announcement</PrimaryBtn>
+          {canMutate && <PrimaryBtn onClick={openNew}><FaPlus /> New Announcement</PrimaryBtn>}
         </Header>
 
         <StatsGrid>
@@ -397,23 +452,25 @@ const AdminAnnouncements = () => {
                     </td>
                     <td><StatusBadge $active={a.is_active}>{a.is_active ? 'Active' : 'Inactive'}</StatusBadge></td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <ActionBtn onClick={() => openEdit(a)}><FaEdit /></ActionBtn>
-                      <ActionBtn className="pin" onClick={() => togglePin(a.id, a.is_pinned)}>
-                        <FaThumbtack />
-                      </ActionBtn>
-                      {a.is_active
-                        ? <ActionBtn className="danger" onClick={() => deleteAnnouncement(a.id)}>
-                            <FaToggleOff />
+                      {canMutate ? (
+                        <>
+                          <ActionBtn onClick={() => openEdit(a)}><FaEdit /></ActionBtn>
+                          <ActionBtn className="pin" onClick={() => handleTogglePin(a.id, a.is_pinned)}>
+                            <FaThumbtack />
                           </ActionBtn>
-                        : <ActionBtn onClick={() => activateAnnouncement(a.id)}>
-                            <FaToggleOn />
-                          </ActionBtn>
-                      }
-                      <ActionBtn className="danger" onClick={async () => {
-                        await supabase.from('announcements').delete().eq('id', a.id);
-                        toast.success('Deleted permanently');
-                        window.location.reload();
-                      }}><FaTrash /></ActionBtn>
+                          {a.is_active
+                            ? <ActionBtn className="danger" onClick={() => handleToggleActive(a.id, true)}>
+                                <FaToggleOff />
+                              </ActionBtn>
+                            : <ActionBtn onClick={() => handleToggleActive(a.id, false)}>
+                                <FaToggleOn />
+                              </ActionBtn>
+                          }
+                          <ActionBtn className="danger" onClick={() => handleDeletePermanent(a.id)}><FaTrash /></ActionBtn>
+                        </>
+                      ) : (
+                        <span style={{ color: '#666', fontSize: '0.8rem' }}>View only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -93,16 +93,22 @@ function anonSupabaseCall($path, $method = 'GET', $payload = null) {
 
 // 1.1 Direct anon access to allowed_cnics
 $anonRead = anonSupabaseCall('allowed_cnics?select=*&limit=1');
-echo "  [INFO] Anon SELECT allowed_cnics HTTP {$anonRead['code']}\n";
+assertTest("Anon SELECT allowed_cnics is rejected/inaccessible", $anonRead['code'] === 401 || empty($anonRead['data']), "HTTP {$anonRead['code']}");
 
 $anonInsert = anonSupabaseCall('allowed_cnics', 'POST', [
     'cnic' => '00000-0000000-0',
     'name' => 'Attacker',
     'role' => 'admin'
 ]);
-echo "  [INFO] Anon INSERT fake CNIC HTTP {$anonInsert['code']}\n";
-// Clean up fake test row
-otp_supabase_request('DELETE', 'allowed_cnics?cnic=eq.' . rawurlencode('00000-0000000-0'));
+assertTest("Anon INSERT allowed_cnics is strictly rejected", $anonInsert['code'] === 401 || $anonInsert['code'] === 403, "HTTP {$anonInsert['code']}");
+
+$anonUpdate = anonSupabaseCall('allowed_cnics?cnic=eq.00000-0000000-0', 'PATCH', [
+    'name' => 'Hacked'
+]);
+assertTest("Anon UPDATE allowed_cnics is strictly rejected", $anonUpdate['code'] === 401 || $anonUpdate['code'] === 403, "HTTP {$anonUpdate['code']}");
+
+$anonDelete = anonSupabaseCall('allowed_cnics?cnic=eq.00000-0000000-0', 'DELETE');
+assertTest("Anon DELETE allowed_cnics is strictly rejected", $anonDelete['code'] === 401 || $anonDelete['code'] === 403, "HTTP {$anonDelete['code']}");
 
 echo "\n--- 2. Setup Test Identities via Service Role ---\n";
 $now = time();
@@ -370,7 +376,13 @@ assertTest('Staff without users:full calling staff-access.php rejected with 403'
 
 // Clean up test records
 otp_supabase_request('DELETE', 'allowed_cnics?cnic=eq.' . rawurlencode('35202-1234567-1'));
+otp_supabase_request('DELETE', 'allowed_cnics?cnic=eq.' . rawurlencode($teacherCnic));
+otp_supabase_request('DELETE', 'allowed_cnics?cnic=eq.' . rawurlencode($studentOtherCnic));
 otp_supabase_request('DELETE', 'allowed_cnics?cnic=eq.' . rawurlencode($customStaffCnic));
+otp_supabase_request('DELETE', 'portal_sessions?cnic=eq.' . rawurlencode($teacherCnic));
+otp_supabase_request('DELETE', 'portal_sessions?cnic=eq.' . rawurlencode($studentOtherCnic));
+otp_supabase_request('DELETE', 'portal_sessions?cnic=eq.' . rawurlencode($studentCnic));
+otp_supabase_request('DELETE', 'portal_sessions?cnic=eq.' . rawurlencode($customStaffCnic));
 otp_supabase_request('DELETE', 'users?cnic=eq.' . rawurlencode($customStaffCnic));
 otp_supabase_request('DELETE', 'custom_roles?id=eq.' . rawurlencode($customRoleId));
 

@@ -407,13 +407,17 @@ export const StudentDashboard = () => {
       if (!user?.cnic) return;
       
       try {
-        const { data: admission, error: admError } = await supabase
+        const { data: admissionRows, error: admError } = await supabase
           .from('admissions')
           .select('*')
           .eq('cnic', user.cnic)
-          .single();
+          .in('status', ['Active', 'Graduated'])
+          .order('submitted_at', { ascending: false })
+          .limit(1);
 
         if (admError) throw admError;
+        const admission = admissionRows?.[0];
+        if (!admission) return;
 
         let batchInfo = null;
         let instructorName = null;
@@ -541,7 +545,7 @@ export const StudentDashboard = () => {
             <QuickActionBtn to="/student/tasks" $primary>
               <FaTasks /> View Tasks
             </QuickActionBtn>
-            <QuickActionBtn to="/student/chats">
+            <QuickActionBtn to="/student/group-chat">
               <FaComments /> Batch Chat
             </QuickActionBtn>
           </BannerActions>

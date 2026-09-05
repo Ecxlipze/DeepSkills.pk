@@ -77,6 +77,7 @@ const stepLabel = (step) => ({
 
 const AdminHRTable = ({
   applications,
+  canMutate = true,
   onView,
   onCreateJd,
   onFinalize,
@@ -110,13 +111,13 @@ const AdminHRTable = ({
               <td>
                 <ActionRow>
                   <Button type="button" onClick={() => onView(application)}>View Profile</Button>
-                  {profile.current_step >= 3 && profile.hr_status !== 'hired' && profile.hr_status !== 'rejected' && (
+                  {canMutate && profile.current_step >= 3 && profile.hr_status !== 'hired' && profile.hr_status !== 'rejected' && (
                     <Button type="button" $primary onClick={() => onCreateJd(application)}>Create JD Draft</Button>
                   )}
-                  {signature && profile.hr_status !== 'hired' && (
+                  {canMutate && signature && profile.hr_status !== 'hired' && (
                     <Button type="button" $success onClick={() => onFinalize(application)}>Finalize Hiring</Button>
                   )}
-                  {profile.hr_status !== 'hired' && profile.hr_status !== 'rejected' && (
+                  {canMutate && profile.hr_status !== 'hired' && profile.hr_status !== 'rejected' && (
                     <Button type="button" $danger onClick={() => onReject(application)}>Reject</Button>
                   )}
                 </ActionRow>

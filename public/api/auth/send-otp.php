@@ -24,8 +24,9 @@ if ($role === 'student') {
 } elseif ($role === 'teacher') {
     $rows = otp_supabase_request('GET', 'teachers?select=id,name,email,status,cnic&cnic=eq.' . rawurlencode($cnic) . '&limit=1');
     $profile = $rows[0] ?? null;
-    if ($profile && ($profile['status'] ?? '') !== 'Active') {
-        otp_respond(403, ['status' => 'error', 'message' => 'Your account is not active. Please contact the administrator.']);
+    $teacherStatus = $profile['status'] ?? '';
+    if ($profile && !in_array($teacherStatus, ['Active', 'Pending', 'Onboarding'])) {
+        otp_respond(403, ['status' => 'error', 'message' => 'Your account is ' . strtolower($teacherStatus ?: 'inactive') . '. Please contact the administrator.']);
     }
 } else {
     $rows = otp_supabase_request('GET', 'users?select=id,full_name,email,status,role,cnic&cnic=eq.' . rawurlencode($cnic) . '&limit=1');
@@ -63,15 +64,25 @@ otp_supabase_request(
     'return=minimal'
 );
 
-if (!otp_send_mail($email, $name, $code)) {
+$isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true) ||
+    strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false ||
+    strpos($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') !== false;
+
+$mailSent = otp_send_mail($email, $name, $code);
+if (!$mailSent && !$isLocal) {
     otp_respond(500, ['status' => 'error', 'message' => 'Unable to send OTP email. Please try again.']);
 }
 
 $masked = preg_replace('/(^.).*(@.*$)/', '$1***$2', $email);
-otp_respond(200, [
+$responsePayload = [
     'status' => 'success',
     'message' => 'OTP sent to your registered email.',
     'email' => $masked,
     'expiresInSeconds' => 600,
-]);
+];
+if ($isLocal) {
+    $responsePayload['devOtp'] = $code;
+}
+
+otp_respond(200, $responsePayload);
 ?>

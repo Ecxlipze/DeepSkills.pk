@@ -6,11 +6,27 @@ import { syncTeacherAccess } from './adminAccessApi';
 
 const nowIso = () => new Date().toISOString();
 
+const getSessionToken = () => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return localStorage.getItem('deepskill_session_token') || '';
+  } catch (e) {
+    return '';
+  }
+};
+
 const teacherHrRequest = async (payload) => {
+  const sessionToken = getSessionToken();
   const response = await fetch('/api/hr/teacher.php', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    headers: {
+      'Content-Type': 'application/json',
+      ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+    },
+    body: JSON.stringify({
+      ...payload,
+      token: sessionToken
+    })
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.status === 'error') {
@@ -344,6 +360,17 @@ export const finalizeHiring = async ({
     .eq('id', profile.id);
   if (profileError) {
     throw profileError;
+  }
+
+  const { error: teacherError } = await supabase
+    .from('teachers')
+    .update({
+      status: 'Active',
+      updated_at: nowIso()
+    })
+    .eq('id', teacher.id);
+  if (teacherError) {
+    throw teacherError;
   }
 
   await syncTeacherAccess({

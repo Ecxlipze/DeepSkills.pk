@@ -11,6 +11,9 @@ import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { syncStudentAccess, revokeStudentAccess } from '../utils/adminAccessApi';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
+import { calculateInstallments } from '../utils/installmentUtils';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -387,6 +390,10 @@ const StudentProfile = ({ studentId }) => {
   const [isSetupFinanceOpen, setIsSetupFinanceOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
 
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'full');
+  const canMutateFinance = user?.role === 'admin' || canAccess(user?.permissions || {}, 'finance', 'full') || canAccess(user?.permissions || {}, 'students', 'full');
+
   // Fee generation states
   const [setupTotalFee, setSetupTotalFee] = useState(25000);
   const [setupPlanType, setSetupPlanType] = useState('installment');
@@ -411,19 +418,26 @@ const StudentProfile = ({ studentId }) => {
       if (error) throw error;
       setStudent(data);
 
-      // 2. Fetch Tasks & Submissions
-      const { data: taskData } = await supabase.from('tasks').select('*').eq('course', data.course).eq('batch', data.batch);
-      const { data: subData } = await supabase.from('task_submissions').select('*').eq('cnic', data.cnic);
-      
-      if (taskData) {
-        const merged = taskData.map(t => ({
-          ...t,
-          submission: subData?.find(s => s.task_id === t.id)
-        }));
+      // 2. Fetch Tasks (from Batch)
+      if (data.batch) {
+        const { data: batchTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('batch', data.batch);
+        
+        const { data: userSubs } = await supabase
+          .from('task_submissions')
+          .select('*')
+          .eq('cnic', data.cnic);
+
+        const merged = (batchTasks || []).map(t => {
+          const sub = (userSubs || []).find(s => s.task_id === t.id);
+          return { ...t, submission: sub };
+        });
         setTasks(merged);
       }
 
-      // 3. Fetch Attendance Records
+      // 3. Fetch Attendance
       const { data: attData } = await supabase
         .from('attendance')
         .select('*')
@@ -440,9 +454,10 @@ const StudentProfile = ({ studentId }) => {
       const { data: payments } = await supabase.from('payments').select('*').eq('entity_id', id).eq('entity_type', 'student').order('installment_number');
       
       const paidAmount = payments?.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0) || 0;
+      const effectiveTotalFee = plan?.final_fee != null ? Number(plan.final_fee) : Number(plan?.total_fee || 0);
 
       setFinance({
-        totalFee: plan?.total_fee || 0,
+        totalFee: effectiveTotalFee,
         paid: paidAmount,
         plan: plan,
         payments: payments || []
@@ -682,24 +697,29 @@ const StudentProfile = ({ studentId }) => {
   };
 
   const handleSetupFeePlan = async () => {
+    if (!canMutateFinance) {
+      toast.error("You do not have permission to initialize fee plans.");
+      return;
+    }
     setProcessing(true);
     try {
       const normalizedPlan = setupPlanType === 'full' ? 'full' : 'installment';
-      const amountPerInst = normalizedPlan === 'full' ? setupTotalFee : Math.round(setupTotalFee / setupInstallments);
+      const instCount = normalizedPlan === 'full' ? 1 : setupInstallments;
+      const installmentAmounts = calculateInstallments(setupTotalFee, instCount);
       
       const { error: planError } = await supabase.from('fee_plans').insert({
         student_id: id,
         course: student.course,
         batch: student.batch,
         total_fee: setupTotalFee,
+        final_fee: setupTotalFee,
         plan_type: normalizedPlan,
-        installment_count: normalizedPlan === 'full' ? 1 : setupInstallments
+        installment_count: instCount
       });
 
       if (planError) throw planError;
 
       const paymentRows = [];
-      const instCount = normalizedPlan === 'full' ? 1 : setupInstallments;
 
       for (let i = 1; i <= instCount; i++) {
         const dueDate = new Date();
@@ -710,7 +730,7 @@ const StudentProfile = ({ studentId }) => {
           entity_type: 'student',
           installment_number: normalizedPlan === 'full' ? null : i,
           total_installments: normalizedPlan === 'full' ? null : instCount,
-          amount: amountPerInst,
+          amount: installmentAmounts[i - 1],
           due_date: dueDate.toISOString().split('T')[0],
           status: 'pending',
           method: null,
@@ -848,41 +868,47 @@ const StudentProfile = ({ studentId }) => {
               <InfoRow><span className="label">Enrolled</span><span className="value">{new Date(student.submitted_at).toLocaleDateString()}</span></InfoRow>
             </InfoGrid>
 
-            <ActionButtons>
-              <Button className="edit" onClick={() => {
-                setEditFormData({
-                  name: student.name,
-                  phone: student.phone,
-                  email: student.email,
-                  education: student.education || '',
-                  cnic: student.cnic,
-                  course: student.course
-                });
-                setIsEditProfileOpen(true);
-              }}>
-                <FaEdit /> Edit Profile
-              </Button>
-              <Button className="batches" onClick={() => {
-                const currentBatch = availableBatches.find((batch) =>
-                  batch.batch_name === student.batch
-                  && batch.course === student.course
-                  && (!student.batch_timing || [batch.time_shift, batch.timing_label].includes(student.batch_timing))
-                ) || availableBatches.find((batch) => batch.batch_name === student.batch && batch.course === student.course);
-                setSelectedBatch(currentBatch?.id || '');
-                setIsEditBatchOpen(true);
-              }}>
-                <FaEdit /> Edit Batch
-              </Button>
-              <Button className="status" $active={student.status === 'Active'} onClick={toggleStatus} disabled={processing}>
-                {student.status === 'Active' ? <><FaUserSlash /> Mark as Inactive</> : <><FaCheckCircle /> Mark as Active</>}
-              </Button>
-              <Button className="revoke" onClick={revokeAccess} disabled={processing}>
-                <FaTimesCircle /> Revoke Access
-              </Button>
-              <Button className="revoke" onClick={handleDeleteStudent} disabled={processing}>
-                <FaTrash /> Delete Student
-              </Button>
-            </ActionButtons>
+            {canMutate ? (
+              <ActionButtons>
+                <Button className="edit" onClick={() => {
+                  setEditFormData({
+                    name: student.name,
+                    phone: student.phone,
+                    email: student.email,
+                    education: student.education || '',
+                    cnic: student.cnic,
+                    course: student.course
+                  });
+                  setIsEditProfileOpen(true);
+                }}>
+                  <FaEdit /> Edit Profile
+                </Button>
+                <Button className="batches" onClick={() => {
+                  const currentBatch = availableBatches.find((batch) =>
+                    batch.batch_name === student.batch
+                    && batch.course === student.course
+                    && (!student.batch_timing || [batch.time_shift, batch.timing_label].includes(student.batch_timing))
+                  ) || availableBatches.find((batch) => batch.batch_name === student.batch && batch.course === student.course);
+                  setSelectedBatch(currentBatch?.id || '');
+                  setIsEditBatchOpen(true);
+                }}>
+                  <FaEdit /> Edit Batch
+                </Button>
+                <Button className="status" $active={student.status === 'Active'} onClick={toggleStatus} disabled={processing}>
+                  {student.status === 'Active' ? <><FaUserSlash /> Mark as Inactive</> : <><FaCheckCircle /> Mark as Active</>}
+                </Button>
+                <Button className="revoke" onClick={revokeAccess} disabled={processing}>
+                  <FaTimesCircle /> Revoke Access
+                </Button>
+                <Button className="revoke" onClick={handleDeleteStudent} disabled={processing}>
+                  <FaTrash /> Delete Student
+                </Button>
+              </ActionButtons>
+            ) : (
+              <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', color: '#888', fontSize: '0.8rem', textAlign: 'center', marginTop: '15px' }}>
+                Read-only view
+              </div>
+            )}
           </SidebarCard>
 
           {/* MAIN CONTENT (TABS) */}

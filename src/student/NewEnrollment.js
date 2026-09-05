@@ -244,13 +244,17 @@ const NewEnrollment = () => {
 
     try {
       // Get the correct student_id from the admissions table
-      const { data: admissionData, error: admError } = await supabase
+      const { data: admissionRows, error: admErr } = await supabase
         .from('admissions')
         .select('id, email, name, course')
         .eq('cnic', user.cnic)
-        .single();
+        .in('status', ['Active', 'Graduated'])
+        .order('submitted_at', { ascending: false })
+        .limit(1);
         
-      if (admError || !admissionData) throw new Error("Could not find student admission record.");
+      if (admErr) throw new Error("Could not find student admission record.");
+      const admissionData = admissionRows?.[0];
+      if (!admissionData) throw new Error("Could not find student admission record.");
 
       const { error } = await supabase.from('enrollments').insert([{
         student_id: admissionData.id,

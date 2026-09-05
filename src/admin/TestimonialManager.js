@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
 import AdminLayout from '../components/AdminLayout';
 import { requestRevalidate } from '../utils/revalidatePublic';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -118,6 +122,9 @@ const emptyFormData = {
 };
 
 const TestimonialManager = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'settings', 'full'));
   const [testimonials, setTestimonials] = useState([]);
   const [courses, setCourses] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -141,28 +148,38 @@ const TestimonialManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canMutate) {
+      toast.error('You have view-only access to settings.');
+      return;
+    }
     if (editingId) {
       const { error } = await supabase.from('testimonials').update(formData).eq('id', editingId);
-      if (error) alert(error.message);
+      if (error) toast.error(error.message);
       else {
         setFormData(emptyFormData);
         setEditingId(null);
         requestRevalidate(['/']);
+        toast.success('Testimonial updated successfully.');
         fetchTestimonials();
       }
     } else {
       const { error } = await supabase.from('testimonials').insert([formData]);
       if (error) {
-        alert(error.message);
+        toast.error(error.message);
       } else {
         setFormData(emptyFormData);
         requestRevalidate(['/']);
+        toast.success('Testimonial added successfully.');
         fetchTestimonials();
       }
     }
   };
 
   const handleEdit = (testi) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to settings.');
+      return;
+    }
     setEditingId(testi.id);
     setFormData({
       student_name: testi.student_name || '',
@@ -174,11 +191,16 @@ const TestimonialManager = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to settings.');
+      return;
+    }
     if (!window.confirm('Delete this testimonial?')) return;
     const { error } = await supabase.from('testimonials').delete().eq('id', id);
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     else {
       requestRevalidate(['/']);
+      toast.success('Testimonial deleted.');
       fetchTestimonials();
     }
   };
@@ -187,49 +209,51 @@ const TestimonialManager = () => {
     <Container>
       <Header>
         <h1>Testimonial Manager</h1>
-        <button onClick={() => window.location.href = '/admin/dashboard'}>Dashboard</button>
+        <button onClick={() => router.push('/admin/dashboard')}>Dashboard</button>
       </Header>
 
-      <Form onSubmit={handleSubmit}>
-        <InputGroup>
-          <Label>Student Name</Label>
-          <Input value={formData.student_name} onChange={e => setFormData({...formData, student_name: e.target.value})} required />
-        </InputGroup>
-        <InputGroup>
-          <Label>Video URL (from Media Library)</Label>
-          <Input value={formData.video_url} onChange={e => setFormData({...formData, video_url: e.target.value})} placeholder="e.g. https://.../media/vid.mp4" required />
-        </InputGroup>
-        <InputGroup>
-          <Label>Thumbnail URL (optional)</Label>
-          <Input value={formData.thumbnail_url} onChange={e => setFormData({...formData, thumbnail_url: e.target.value})} placeholder="e.g. https://.../media/testimonial-thumb.jpg" />
-        </InputGroup>
-        <InputGroup>
-          <Label>Course Assignment</Label>
-          <select 
-            style={{ padding: '10px', background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: '6px' }}
-            value={formData.course_name} 
-            onChange={e => setFormData({...formData, course_name: e.target.value})}
-          >
-            <option value="General">General / Homepage</option>
-            {courses.map(c => (
-              <option key={c.title} value={c.title}>{c.title}</option>
-            ))}
-          </select>
-        </InputGroup>
-        <Button type="submit">{editingId ? 'Update Testimonial' : 'Add Testimonial'}</Button>
-        {editingId && (
-          <Button 
-            type="button" 
-            onClick={() => {
-              setEditingId(null);
-              setFormData(emptyFormData);
-            }}
-            style={{ background: '#444' }}
-          >
-            Cancel Edit
-          </Button>
-        )}
-      </Form>
+      {canMutate && (
+        <Form onSubmit={handleSubmit}>
+          <InputGroup>
+            <Label>Student Name</Label>
+            <Input value={formData.student_name} onChange={e => setFormData({...formData, student_name: e.target.value})} required />
+          </InputGroup>
+          <InputGroup>
+            <Label>Video URL (from Media Library)</Label>
+            <Input value={formData.video_url} onChange={e => setFormData({...formData, video_url: e.target.value})} placeholder="e.g. https://.../media/vid.mp4" required />
+          </InputGroup>
+          <InputGroup>
+            <Label>Thumbnail URL (optional)</Label>
+            <Input value={formData.thumbnail_url} onChange={e => setFormData({...formData, thumbnail_url: e.target.value})} placeholder="e.g. https://.../media/testimonial-thumb.jpg" />
+          </InputGroup>
+          <InputGroup>
+            <Label>Course Assignment</Label>
+            <select 
+              style={{ padding: '10px', background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: '6px' }}
+              value={formData.course_name} 
+              onChange={e => setFormData({...formData, course_name: e.target.value})}
+            >
+              <option value="General">General / Homepage</option>
+              {courses.map(c => (
+                <option key={c.title} value={c.title}>{c.title}</option>
+              ))}
+            </select>
+          </InputGroup>
+          <Button type="submit">{editingId ? 'Update Testimonial' : 'Add Testimonial'}</Button>
+          {editingId && (
+            <Button 
+              type="button" 
+              onClick={() => {
+                setEditingId(null);
+                setFormData(emptyFormData);
+              }}
+              style={{ background: '#444' }}
+            >
+              Cancel Edit
+            </Button>
+          )}
+        </Form>
+      )}
 
       <Table>
         <thead>
@@ -253,8 +277,14 @@ const TestimonialManager = () => {
               <Td>{t.student_name}</Td>
               <Td>{t.course_name}</Td>
               <Td>
-                <EditBtn onClick={() => handleEdit(t)}>Edit</EditBtn>
-                <DeleteBtn onClick={() => handleDelete(t.id)}>Delete</DeleteBtn>
+                {canMutate ? (
+                  <>
+                    <EditBtn onClick={() => handleEdit(t)}>Edit</EditBtn>
+                    <DeleteBtn onClick={() => handleDelete(t.id)}>Delete</DeleteBtn>
+                  </>
+                ) : (
+                  <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only</span>
+                )}
               </Td>
             </tr>
           ))}

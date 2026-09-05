@@ -33,6 +33,7 @@ const SVG_BLOCKED_PATTERN = /<script|<foreignObject|\son\w+\s*=|javascript:|data
 const getActorId = (user) => user?.id || user?.cnic || user?.email || '';
 const isAdminUser = (user) => user?.role === 'admin';
 const canUseBlogPanel = (user) => isAdminUser(user) || canAccess(user?.permissions || {}, 'blog', 'view');
+const canMutateBlog = (user) => isAdminUser(user) || canAccess(user?.permissions || {}, 'blog', 'full');
 const sanitizePlainText = (value = '', max = 200) =>
   value
     .toString()
@@ -69,6 +70,7 @@ function BlogList() {
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
+  const canMutate = canMutateBlog(user);
   const actorId = getActorId(user);
   const [posts, setPosts] = useState([]);
   const [categories, setCategories] = useState(BLOG_CATEGORIES);
@@ -137,6 +139,10 @@ function BlogList() {
   );
 
   const bulkUpdate = async (status) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     if (!selectedIds.length) return;
     const { error } = await supabase.from('blog_posts').update({ status, updated_at: new Date().toISOString() }).in('id', selectedIds);
     if (error) {
@@ -149,6 +155,10 @@ function BlogList() {
   };
 
   const bulkDelete = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     if (!selectedIds.length || !window.confirm('Delete selected blog posts?')) return;
     const { error } = await supabase.from('blog_posts').delete().in('id', selectedIds);
     if (error) {
@@ -161,6 +171,10 @@ function BlogList() {
   };
 
   const deletePost = async (post) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     if (!window.confirm(`Delete "${post.title}"?`)) return;
     const response = await fetch(`/api/blog/${post.id}`, {
       method: 'DELETE',
@@ -177,6 +191,10 @@ function BlogList() {
   };
 
   const duplicatePost = async (post) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     const copy = {
       ...post,
       id: undefined,
@@ -201,6 +219,10 @@ function BlogList() {
   };
 
   const togglePublished = async (post) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     const nextStatus = post.status === 'published' ? 'draft' : 'published';
     const response = await fetch('/api/blog', {
       method: 'POST',
@@ -225,9 +247,11 @@ function BlogList() {
           <h1>Blog Posts</h1>
           <p>{isAdmin ? 'Create, manage, and publish blog content for the DeepSkills website' : 'Create and edit your draft blog posts for admin review'}</p>
         </div>
-        <PrimaryButton onClick={() => router.push('/admin/management/blog/new')}>
-          <FaEdit /> New Post
-        </PrimaryButton>
+        {canMutate && (
+          <PrimaryButton onClick={() => router.push('/admin/management/blog/new')}>
+            <FaEdit /> New Post
+          </PrimaryButton>
+        )}
       </PageHeader>
 
       <StatsStrip>
@@ -263,7 +287,7 @@ function BlogList() {
         <input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
       </FilterBar>
 
-      {isAdmin && selectedIds.length > 0 && (
+      {canMutate && isAdmin && selectedIds.length > 0 && (
         <BulkBar>
           <span>{selectedIds.length} selected</span>
           <button onClick={() => bulkUpdate('published')}>Bulk publish</button>
@@ -276,7 +300,7 @@ function BlogList() {
         <table>
           <thead>
             <tr>
-              {isAdmin && <th><input type="checkbox" checked={selectedIds.length === filteredPosts.length && filteredPosts.length > 0} onChange={(event) => setSelectedIds(event.target.checked ? filteredPosts.map((post) => post.id) : [])} /></th>}
+              {canMutate && isAdmin && <th><input type="checkbox" checked={selectedIds.length === filteredPosts.length && filteredPosts.length > 0} onChange={(event) => setSelectedIds(event.target.checked ? filteredPosts.map((post) => post.id) : [])} /></th>}
               <th>Cover</th>
               <th>Title</th>
               <th>Category</th>
@@ -289,12 +313,12 @@ function BlogList() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={isAdmin ? 9 : 7}>Loading posts...</td></tr>
+              <tr><td colSpan={canMutate && isAdmin ? 9 : 8}>Loading posts...</td></tr>
             ) : filteredPosts.length === 0 ? (
-              <tr><td colSpan={isAdmin ? 9 : 7}>{isAdmin ? 'No blog posts found.' : 'No drafts yet. Create your first blog draft.'}</td></tr>
+              <tr><td colSpan={canMutate && isAdmin ? 9 : 8}>{isAdmin ? 'No blog posts found.' : 'No drafts yet. Create your first blog draft.'}</td></tr>
             ) : filteredPosts.map((post) => (
               <tr key={post.id}>
-                {isAdmin && (
+                {canMutate && isAdmin && (
                   <td>
                     <input
                       type="checkbox"
@@ -319,11 +343,11 @@ function BlogList() {
                 {isAdmin && <td>{(post.view_count || 0).toLocaleString()}</td>}
                 <td>
                   <ActionRow>
-                    <button title="Edit" onClick={() => router.push(`/admin/management/blog/edit/${post.id}`)}><FaEdit /></button>
-                    {isAdmin && <a title="Preview" href={`/blogs/${post.slug}?preview=true`} target="_blank" rel="noreferrer"><FaEye /></a>}
-                    {isAdmin && <button title="Duplicate" onClick={() => duplicatePost(post)}><FaCopy /></button>}
-                    {isAdmin && <button title="Toggle published" onClick={() => togglePublished(post)}><FaUpload /></button>}
-                    {isAdmin && <button title="Delete" className="danger" onClick={() => deletePost(post)}><FaTrash /></button>}
+                    {canMutate && <button title="Edit" onClick={() => router.push(`/admin/management/blog/edit/${post.id}`)}><FaEdit /></button>}
+                    <a title="Preview" href={`/blogs/${post.slug}?preview=true`} target="_blank" rel="noreferrer"><FaEye /></a>
+                    {canMutate && isAdmin && <button title="Duplicate" onClick={() => duplicatePost(post)}><FaCopy /></button>}
+                    {canMutate && isAdmin && <button title="Toggle published" onClick={() => togglePublished(post)}><FaUpload /></button>}
+                    {canMutate && isAdmin && <button title="Delete" className="danger" onClick={() => deletePost(post)}><FaTrash /></button>}
                   </ActionRow>
                 </td>
               </tr>
@@ -339,11 +363,19 @@ function BlogEditor({ postId }) {
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
+  const canMutate = canMutateBlog(user);
   const actorId = getActorId(user);
   const fileRef = useRef(null);
   const inlineImageRef = useRef(null);
   const [loading, setLoading] = useState(Boolean(postId));
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!canMutate && !postId) {
+      toast.error('You have view-only access to blog management.');
+      router.push('/admin/management/blog');
+    }
+  }, [canMutate, postId, router]);
   const [categories, setCategories] = useState(BLOG_CATEGORIES);
   const [courses, setCourses] = useState([]);
   const [newCategory, setNewCategory] = useState('');
@@ -513,6 +545,10 @@ function BlogEditor({ postId }) {
   };
 
   const uploadCover = async (event) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
     try {
@@ -525,6 +561,10 @@ function BlogEditor({ postId }) {
   };
 
   const uploadInlineImage = async (event) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file || !editor) return;
     try {
@@ -548,6 +588,10 @@ function BlogEditor({ postId }) {
   };
 
   const savePost = async (statusOverride) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to blog management.');
+      return;
+    }
     const status = isAdmin ? statusOverride || form.status : 'draft';
     const payload = {
       ...form,
@@ -616,10 +660,14 @@ function BlogEditor({ postId }) {
     <Container>
       <EditorHeader>
         <button type="button" onClick={() => router.push('/admin/management/blog')}>Back to posts</button>
-        <div>
-          <button type="button" onClick={() => savePost('draft')} disabled={saving}>Save Draft</button>
-          {isAdmin && <PrimaryButton type="button" onClick={() => savePost('published')} disabled={saving}>Publish Now</PrimaryButton>}
-        </div>
+        {canMutate ? (
+          <div>
+            <button type="button" onClick={() => savePost('draft')} disabled={saving}>Save Draft</button>
+            {isAdmin && <PrimaryButton type="button" onClick={() => savePost('published')} disabled={saving}>Publish Now</PrimaryButton>}
+          </div>
+        ) : (
+          <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only access</span>
+        )}
       </EditorHeader>
 
       <EditorGrid>

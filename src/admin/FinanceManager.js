@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,10 +11,13 @@ import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
 import { Skeleton, SkeletonCard, SkeletonTable } from '../components/Skeleton';
-
-
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const FinanceManager = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'finance', 'full');
   const [activeTab, setActiveTab] = useState('students');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -30,6 +34,13 @@ const FinanceManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState(null);
+  const [selectedTeacherForPay, setSelectedTeacherForPay] = useState(null);
+  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    method: 'cash',
+    reference: '',
+    paid_date: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     fetchFinanceData();
@@ -40,6 +51,7 @@ const FinanceManager = () => {
     try {
       // 1. Fetch Stats
       const { data: allPayments } = await supabase.from('payments').select('amount, status, entity_type');
+      const { data: allTeacherPayments } = await supabase.from('teacher_payments').select('amount, status');
 
       let revenue = 0;
       let outstanding = 0;
@@ -51,6 +63,12 @@ const FinanceManager = () => {
           else outstanding += p.amount;
         } else if (p.entity_type === 'teacher' && p.status === 'paid') {
           salaries += p.amount;
+        }
+      });
+
+      allTeacherPayments?.forEach(tp => {
+        if (tp.status?.toLowerCase() === 'paid') {
+          salaries += Number(tp.amount || 0);
         }
       });
 
@@ -75,17 +93,24 @@ const FinanceManager = () => {
       const processedFees = fees?.map(plan => {
         const planPayments = payments?.filter(p => p.entity_id === plan.student_id) || [];
         const paid = planPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
-        const total = plan.total_fee;
+        const payable = plan.final_fee != null ? Number(plan.final_fee) : Number(plan.total_fee || 0);
 
         let status = 'Pending';
-        if (paid >= total) status = 'Paid';
+        if (paid >= payable) status = 'Paid';
         else if (paid > 0) status = 'Partial';
 
         // Check for overdue
         const hasOverdue = planPayments.some(p => p.status === 'pending' && new Date(p.due_date) < new Date());
         if (hasOverdue && status !== 'Paid') status = 'Overdue';
 
-        return { ...plan, paid, outstanding: total - paid, status, paymentRecords: planPayments };
+        return { 
+          ...plan, 
+          payable,
+          paid, 
+          outstanding: Math.max(0, payable - paid), 
+          status, 
+          paymentRecords: planPayments 
+        };
       });
 
       setStudentFees(processedFees || []);
@@ -99,15 +124,24 @@ const FinanceManager = () => {
         `);
 
       const { data: tPayments } = await supabase.from('payments').select('*').eq('entity_type', 'teacher');
+      const { data: directTPayments } = await supabase.from('teacher_payments').select('*');
 
       const processedTeachers = teachers?.map(t => {
         const monthly = t.salary_config?.[0]?.monthly_amount || 0;
         const teacherPay = tPayments?.filter(p => p.entity_id === t.id) || [];
-        const lastPaid = teacherPay.length > 0 ? teacherPay.sort((a, b) => new Date(b.paid_date) - new Date(a.paid_date))[0].paid_date : 'Never';
+        const directPay = directTPayments?.filter(p => p.teacher_id === t.id) || [];
+
+        const allPaidDates = [
+          ...teacherPay.map(p => p.paid_date),
+          ...directPay.map(p => p.paid_on)
+        ].filter(Boolean).sort((a, b) => new Date(b) - new Date(a));
+        const lastPaid = allPaidDates.length > 0 ? allPaidDates[0] : 'Never';
 
         // Determine this month status
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-        const paidThisMonth = teacherPay.some(p => p.description?.includes(currentMonth) && p.status === 'paid');
+        const paidThisMonth =
+          teacherPay.some(p => p.description?.includes(currentMonth) && p.status === 'paid') ||
+          directPay.some(p => p.month === currentMonth && p.status?.toLowerCase() === 'paid');
 
         return {
           ...t,
@@ -128,6 +162,10 @@ const FinanceManager = () => {
   };
 
   const handleRecordPayment = async (formData) => {
+    if (!canMutate) {
+      toast.error("You have view-only access to finance.");
+      return;
+    }
     try {
       const { error } = await supabase
         .from('payments')
@@ -148,6 +186,52 @@ const FinanceManager = () => {
       fetchFinanceData(); // Refresh
     } catch (err) {
       toast.error("Failed to record payment");
+    }
+  };
+
+  const handlePaySalary = async (formData) => {
+    if (!canMutate) {
+      toast.error("You have view-only access to finance.");
+      return;
+    }
+    if (!selectedTeacherForPay) return;
+    try {
+      const currentMonth = formData.month || new Date().toISOString().slice(0, 7);
+
+      // Check duplicate payment for the same teacher and month
+      const { data: existingTPay } = await supabase
+        .from('teacher_payments')
+        .select('id')
+        .eq('teacher_id', selectedTeacherForPay.id)
+        .eq('month', currentMonth)
+        .maybeSingle();
+
+      if (existingTPay) {
+        toast.error(`Salary for ${currentMonth} has already been recorded for ${selectedTeacherForPay.name}.`);
+        return;
+      }
+
+      // Record in teacher_payments
+      const { error: tpError } = await supabase
+        .from('teacher_payments')
+        .insert({
+          teacher_id: selectedTeacherForPay.id,
+          amount: Number(formData.amount),
+          month: currentMonth,
+          paid_on: formData.paidDate,
+          method: formData.method,
+          reference: formData.reference || null,
+          status: 'Paid'
+        });
+
+      if (tpError) throw tpError;
+
+      toast.success(`Salary paid successfully for ${selectedTeacherForPay.name}!`);
+      setIsSalaryModalOpen(false);
+      setSelectedTeacherForPay(null);
+      fetchFinanceData();
+    } catch (err) {
+      toast.error("Failed to record salary payment");
     }
   };
 
@@ -237,7 +321,14 @@ const FinanceManager = () => {
                         </div>
                       </td>
                       <td>{fee.course}</td>
-                      <td>Rs. {fee.total_fee.toLocaleString()}</td>
+                      <td>
+                        Rs. {(fee.payable != null ? fee.payable : fee.total_fee).toLocaleString()}
+                        {fee.discount > 0 && (
+                          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                            (Disc: Rs. {fee.discount.toLocaleString()})
+                          </div>
+                        )}
+                      </td>
                       <td style={{ color: '#10B981' }}>Rs. {fee.paid.toLocaleString()}</td>
                       <td style={{ color: fee.outstanding > 0 ? '#ef4444' : '#6b7280' }}>
                         Rs. {fee.outstanding.toLocaleString()}
@@ -283,10 +374,19 @@ const FinanceManager = () => {
                       <td>{t.lastPaid}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                          <ActionButton disabled={t.status === 'Paid'}>
+                          <ActionButton 
+                            disabled={!canMutate || t.status === 'Paid' || (t.monthlySalary || 0) <= 0}
+                            onClick={() => {
+                              setSelectedTeacherForPay(t);
+                              setIsSalaryModalOpen(true);
+                            }}
+                            title={(t.monthlySalary || 0) <= 0 ? "No monthly salary configured" : t.status === 'Paid' ? "Salary already paid for this month" : ""}
+                          >
                             <FaPlus /> Pay Salary
                           </ActionButton>
-                          <ActionButton><FaHistory /> History</ActionButton>
+                          <ActionButton onClick={() => router.push(`/admin/finance/transactions?search=${encodeURIComponent(t.name)}`)}>
+                            <FaHistory /> History
+                          </ActionButton>
                         </div>
                       </td>
                     </tr>
@@ -322,9 +422,15 @@ const FinanceManager = () => {
               <ModalBody>
                 <div className="summary-banner">
                   <div className="item">
-                    <span>Total Fee</span>
-                    <strong>Rs. {selectedStudent.total_fee.toLocaleString()}</strong>
+                    <span>Payable Fee</span>
+                    <strong>Rs. {(selectedStudent.payable != null ? selectedStudent.payable : selectedStudent.total_fee).toLocaleString()}</strong>
                   </div>
+                  {selectedStudent.discount > 0 && (
+                    <div className="item">
+                      <span>Discount</span>
+                      <strong style={{ color: '#F59E0B' }}>Rs. {selectedStudent.discount.toLocaleString()}</strong>
+                    </div>
+                  )}
                   <div className="item">
                     <span>Paid</span>
                     <strong style={{ color: '#10B981' }}>Rs. {selectedStudent.paid.toLocaleString()}</strong>
@@ -359,7 +465,7 @@ const FinanceManager = () => {
                           <td>{p.method || '—'}</td>
                           <td><StatusBadge $status={p.status}>{p.status}</StatusBadge></td>
                           <td>
-                            {p.status !== 'paid' && (
+                            {p.status !== 'paid' && canMutate && (
                               <RecordBtn onClick={() => { setSelectedInstallment(p); setIsPaymentModalOpen(true); }}>
                                 Mark Paid
                               </RecordBtn>
@@ -413,6 +519,57 @@ const FinanceManager = () => {
                     <Input type="text" name="reference" placeholder="TXN ID / Receipt #" />
                   </div>
                   <SubmitBtn type="submit">Submit Payment</SubmitBtn>
+                </div>
+              </form>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+      </AnimatePresence>
+
+      {/* Pay Teacher Salary Modal */}
+      <AnimatePresence>
+        {isSalaryModalOpen && selectedTeacherForPay && (
+          <ModalOverlay style={{ zIndex: 2000 }}>
+            <ModalContent style={{ maxWidth: '450px' }}>
+              <ModalHeader>
+                <div>
+                  <h2>Pay Salary: {selectedTeacherForPay.name}</h2>
+                  <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>{selectedTeacherForPay.specialization}</p>
+                </div>
+                <CloseBtn onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }}><FaTimes /></CloseBtn>
+              </ModalHeader>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                handlePaySalary(Object.fromEntries(formData));
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Salary Amount (PKR)</label>
+                    <Input type="number" name="amount" defaultValue={selectedTeacherForPay.monthlySalary} required min="1" />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Month</label>
+                    <Input type="month" name="month" defaultValue={new Date().toISOString().slice(0, 7)} required />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Payment Date</label>
+                    <Input type="date" name="paidDate" defaultValue={new Date().toISOString().split('T')[0]} required />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Payment Method</label>
+                    <Select name="method" required>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="cash">Cash</option>
+                      <option value="online">Online</option>
+                      <option value="cheque">Cheque</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Reference #</label>
+                    <Input type="text" name="reference" placeholder="Bank Ref / Cheque # / Slip #" />
+                  </div>
+                  <SubmitBtn type="submit">Confirm & Record Salary</SubmitBtn>
                 </div>
               </form>
             </ModalContent>

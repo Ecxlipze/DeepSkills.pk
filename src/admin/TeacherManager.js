@@ -9,6 +9,8 @@ import AdminLayout from '../components/AdminLayout';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { syncTeacherAccess } from '../utils/adminAccessApi';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -339,8 +341,11 @@ const SubmitBtn = styled.button`
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
-const TeacherManager = () => {
+const TeacherManager = ({ basePath }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'teachers', 'full') || canAccess(user?.permissions || {}, 'hr', 'full');
+  const targetBase = basePath || (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin/hr') ? '/admin/hr/teachers' : '/admin/management/teachers');
   const [teachers, setTeachers] = useState([]);
   const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -410,6 +415,10 @@ const TeacherManager = () => {
 
   const handleAddTeacher = async (e) => {
     e.preventDefault();
+    if (!canMutate) {
+      toast.error("You do not have permission to add teachers.");
+      return;
+    }
     setProcessing(true);
     try {
       // 1. Create Teacher
@@ -505,9 +514,11 @@ const TeacherManager = () => {
             <h1>Teachers</h1>
             <p>Manage all teachers and their batch assignments</p>
           </div>
-          <AddBtn onClick={() => setIsAddModalOpen(true)}>
-            <FaPlus /> Add Teacher
-          </AddBtn>
+          {canMutate && (
+            <AddBtn onClick={() => setIsAddModalOpen(true)}>
+              <FaPlus /> Add Teacher
+            </AddBtn>
+          )}
         </PageHeader>
 
         <StatsGrid>
@@ -566,7 +577,7 @@ const TeacherManager = () => {
                 <tr><td colSpan="7" style={{ textAlign: 'center', padding: '50px', color: '#555' }}>No teachers found</td></tr>
               ) : (
                 filteredTeachers.map(teacher => (
-                  <tr key={teacher.id} onClick={() => navigate(`/admin/management/teachers/${teacher.id}`)}>
+                  <tr key={teacher.id} onClick={() => navigate(`${targetBase}/${teacher.id}`)}>
                     <td>
                       <TeacherInfo>
                         <div className="avatar">{getInitials(teacher.name)}</div>
@@ -597,7 +608,7 @@ const TeacherManager = () => {
                     <td><StatusBadge $active={teacher.status === 'Active'}>{teacher.status}</StatusBadge></td>
                     <td>
                       <button 
-                        onClick={(e) => { e.stopPropagation(); navigate(`/admin/management/teachers/${teacher.id}`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`${targetBase}/${teacher.id}`); }}
                         style={{ background: 'none', border: 'none', color: '#378ADD', cursor: 'pointer' }}
                       >
                         <FaEye />

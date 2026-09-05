@@ -6,6 +6,8 @@ import { FaArrowLeft, FaPlus, FaTimes, FaEdit, FaArchive, FaEye, FaClock, FaSear
 import AdminLayout from '../components/AdminLayout';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const ACCENT = { blue:'#3b82f6', purple:'#9333ea', green:'#10b981', amber:'#f59e0b', red:'#ef4444', teal:'#14b8a6' };
 const ICONS = { laptop:FaLaptopCode, palette:FaPalette, chart:FaChartLine, mobile:FaMobileAlt, shield:FaShieldAlt, video:FaVideo, pen:FaPen, globe:FaGlobe, robot:FaRobot, compass:FaDraftingCompass, wrench:FaWrench, grad:FaGraduationCap, code:FaCode, database:FaDatabase };
@@ -96,6 +98,8 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   const params = useParams();
   const courseId = courseIdProp || params.courseId || getCourseIdFromPath();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'courses', 'full');
   const [course, setCourse] = useState(null);
   const [batches, setBatches] = useState([]);
   const [admissions, setAdmissions] = useState([]);
@@ -125,10 +129,26 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   const batchesWithStats = batches.map(b=>({...b, _enrolled:admissions.filter(a=>a.batch===b.batch_name).length}));
   const activeBatches = batchesWithStats.filter(b=>{ const s=getBatchStatus(b); return s==='active'||s==='upcoming'; }).length;
 
-  const openAddBatch = () => { setEditBatch(null); setBf({batch_name:'',timing_label:'morning',start_time:'09:00',end_time:'12:00',start_date:'',end_date:'',capacity:30,notes:''}); setBatchModal(true); };
-  const openEditBatch = (b) => { setEditBatch(b); setBf({batch_name:b.batch_name||'',timing_label:b.timing_label||'morning',start_time:b.start_time||'09:00',end_time:b.end_time||'12:00',start_date:b.start_date||'',end_date:b.end_date||'',capacity:b.capacity||30,notes:b.notes||''}); setBatchModal(true); };
+  const openAddBatch = () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Adding batches is not permitted.');
+      return;
+    }
+    setEditBatch(null); setBf({batch_name:'',timing_label:'morning',start_time:'09:00',end_time:'12:00',start_date:'',end_date:'',capacity:30,notes:''}); setBatchModal(true);
+  };
+  const openEditBatch = (b) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Editing batches is not permitted.');
+      return;
+    }
+    setEditBatch(b); setBf({batch_name:b.batch_name||'',timing_label:b.timing_label||'morning',start_time:b.start_time||'09:00',end_time:b.end_time||'12:00',start_date:b.start_date||'',end_date:b.end_date||'',capacity:b.capacity||30,notes:b.notes||''}); setBatchModal(true);
+  };
 
   const saveBatch = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Modifying batches is not permitted.');
+      return;
+    }
     if(!bf.batch_name.trim()){toast.error('Batch name required');return;}
     setSaving(true);
     try {
@@ -142,11 +162,19 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   };
 
   const archiveBatch = async (b) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Archiving batches is not permitted.');
+      return;
+    }
     if(!window.confirm(`Archive "${b.batch_name}"?`))return;
     try{ const {error}=await supabase.from('batches').update({status:'Inactive',archived_at:new Date().toISOString()}).eq('id',b.id); if(error)throw error; toast.success('Batch archived'); fetchData(); }catch(e){toast.error('Failed: '+e.message);}
   };
 
   const completeBatch = async (b) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Completing batches is not permitted.');
+      return;
+    }
     if(!window.confirm(`Complete "${b.batch_name}" and graduate all active students in this batch?`))return;
     try{
       const completedAt = new Date().toISOString();
@@ -193,7 +221,7 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
           </div>
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             <StatusPill $on={course.status==='active'}>{course.status==='active'?'Active':'Inactive'}</StatusPill>
-            <EditCourseBtn onClick={()=>navigate('/admin/management/courses')}><FaEdit /> Edit</EditCourseBtn>
+            {canMutate && <EditCourseBtn onClick={()=>navigate('/admin/management/courses')}><FaEdit /> Edit</EditCourseBtn>}
           </div>
         </InfoBar>
 
@@ -204,7 +232,7 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
           <StatCard><div className="val">—</div><div className="lbl">Avg Attendance</div></StatCard>
         </StatsGrid>
 
-        <SectionHeader><h3>Batches</h3><AddBtn onClick={openAddBatch}><FaPlus /> Add New Batch</AddBtn></SectionHeader>
+        <SectionHeader><h3>Batches</h3>{canMutate && <AddBtn onClick={openAddBatch}><FaPlus /> Add New Batch</AddBtn>}</SectionHeader>
 
         {batchesWithStats.length===0 ? <EmptyMsg>No batches yet. Add the first batch for this course.</EmptyMsg> : (
           <TableWrap><Table>
@@ -224,9 +252,9 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
                     <Td><Badge $c={sColors[st]}>{st}</Badge></Td>
                     <Td><TdActions>
                       <SmBtn onClick={()=>{setPanelBatch(b);setPanelSearch('');}}><FaEye /> Students</SmBtn>
-                      <SmBtn onClick={()=>openEditBatch(b)}><FaEdit /></SmBtn>
-                      {b.status!=='Completed' && b.status!=='Inactive' && <SmBtn onClick={()=>completeBatch(b)}><FaGraduationCap /></SmBtn>}
-                      <SmBtn onClick={()=>archiveBatch(b)}><FaArchive /></SmBtn>
+                      {canMutate && <SmBtn onClick={()=>openEditBatch(b)}><FaEdit /></SmBtn>}
+                      {canMutate && b.status!=='Completed' && b.status!=='Inactive' && <SmBtn onClick={()=>completeBatch(b)}><FaGraduationCap /></SmBtn>}
+                      {canMutate && <SmBtn onClick={()=>archiveBatch(b)}><FaArchive /></SmBtn>}
                     </TdActions></Td>
                   </tr>
                 );

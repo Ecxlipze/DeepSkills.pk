@@ -209,13 +209,14 @@ function auth_build_user($cnic) {
         if (!$teacher) {
             otp_respond(404, ['status' => 'error', 'message' => 'Teacher profile not found.']);
         }
-        if (($teacher['status'] ?? '') !== 'Active') {
-            otp_respond(403, ['status' => 'error', 'message' => 'Your account is ' . strtolower($teacher['status'] ?? 'inactive') . '. Please contact the administrator.']);
+        $teacherStatus = $teacher['status'] ?? 'Inactive';
+        if (!in_array($teacherStatus, ['Active', 'Pending', 'Onboarding'])) {
+            otp_respond(403, ['status' => 'error', 'message' => 'Your account is ' . strtolower($teacherStatus) . '. Please contact the administrator.']);
         }
         return array_merge($roleData, [
             'id' => $teacher['id'] ?? ($roleData['id'] ?? null),
             'name' => $roleData['name'] ?? '',
-            'status' => $teacher['status'],
+            'status' => $teacherStatus,
             'authType' => 'cnic',
             'permissions' => (object) [],
         ]);

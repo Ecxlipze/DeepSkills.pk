@@ -91,6 +91,7 @@ export const getFirstAccessibleAdminPath = (permissions = {}) => {
     { key: 'users', path: '/admin/management/users' },
     { key: 'courses', path: '/admin/management/courses' },
     { key: 'attendance', path: '/admin/academic/attendance' },
+    { key: 'tasks', path: '/admin/academic/tasks' },
     { key: 'announcements', path: '/admin/academic/announcements' },
     { key: 'blog', path: '/admin/management/blog' },
     { key: 'complaints', path: '/admin/academic/complaints' },
@@ -143,6 +144,7 @@ export const buildAdminSidebar = (user, permissions = {}, hasOpenComplaints = fa
         { label: 'Settings', path: '/admin/academic/attendance', permissionKey: 'attendance' }
       ]
     },
+    { iconKey: 'tasks', label: 'Tasks', path: '/admin/academic/tasks', permissionKey: 'tasks' },
     { iconKey: 'results', label: 'Certificates', path: '/admin/management/certificates', permissionKey: 'results' },
     { type: 'label', label: 'COMMUNICATION' },
     { iconKey: 'announcements', label: 'Announcements', path: '/admin/academic/announcements', permissionKey: 'announcements' },

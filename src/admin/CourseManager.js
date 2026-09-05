@@ -13,6 +13,8 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 import { requestRevalidate } from '../utils/revalidatePublic';
 
 // --- Color Map ---
@@ -205,6 +207,8 @@ const EmptyState = styled.div`
 // ===================== COMPONENT =====================
 const CourseManager = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'courses', 'full');
   const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);
   const [admissions, setAdmissions] = useState([]);
@@ -244,17 +248,29 @@ const CourseManager = () => {
   };
 
   const openAdd = () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Adding courses is not permitted.');
+      return;
+    }
     setEditingCourse(null);
     setForm({title:'',description:'',duration:'',price:'',reenrollment_discount_pct:5,icon:'laptop',accent_color:'blue',status:'active'});
     setIsModalOpen(true);
   };
   const openEdit = (c) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Editing courses is not permitted.');
+      return;
+    }
     setEditingCourse(c);
     setForm({title:c.title||'',description:c.description||'',duration:c.duration||'',price:c.price||'',reenrollment_discount_pct:c.reenrollment_discount_pct??5,icon:c.icon||'laptop',accent_color:c.accent_color||'blue',status:c.status||'active'});
     setIsModalOpen(true);
   };
 
   const handleSave = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Modifying courses is not permitted.');
+      return;
+    }
     if(!form.title.trim()){toast.error('Course name is required');return;}
     setSaving(true);
     try {
@@ -273,6 +289,10 @@ const CourseManager = () => {
   };
 
   const handleDeactivate = async (c) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Changing course status is not permitted.');
+      return;
+    }
     const next = (c.status||'active')==='active'?'inactive':'active';
     if(!window.confirm(`${next==='inactive'?'Deactivate':'Reactivate'} "${c.title}"?`))return;
     try{
@@ -289,7 +309,7 @@ const CourseManager = () => {
           <h1>Courses & Batches</h1>
           <p>Manage all courses offered at DeepSkill</p>
         </div>
-        <AddBtn onClick={openAdd}><FaPlus /> Add New Course</AddBtn>
+        {canMutate && <AddBtn onClick={openAdd}><FaPlus /> Add New Course</AddBtn>}
       </PageHeader>
 
       <StatsStrip>
@@ -332,8 +352,8 @@ const CourseManager = () => {
                   </MiniStats>
                   <CardActions>
                     <ActionBtn $primary $grow onClick={()=>navigate(`/admin/management/courses/${course.id}`)}>View Batches <FaArrowRight /></ActionBtn>
-                    <ActionBtn onClick={()=>openEdit(course)}><FaEdit /></ActionBtn>
-                    <ActionBtn $danger onClick={()=>handleDeactivate(course)}><FaBan /></ActionBtn>
+                    {canMutate && <ActionBtn onClick={()=>openEdit(course)}><FaEdit /></ActionBtn>}
+                    {canMutate && <ActionBtn $danger onClick={()=>handleDeactivate(course)}><FaBan /></ActionBtn>}
                   </CardActions>
                 </CardBody>
               </CourseCard>

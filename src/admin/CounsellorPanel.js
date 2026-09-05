@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { createNotification } from '../utils/notifications';
 
@@ -86,6 +87,7 @@ const statusLabel = (value) => STATUS_OPTIONS.find((status) => status.value === 
 
 const CounsellorPanel = ({ initialView }) => {
   const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'counsellor', 'full');
   const navigate = useNavigate();
   const location = useLocation();
   const resolvedView = initialView || location.pathname.split('/')[3] || 'overview';
@@ -179,6 +181,10 @@ const CounsellorPanel = ({ initialView }) => {
   const todayDateStr = new Date().toISOString().split('T')[0];
 
   const openEnroll = (inquiry = null) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Enrolling students is not permitted.');
+      return;
+    }
     setSuccess(null);
     setErrors({});
     const initialCourse = inquiry?.course_interest || '';
@@ -398,6 +404,10 @@ const CounsellorPanel = ({ initialView }) => {
   };
 
   const updateStatus = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Updating inquiries is not permitted.');
+      return;
+    }
     if (!statusTarget) return;
     const entry = {
       note: statusForm.note || `Status changed to ${statusLabel(statusForm.status)}`,
@@ -428,6 +438,10 @@ const CounsellorPanel = ({ initialView }) => {
 
   const enrollStudent = async (event) => {
     event.preventDefault();
+    if (!canMutate) {
+      toast.error('You have view-only access. Enrolling students is not permitted.');
+      return;
+    }
 
     const formErrors = validateEnrollment(enrollment, selectedBatch);
     if (Object.keys(formErrors).length > 0) {
@@ -528,6 +542,10 @@ const CounsellorPanel = ({ initialView }) => {
   };
 
   const sendLoginInstructions = async (student = success) => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Sending instructions is not permitted.');
+      return;
+    }
     if (!student?.email) {
       toast.error('Student email missing');
       return;
@@ -545,6 +563,10 @@ const CounsellorPanel = ({ initialView }) => {
   };
 
   const saveStudentAction = async () => {
+    if (!canMutate) {
+      toast.error('You have view-only access. Modifying students is not permitted.');
+      return;
+    }
     if (!studentAction) return;
     if (studentAction.type === 'batch') {
       const batch = activeBatches.find((item) => item.id === studentAction.batchId);
@@ -587,7 +609,7 @@ const CounsellorPanel = ({ initialView }) => {
             <h1>Counsellor Panel</h1>
             <p>Manage inquiries, walk-ins, enrollment, batch assignment, and first payments.</p>
           </div>
-          <Primary onClick={() => openEnroll()}><FaPlus /> Add Walk-in Student</Primary>
+          {canMutate && <Primary onClick={() => openEnroll()}><FaPlus /> Add Walk-in Student</Primary>}
         </Header>
 
         {(enrollmentOpen || resolvedView === 'enroll') ? (
@@ -1019,7 +1041,7 @@ const CounsellorPanel = ({ initialView }) => {
                         <td>{inquiry.submitted_at ? new Date(inquiry.submitted_at).toLocaleDateString() : '-'}</td>
                         <td><Badge $status={inquiry.status}>{statusLabel(inquiry.status)}</Badge></td>
                         <td className="muted">{lastNote ? `${lastNote.slice(0, 55)}${lastNote.length > 55 ? '...' : ''}` : '-'}</td>
-                        <td><Actions><button onClick={() => { setStatusTarget(inquiry); setStatusForm({ status: inquiry.status || 'contacted', note: '' }); }}><FaPhone /> Update</button><button onClick={() => openEnroll(inquiry)}><FaCheckCircle /> Enroll</button><button onClick={() => setSelectedInquiry(inquiry)}><FaEye /> View</button></Actions></td>
+                        <td><Actions>{canMutate && <button onClick={() => { setStatusTarget(inquiry); setStatusForm({ status: inquiry.status || 'contacted', note: '' }); }}><FaPhone /> Update</button>}{canMutate && <button onClick={() => openEnroll(inquiry)}><FaCheckCircle /> Enroll</button>}<button onClick={() => setSelectedInquiry(inquiry)}><FaEye /> View</button></Actions></td>
                       </tr>
                     );
                   })}
@@ -1029,7 +1051,7 @@ const CounsellorPanel = ({ initialView }) => {
             </TableCard>
               </>
             ) : (
-              <StudentList students={students} batches={activeBatches} navigate={navigate} onAction={setStudentAction} />
+              <StudentList students={students} batches={activeBatches} navigate={navigate} onAction={setStudentAction} canMutate={canMutate} />
             )}
           </>
         )}
@@ -1104,7 +1126,7 @@ const CounsellorPanel = ({ initialView }) => {
   );
 };
 
-function StudentList({ students, batches, navigate, onAction }) {
+function StudentList({ students, batches, navigate, onAction, canMutate = true }) {
   const [search, setSearch] = useState('');
   const visible = students.filter((student) => !search || [student.name, student.cnic, student.phone, student.email, student.course, student.batch].some((value) => String(value || '').toLowerCase().includes(search.toLowerCase())));
   return (
@@ -1113,7 +1135,7 @@ function StudentList({ students, batches, navigate, onAction }) {
       <TableCard>
         <table>
           <thead><tr><th>Student</th><th>CNIC</th><th>Course</th><th>Batch</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>{visible.map((student) => <tr key={student.id}><td><strong>{student.name}</strong><small>{student.email}</small></td><td>{student.cnic}</td><td>{student.course}</td><td>{student.batch}</td><td><Badge $status={student.status}>{student.status}</Badge></td><td><Actions><button onClick={() => navigate(`/admin/management/students/${student.id}`)}><FaEye /> Profile</button><button onClick={() => onAction({ type: 'batch', student, batchId: batches.find((batch) => batch.batch_name === student.batch)?.id || '' })}>Batch</button><button onClick={() => onAction({ type: 'payment', student })}><FaMoneyBillWave /> Payment</button><button onClick={() => onAction({ type: 'note', student, note: '' })}><FaStickyNote /> Note</button></Actions></td></tr>)}</tbody>
+          <tbody>{visible.map((student) => <tr key={student.id}><td><strong>{student.name}</strong><small>{student.email}</small></td><td>{student.cnic}</td><td>{student.course}</td><td>{student.batch}</td><td><Badge $status={student.status}>{student.status}</Badge></td><td><Actions><button onClick={() => navigate(`/admin/management/students/${student.id}`)}><FaEye /> Profile</button>{canMutate && <button onClick={() => onAction({ type: 'batch', student, batchId: batches.find((batch) => batch.batch_name === student.batch)?.id || '' })}>Batch</button>}{canMutate && <button onClick={() => onAction({ type: 'payment', student })}><FaMoneyBillWave /> Payment</button>}{canMutate && <button onClick={() => onAction({ type: 'note', student, note: '' })}><FaStickyNote /> Note</button>}</Actions></td></tr>)}</tbody>
         </table>
       </TableCard>
     </>

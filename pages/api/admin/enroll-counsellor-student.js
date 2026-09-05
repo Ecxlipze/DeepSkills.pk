@@ -1,9 +1,15 @@
 import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+import { authorizeAdminOperation } from '../../../lib/portalAuthServer';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ status: 'error', message: 'Method not allowed' });
+  }
+
+  const auth = await authorizeAdminOperation(req, ['students', 'counsellor']);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ status: 'error', message: auth.message });
   }
 
   const supabase = getSupabaseServerClient();

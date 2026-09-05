@@ -23,7 +23,7 @@ const StudentAnnouncements = dynamic(() => import('../../src/student/StudentAnno
 const ReferralPage = dynamic(() => import('../../src/components/ReferralPage'), { ssr: false });
 
 function getStudentPage(path = []) {
-  const [section] = path;
+  const [section, child] = path;
 
   if (!section || section === 'dashboard') return <StudentDashboard />;
   if (section === 'tasks') return <StudentTasks />;
@@ -32,7 +32,7 @@ function getStudentPage(path = []) {
   if (section === 'certificate') return <StudentCertificate />;
   if (section === 'complaints') return <StudentComplaints />;
   if (section === 'attendance') return <StudentAttendance />;
-  if (section === 'results') return <StudentResults />;
+  if (section === 'results') return <StudentResults type={child} />;
   if (section === 'new-enrollment') return <NewEnrollment />;
   if (section === 'group-chat') return <StudentGroupChat />;
   if (section === 'announcements') return <StudentAnnouncements />;

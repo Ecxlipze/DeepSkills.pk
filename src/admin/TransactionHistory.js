@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { 
   FaSearch, FaDownload, FaArrowUp, 
@@ -7,13 +8,21 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
+import { downloadCsv } from '../utils/csvExport';
 
 const TransactionHistory = () => {
+  const router = useRouter();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(router?.query?.search ? String(router.query.search) : '');
   const [filterType, setFilterType] = useState('all');
   const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, net: 0 });
+
+  useEffect(() => {
+    if (router?.query?.search) {
+      setSearchQuery(String(router.query.search));
+    }
+  }, [router?.query?.search]);
 
   useEffect(() => {
     fetchTransactions();
@@ -48,24 +57,35 @@ const TransactionHistory = () => {
     }
   };
 
+  const filteredTransactions = transactions.filter(t => {
+    const matchesType = filterType === 'all' || t.entity_type === filterType;
+    const search = searchQuery.trim().toLowerCase();
+    const matchesSearch = !search ||
+      t.description?.toLowerCase().includes(search) ||
+      t.reference_number?.toLowerCase().includes(search) ||
+      t.method?.toLowerCase().includes(search);
+    return matchesType && matchesSearch;
+  });
+
   const exportCSV = () => {
+    const listToExport = filteredTransactions.length > 0 ? filteredTransactions : transactions;
+    if (listToExport.length === 0) {
+      toast.error("No transactions to export");
+      return;
+    }
     const headers = ["Date", "Type", "Description", "Method", "Amount", "Reference"];
-    const rows = transactions.map(t => [
-      t.paid_date,
+    const rows = listToExport.map(t => [
+      t.paid_date || '',
       t.entity_type === 'student' ? 'Fee' : 'Salary',
-      t.description,
-      t.method,
-      t.amount,
-      t.reference_number
+      t.description || 'System Transaction',
+      t.method ? t.method.replace('_', ' ') : '',
+      t.amount ?? '',
+      t.reference_number || '—'
     ]);
 
-    let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `DeepSkills_Finance_Export_${new Date().toLocaleDateString()}.csv`);
-    document.body.appendChild(link);
-    link.click();
+    const dateStr = new Date().toISOString().split('T')[0];
+    downloadCsv(`DeepSkills_Finance_Export_${dateStr}.csv`, headers, rows);
+    toast.success("Transactions exported successfully");
   };
 
   return (
@@ -139,25 +159,23 @@ const TransactionHistory = () => {
                 </tr>
               </thead>
               <tbody>
-                {transactions
-                  .filter(t => (filterType === 'all' || t.entity_type === filterType))
-                  .map((t) => (
-                    <tr key={t.id}>
-                      <td>{t.paid_date}</td>
-                      <td>
-                        <TypeBadge type={t.entity_type}>
-                          {t.entity_type === 'student' ? 'Student Fee' : 'Salary'}
-                        </TypeBadge>
-                      </td>
-                      <td>{t.description || 'System Transaction'}</td>
-                      <td>{t.method?.replace('_', ' ')}</td>
-                      <td style={{ fontWeight: '700', color: t.entity_type === 'student' ? '#10B981' : '#ef4444' }}>
-                        {t.entity_type === 'student' ? '+' : '-'} Rs. {t.amount.toLocaleString()}
-                      </td>
-                      <td style={{ color: '#6b7280', fontSize: '0.85rem' }}>{t.reference_number || '—'}</td>
-                    </tr>
-                  ))}
-                {transactions.length === 0 && !loading && (
+                {filteredTransactions.map((t) => (
+                  <tr key={t.id}>
+                    <td>{t.paid_date}</td>
+                    <td>
+                      <TypeBadge type={t.entity_type}>
+                        {t.entity_type === 'student' ? 'Student Fee' : 'Salary'}
+                      </TypeBadge>
+                    </td>
+                    <td>{t.description || 'System Transaction'}</td>
+                    <td>{t.method?.replace('_', ' ')}</td>
+                    <td style={{ fontWeight: '700', color: t.entity_type === 'student' ? '#10B981' : '#ef4444' }}>
+                      {t.entity_type === 'student' ? '+' : '-'} Rs. {t.amount.toLocaleString()}
+                    </td>
+                    <td style={{ color: '#6b7280', fontSize: '0.85rem' }}>{t.reference_number || '—'}</td>
+                  </tr>
+                ))}
+                {filteredTransactions.length === 0 && !loading && (
                   <tr><td colSpan="6" style={{ textAlign: 'center', padding: '50px', color: '#6b7280' }}>No transactions recorded yet.</td></tr>
                 )}
               </tbody>

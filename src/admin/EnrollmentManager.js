@@ -14,6 +14,8 @@ import { Skeleton } from '../components/Skeleton';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { createNotification } from '../utils/notifications';
 import { syncStudentAccess } from '../utils/adminAccessApi';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -287,6 +289,8 @@ const SecondaryButton = styled.button`
 `;
 
 const EnrollmentManager = () => {
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'full') || canAccess(user?.permissions || {}, 'counsellor', 'full');
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState([]);
@@ -500,6 +504,10 @@ const EnrollmentManager = () => {
   };
 
   const handleGrantAccess = async () => {
+    if (!canMutate) {
+      toast.error("You do not have permission to grant enrollment access.");
+      return;
+    }
     if (!selectedBatch) {
       toast.error("Please select a batch");
       return;
@@ -507,89 +515,56 @@ const EnrollmentManager = () => {
     setProcessing(true);
     try {
       const batch = batches.find(b => b.id === selectedBatch);
-
-      // 1. Update Admission record
-      if (selectedApp.isReEnrollment) {
-        // Only update the enrollments record — do NOT touch the student's current admissions record
-        const { error: admError } = await supabase
-          .from('enrollments')
-          .update({
-            status: 'active',
-            batch_id: batch.batch_name,
-            batch_name: batch.batch_name,
-            batch_timing: batch.time_shift,
-            activated_at: new Date().toISOString()
-          })
-          .eq('id', selectedApp.id);
-        if (admError) throw admError;
-
-      } else {
-        const { error: admError } = await supabase
-          .from('admissions')
-          .update({
-            status: 'Active',
-            batch: batch.batch_name,
-            batch_timing: batch.time_shift,
-            batch_assigned_at: new Date().toISOString()
-          })
-          .eq('id', selectedApp.id);
-        if (admError) throw admError;
+      if (!batch) {
+        toast.error("Selected batch not found");
+        return;
       }
 
-      // 2. Synchronize student login access to unlock dashboard
-      await syncStudentAccess({
-        cnic: selectedApp.cnic,
+      const normalizedPlan = planType === 'full' ? 'full' : 'installment';
+      const finalInstCount = normalizedPlan === 'full' ? 1 : Math.max(1, installmentCount);
+      const discAmount = selectedApp.discount_amount || 0;
+      const finalFee = Math.max(0, totalFee - discAmount);
+
+      const enrollmentPayload = {
+        admissionId: selectedApp.isReEnrollment ? null : selectedApp.id,
+        reEnrollmentId: selectedApp.isReEnrollment ? selectedApp.id : null,
+        studentId: selectedApp.isReEnrollment ? selectedApp.original_admission_id : selectedApp.id,
         name: selectedApp.name,
+        fatherName: selectedApp.father_name || selectedApp.fatherName || '',
+        cnic: selectedApp.cnic,
+        phone: selectedApp.phone || '',
+        email: selectedApp.email || '',
+        city: selectedApp.city || '',
+        address: selectedApp.address || '',
         course: selectedApp.course || selectedApp.selectedCourse,
-        batch: batch.batch_name
+        batchId: batch.id,
+        batchName: batch.batch_name,
+        totalFee: totalFee,
+        discountAmount: discAmount,
+        discountReason: selectedApp.discount_reason || '',
+        finalFee: finalFee,
+        paymentPlan: normalizedPlan,
+        installmentCount: finalInstCount,
+        firstPayment: 0,
+        firstPaymentMethod: 'cash',
+        enrollmentSource: selectedApp.isReEnrollment ? 're_enrollment' : 'web_application',
+        referralCode: selectedApp.referred_by || selectedApp.referral_code || ''
+      };
+
+      const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
+      const response = await fetch('/api/admin/enroll-counsellor-student', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+        },
+        body: JSON.stringify({ payload: enrollmentPayload })
       });
 
-      // 3. Automate Fee Generation
-      const normalizedPlan = planType === 'full' ? 'full' : 'installment';
-      const amountPerInst = normalizedPlan === 'full' ? totalFee : Math.round(totalFee / installmentCount);
-
-      // Create Fee Plan record
-      const { error: feePlanError } = await supabase
-        .from('fee_plans')
-        .insert({
-          student_id: selectedApp.isReEnrollment ? selectedApp.original_admission_id : selectedApp.id,
-          course: selectedApp.course || selectedApp.selectedCourse,
-          batch: batch.batch_name,
-          total_fee: totalFee,
-          plan_type: normalizedPlan,
-          installment_count: normalizedPlan === 'full' ? 1 : installmentCount
-        })
-        .select()
-        .single();
-
-      if (feePlanError) throw feePlanError;
-
-      // Create Payment installments
-      const paymentRows = [];
-      const insts = normalizedPlan === 'full' ? 1 : installmentCount;
-
-      for (let i = 1; i <= insts; i++) {
-        const dueDate = new Date();
-        dueDate.setMonth(dueDate.getMonth() + (i - 1)); // One month apart
-
-        paymentRows.push({
-          entity_id: selectedApp.isReEnrollment ? selectedApp.original_admission_id : selectedApp.id,
-          entity_type: 'student',
-          installment_number: normalizedPlan === 'full' ? null : i,
-          total_installments: normalizedPlan === 'full' ? null : insts,
-          amount: amountPerInst,
-          due_date: dueDate.toISOString().split('T')[0],
-          status: 'pending',
-          method: null,
-          description: normalizedPlan === 'full' ? 'Full Course Fee' : `Installment ${i} of ${insts}`
-        });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status === 'error' || result.ok === false) {
+        throw new Error(result.message || 'Enrollment failed.');
       }
-
-      const { error: paymentsError } = await supabase
-        .from('payments')
-        .insert(paymentRows);
-
-      if (paymentsError) throw paymentsError;
 
       const emailResult = await sendAdmissionEmail(
         selectedApp.isReEnrollment ? EMAIL_EVENTS.RE_ENROLLMENT_APPROVED : EMAIL_EVENTS.ADMISSION_APPROVED,
@@ -611,55 +586,10 @@ const EnrollmentManager = () => {
         title: selectedApp.isReEnrollment ? 'Re-enrollment Approved' : 'Enrollment Confirmed',
         message: `You have been enrolled in ${batch.batch_name} — ${selectedApp.course || selectedApp.selectedCourse}.`,
         link: '/student/dashboard',
-        sendEmail: false,
-        emailData: {
-          email: selectedApp.email,
-          name: selectedApp.name,
-          cnic: selectedApp.cnic,
-          course: selectedApp.course || selectedApp.selectedCourse,
-          batch: batch.batch_name,
-          timing: batch.time_shift,
-          event: selectedApp.isReEnrollment ? EMAIL_EVENTS.RE_ENROLLMENT_APPROVED : EMAIL_EVENTS.ADMISSION_APPROVED
-        }
+        sendEmail: false
       });
 
-      // 4. Referral Program Logic
-      if (selectedApp.referred_by) {
-        try {
-          // Look up referrer by code
-          const { data: codeData } = await supabase
-            .from('referral_codes')
-            .select('user_id, user_role')
-            .eq('code', selectedApp.referred_by)
-            .single();
-
-          if (codeData) {
-            // Get reward settings
-            const { data: settings } = await supabase.from('referral_settings').select('cash_reward').single();
-            const rewardAmount = settings ? settings.cash_reward : 1000;
-
-            // Create or Update Referral Record
-            const { error: refError } = await supabase
-              .from('referrals')
-              .upsert({
-                referrer_id: codeData.user_id,
-                referrer_role: codeData.user_role,
-                referred_id: selectedApp.id, // Using admission ID for now as students don't have user_id yet
-                referred_name: selectedApp.name,
-                referred_phone: selectedApp.phone,
-                status: 'enrolled',
-                payout_status: 'pending',
-                reward_amount: rewardAmount,
-                referred_at: selectedApp.submitted_at // Link to original registration time
-              }, { onConflict: 'referred_id' });
-
-            if (refError) console.error('Referral recording failed:', refError);
-          }
-        } catch (refLogErr) {
-          console.error('Error in referral hook:', refLogErr);
-        }
-      }
-
+      toast.success("Student access granted and enrolled successfully!");
       setIsFeeModalOpen(false);
       setIsBatchModalOpen(false);
       fetchData();
@@ -867,7 +797,7 @@ const EnrollmentManager = () => {
                 <PrimaryButton
                   style={{ background: '#7a2136' }}
                   onClick={handleReject}
-                  disabled={processing}
+                  disabled={processing || !canMutate}
                 >
                   <FaTimes /> {processing ? '...' : 'Reject'}
                 </PrimaryButton>

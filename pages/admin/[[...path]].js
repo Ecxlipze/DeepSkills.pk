@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import { Toaster } from 'react-hot-toast';
@@ -9,7 +10,10 @@ import { ComplaintsProvider } from '../../src/context/ComplaintsContext';
 import { GroupChatProvider } from '../../src/context/GroupChatContext';
 import { AnnouncementsProvider } from '../../src/context/AnnouncementsContext';
 import { DepartmentProvider } from '../../src/context/DepartmentContext';
+import { useAuth } from '../../src/context/AuthContext';
+import { getFirstAccessibleAdminPath } from '../../src/utils/permissions';
 import {
+  getDepartmentNav,
   getDepartmentRouteAccess,
   normalizeAdminPath
 } from '../../src/utils/departments';
@@ -65,10 +69,33 @@ const ADMIN_ROUTE_ACCESS = {
   reports: { allowedRoles: ['admin', 'custom'], permissionKey: 'reports' },
   results: { allowedRoles: ['admin', 'custom'], permissionKey: 'results' },
   blog: { allowedRoles: ['admin', 'custom'], permissionKey: 'blog' },
-  tasks: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
-  chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
+  tasks: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
+  chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
   settings: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' }
 };
+
+function DepartmentHubRedirect({ departmentId, currentPath }) {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const navItems = getDepartmentNav(user, departmentId) || [];
+    const target = navItems.find((item) => item.path && item.path !== currentPath && !item.section);
+    if (target?.path) {
+      router.replace(target.path);
+    } else {
+      const fallback = getFirstAccessibleAdminPath(user?.permissions) || '/admin/dashboard';
+      router.replace(fallback);
+    }
+  }, [departmentId, currentPath, loading, user, router]);
+
+  return (
+    <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>
+      Redirecting to accessible module...
+    </div>
+  );
+}
 
 function getAdminPage(path = []) {
   const [section, child] = path;
@@ -83,7 +110,7 @@ function getAdminPage(path = []) {
   }
   if (section === 'students') return child ? <StudentProfile studentId={child} /> : <StudentManager />;
   if (section === 'users') return child === 'activity' ? <AdminActivityLogsPage /> : <AdminUserManagement />;
-  if (section === 'teachers') return child ? <TeacherProfile /> : <TeacherManager />;
+  if (section === 'teachers') return child ? <TeacherProfile teacherId={child} /> : <TeacherManager />;
   if (section === 'courses') return child ? <CourseDetailPage courseId={child} /> : <CourseManager />;
   if (section === 'batches') return <CourseManager />;
   if (section === 'attendance') return <AdminAttendancePage />;
@@ -91,8 +118,8 @@ function getAdminPage(path = []) {
   if (section === 'chats') return <AdminGroupChatsPage />;
   if (section === 'certificates') return <CertificateManager />;
   if (section === 'hr') {
-    if (child === 'teachers') return <TeacherManager />;
-    if (child === 'settings') return <DepartmentPlaceholder title="HR Settings" icon="⚙️" />;
+    if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/hr/teachers" />;
+    if (child === 'settings') return <DepartmentHubRedirect departmentId="hr" currentPath="/admin/hr/settings" />;
     return <AdminHRManagement />;
   }
   if (section === 'announcements') return <AdminAnnouncements />;
@@ -101,7 +128,7 @@ function getAdminPage(path = []) {
     if (child === 'transactions') return <AdminFinanceTransactions />;
     if (child === 'referrals') return <AdminReferral />;
     if (child === 'reports') return <ReportsSystem mode="finance" />;
-    if (child === 'settings') return <DepartmentPlaceholder title="Fee Settings" icon="⚙️" />;
+    if (child === 'settings') return <DepartmentHubRedirect departmentId="finance" currentPath="/admin/finance/settings" />;
     return <AdminFinance />;
   }
   if (section === 'referral') return <AdminReferral />;
@@ -110,8 +137,8 @@ function getAdminPage(path = []) {
   if (section === 'blog') return <BlogManager />;
 
   if (section === 'academic') {
-    if (!child) return <DepartmentPlaceholder title="Academic Overview" icon="📚" />;
-    if (child === 'attendance') return <AdminAttendancePage />;
+    if (!child) return <DepartmentHubRedirect departmentId="academic" currentPath="/admin/academic" />;
+    if (child === 'attendance') return subpath === 'settings' ? <AdminAttendanceSettings /> : <AdminAttendancePage />;
     if (child === 'results') return <AdminResults />;
     if (child === 'announcements') return <AdminAnnouncements />;
     if (child === 'complaints') return <AdminComplaints />;
@@ -121,9 +148,9 @@ function getAdminPage(path = []) {
   }
 
   if (section === 'management') {
-    if (!child) return <DepartmentPlaceholder title="Management Overview" icon="🏢" />;
+    if (!child) return <DepartmentHubRedirect departmentId="management" currentPath="/admin/management" />;
     if (child === 'students') return subpath ? <StudentProfile studentId={subpath} /> : <StudentManager />;
-    if (child === 'teachers') return subpath ? <TeacherProfile /> : <TeacherManager />;
+    if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/management/teachers" />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;
     if (child === 'referral') return <AdminReferral />;
     if (child === 'certificates') return <CertificateManager />;
@@ -147,7 +174,14 @@ function getAdminPage(path = []) {
 
 function getAdminAccess(path = []) {
   const [section, child] = path;
+  const subpath = path.slice(2).join('/');
   const pathname = `/admin/${path.join('/')}`.replace(/\/$/, '');
+  if (section === 'academic' && child === 'attendance' && subpath === 'settings') {
+    return { allowedRoles: ['admin', 'custom'], permissionKey: 'attendance' };
+  }
+  if (section === 'hr' && child === 'teachers') {
+    return { allowedRoles: ['admin', 'custom'], permissionKey: 'hr' };
+  }
   if (['academic', 'management'].includes(section)) {
     return getDepartmentRouteAccess(pathname);
   }
@@ -197,6 +231,7 @@ export default function AdminPortal() {
       <NextPortalGuard
         allowedRoles={access?.allowedRoles || ['admin']}
         permissionKey={access?.permissionKey}
+        departmentId={access?.departmentId}
         loginPath="/admin"
       >
         {getAdminPage(path)}

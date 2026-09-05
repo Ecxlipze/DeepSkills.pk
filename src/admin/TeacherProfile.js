@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { useRouter } from 'next/router';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,20 +11,25 @@ import {
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { syncTeacherAccess } from '../utils/adminAccessApi';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 20px 0;
   color: #fff;
 `;
 
-const BackLink = styled(Link)`
+const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
   color: #888;
-  text-decoration: none;
+  background: none;
+  border: none;
   font-size: 0.9rem;
   margin-bottom: 25px;
+  cursor: pointer;
+  padding: 0;
   transition: color 0.2s;
   &:hover { color: #fff; }
 `;
@@ -284,9 +290,14 @@ const SubmitBtn = styled.button`
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
-const TeacherProfile = () => {
-  const { id } = useParams();
+const TeacherProfile = ({ teacherId }) => {
+  const params = useParams();
+  const router = useRouter();
+  const id = teacherId || params?.id;
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'teachers', 'full') || canAccess(user?.permissions || {}, 'hr', 'full'));
+  
   const [teacher, setTeacher] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Performance');
@@ -457,6 +468,10 @@ const TeacherProfile = () => {
   }, [fetchTeacherData]);
 
   const handleAddAssignment = async () => {
+    if (!canMutate) {
+      toast.error("You do not have permission to modify teacher assignments.");
+      return;
+    }
     if (!newAssignment.batch_id) return;
     
     // Check if teacher is already assigned to this batch
@@ -486,6 +501,10 @@ const TeacherProfile = () => {
   };
 
   const removeAssignment = async (assId, batchName, role) => {
+    if (!canMutate) {
+      toast.error("You do not have permission to modify teacher assignments.");
+      return;
+    }
     // Safety check for last main teacher could be added here
     if (!window.confirm(`Remove ${teacher.name} from ${batchName}?`)) return;
     try {
@@ -499,6 +518,10 @@ const TeacherProfile = () => {
   };
 
   const toggleStatus = async () => {
+    if (!canMutate) {
+      toast.error("You do not have permission to modify teacher status.");
+      return;
+    }
     const newStatus = teacher.status === 'Active' ? 'Inactive' : 'Active';
     if (!window.confirm(`Mark as ${newStatus}?`)) return;
     try {
@@ -547,7 +570,20 @@ const TeacherProfile = () => {
   return (
     <AdminLayout>
       <Container>
-        <BackLink to="/admin/management/teachers"><FaArrowLeft /> Back to Teachers</BackLink>
+        <BackButton
+          type="button"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.history.length > 1) {
+              router.back();
+            } else if (router.asPath?.includes('/admin/hr/')) {
+              router.push('/admin/hr/teachers');
+            } else {
+              router.push('/admin/management/teachers');
+            }
+          }}
+        >
+          <FaArrowLeft /> Back to Teachers
+        </BackButton>
         <Layout>
           {/* SIDEBAR */}
           <SidebarCard>
@@ -581,14 +617,20 @@ const TeacherProfile = () => {
               </div>
             </AssignedBatches>
 
-            <ActionButtons>
-              <Button className="edit"><FaEdit /> Edit Details</Button>
-              <Button className="batches" onClick={() => setIsManageBatchesOpen(true)}><FaPlus /> Manage Batches</Button>
-              <Button className="status" $active={teacher.status === 'Active'} onClick={toggleStatus}>
-                {teacher.status === 'Active' ? <><FaUserSlash /> Mark Inactive</> : <><FaCheckCircle /> Mark Active</>}
-              </Button>
-              <Button className="revoke"><FaTimesCircle /> Revoke Access</Button>
-            </ActionButtons>
+            {canMutate ? (
+              <ActionButtons>
+                <Button className="edit"><FaEdit /> Edit Details</Button>
+                <Button className="batches" onClick={() => setIsManageBatchesOpen(true)}><FaPlus /> Manage Batches</Button>
+                <Button className="status" $active={teacher.status === 'Active'} onClick={toggleStatus}>
+                  {teacher.status === 'Active' ? <><FaUserSlash /> Mark Inactive</> : <><FaCheckCircle /> Mark Active</>}
+                </Button>
+                <Button className="revoke"><FaTimesCircle /> Revoke Access</Button>
+              </ActionButtons>
+            ) : (
+              <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', color: '#888', fontSize: '0.8rem', textAlign: 'center', marginTop: '15px' }}>
+                Read-only view
+              </div>
+            )}
           </SidebarCard>
 
           {/* CONTENT */}

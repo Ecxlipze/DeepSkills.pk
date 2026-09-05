@@ -9,6 +9,9 @@ import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
 import { SkeletonTable } from '../components/Skeleton';
 import { createBatchNotifications } from '../utils/notifications';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
+import { downloadCsv } from '../utils/csvExport';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -87,6 +90,8 @@ const ActionButton = styled.button`
 `;
 
 const AdminResults = () => {
+  const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'full');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', batch: 'all', type: 'midterm' });
@@ -148,15 +153,20 @@ const AdminResults = () => {
   };
 
   const handleBulkRecompute = async () => {
+    if (!canMutate) {
+      toast.error("You do not have permission to recompute results");
+      return;
+    }
     if (filters.batch === 'all') return toast.error("Please select a specific batch to recompute");
     setRecomputing(true);
     try {
       const { data: students } = await supabase.from('admissions').select('id').eq('batch', filters.batch).eq('status', 'Active');
       if (students) {
-        const { computeAndCacheResult } = await import('../utils/resultUtils');
+        const { computeAndCacheResult, updateBatchRanks } = await import('../utils/resultUtils');
         for (const s of students) {
-          await computeAndCacheResult(s.id, filters.type);
+          await computeAndCacheResult(s.id, filters.type, { updateRanks: false });
         }
+        await updateBatchRanks(filters.batch, filters.type);
         await createBatchNotifications(students.map((student) => student.id), {
           role: 'student',
           type: 'result',
@@ -174,6 +184,48 @@ const AdminResults = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!filteredResults.length) {
+      toast.error('No results to export');
+      return;
+    }
+    const headers = [
+      'Rank',
+      'Student Name',
+      'CNIC',
+      'Batch',
+      'Exam Type',
+      'Attendance Marks',
+      'Assignment Marks',
+      'Quiz Marks',
+      'Task Completion Marks',
+      'Project Marks',
+      'Total Marks',
+      'Grade',
+      'Passed/Status',
+      'Last Sync'
+    ];
+    const rows = filteredResults.map((r) => [
+      r.batch_rank ?? '',
+      r.admissions?.name ?? '',
+      r.admissions?.cnic ?? '',
+      r.batch_id ?? '',
+      r.exam_type ?? filters.type,
+      r.attendance_marks ?? 0,
+      r.assignment_marks ?? 0,
+      r.quiz_marks ?? 0,
+      r.task_completion_marks ?? 0,
+      r.project_marks ?? 0,
+      r.total_marks ?? 0,
+      r.grade ?? '',
+      r.passed ? 'PASS' : 'FAIL',
+      r.computed_at ? new Date(r.computed_at).toLocaleString() : ''
+    ]);
+    const filename = `results-${filters.type}-${filters.batch}-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCsv(filename, headers, rows);
+    toast.success('Results exported successfully');
+  };
+
   return (
     <AdminLayout>
       <Container>
@@ -183,10 +235,12 @@ const AdminResults = () => {
             <p style={{ color: '#888', marginTop: '5px' }}>Batch performance and individual student grades</p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <ActionButton onClick={handleBulkRecompute} disabled={recomputing}>
-              <FaSync className={recomputing ? 'fa-spin' : ''} /> {recomputing ? 'Syncing...' : 'Force Batch Sync'}
-            </ActionButton>
-            <ActionButton $primary>
+            {canMutate && (
+              <ActionButton onClick={handleBulkRecompute} disabled={recomputing}>
+                <FaSync className={recomputing ? 'fa-spin' : ''} /> {recomputing ? 'Syncing...' : 'Force Batch Sync'}
+              </ActionButton>
+            )}
+            <ActionButton $primary onClick={handleExportCSV}>
               <FaDownload /> Export CSV
             </ActionButton>
           </div>

@@ -2,14 +2,16 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import styled from 'styled-components';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/router';
 import { 
   FaDownload, FaCalendarAlt, FaChartLine,
-  FaExclamationCircle, FaCheckCircle, FaSearch, FaEdit, FaLock, FaUnlock
+  FaExclamationCircle, FaCheckCircle, FaSearch, FaEdit, FaLock, FaUnlock, FaCog
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
 import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 import { computeAndCacheResult } from '../utils/resultUtils';
 
 const Container = styled.div`
@@ -30,6 +32,14 @@ const ExportBtn = styled.button`
   font-weight: 700; font-size: 0.9rem; cursor: pointer;
   display: flex; align-items: center; gap: 8px; transition: all 0.2s;
   &:hover { background: rgba(55, 138, 221, 0.2); transform: translateY(-2px); }
+`;
+
+const SettingsBtn = styled.button`
+  padding: 12px 20px; border-radius: 10px; background: rgba(255, 255, 255, 0.05);
+  color: #fff; border: 1px solid rgba(255, 255, 255, 0.15);
+  font-weight: 700; font-size: 0.9rem; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+  &:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
 `;
 
 const ActionButton = styled.button`
@@ -228,7 +238,9 @@ function exportAttendanceCSV(data, filename) {
 }
 
 const AdminAttendance = () => {
+  const router = useRouter();
   const { user } = useAuth();
+  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'full');
   const [activeTab, setActiveTab] = useState('By Session');
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState([]);
@@ -344,12 +356,20 @@ const AdminAttendance = () => {
   }, [filteredRecords, students]);
 
   const openOverride = (record) => {
+    if (!canMutate) {
+      toast.error('You do not have permission to modify attendance records');
+      return;
+    }
     setOverrideRecord(record);
     setOverrideStatus(record.status || 'present');
     setOverrideReason(record.override_reason || '');
   };
 
   const saveOverride = async () => {
+    if (!canMutate) {
+      toast.error('You do not have permission to modify attendance records');
+      return;
+    }
     if (!overrideRecord || !overrideReason.trim()) {
       toast.error('Override reason is required');
       return;
@@ -371,8 +391,8 @@ const AdminAttendance = () => {
         .eq('id', overrideRecord.id);
 
       if (error) throw error;
-      await computeAndCacheResult(overrideRecord.student_id, 'midterm');
-      await computeAndCacheResult(overrideRecord.student_id, 'finalterm');
+      await computeAndCacheResult(overrideRecord.student_id, 'midterm', { updateRanks: false });
+      await computeAndCacheResult(overrideRecord.student_id, 'finalterm', { updateRanks: false });
       toast.success('Attendance override saved');
       setOverrideRecord(null);
       fetchGlobalAttendance();
@@ -384,6 +404,10 @@ const AdminAttendance = () => {
   };
 
   const toggleSessionLock = async (date, batchId, locked) => {
+    if (!canMutate) {
+      toast.error('You do not have permission to lock/unlock sessions');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('attendance')
@@ -411,7 +435,12 @@ const AdminAttendance = () => {
             <h1>Attendance Insights</h1>
             <p>Monitor attendance health across all batches</p>
           </div>
-          <ExportBtn onClick={() => exportAttendanceCSV(filteredRecords, `attendance-${filters.batch || 'all'}-${filters.month}`)}><FaDownload /> Export CSV</ExportBtn>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <SettingsBtn onClick={() => router.push('/admin/academic/attendance/settings')}>
+              <FaCog /> Settings
+            </SettingsBtn>
+            <ExportBtn onClick={() => exportAttendanceCSV(filteredRecords, `attendance-${filters.batch || 'all'}-${filters.month}`)}><FaDownload /> Export CSV</ExportBtn>
+          </div>
         </Header>
 
         <StatsGrid>

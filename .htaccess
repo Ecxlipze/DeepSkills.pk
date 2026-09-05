@@ -21,6 +21,10 @@ RewriteRule ^blog/?$ /blogs/ [R=301,L]
 RewriteRule ^blog/(.+)$ /blogs/$1 [R=301,L]
 RewriteRule ^(full-stack-react|laravel-mastery|wordpress-mastery|graphic-design)/?$ /courses/$1/ [R=301,L]
 
+# Map extensionless API requests to their corresponding PHP scripts if present
+RewriteCond %{DOCUMENT_ROOT}/api/$1.php -f
+RewriteRule ^api/(.+)$ /api/$1.php [L]
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

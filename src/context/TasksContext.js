@@ -227,7 +227,14 @@ export const TasksProvider = ({ children }) => {
       if (subErr) throw subErr;
 
       // Trigger result recomputation
-      const { data: student } = await supabase.from('admissions').select('id').eq('cnic', sub.cnic).single();
+      const { data: studentRows } = await supabase
+        .from('admissions')
+        .select('id')
+        .eq('cnic', sub.cnic)
+        .in('status', ['Active', 'Graduated'])
+        .order('submitted_at', { ascending: false })
+        .limit(1);
+      const student = studentRows?.[0];
       if (student) {
         const { computeAndCacheResult } = await import('../utils/resultUtils');
         await computeAndCacheResult(student.id, 'midterm');

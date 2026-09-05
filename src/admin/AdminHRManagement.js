@@ -11,10 +11,11 @@ import {
   fetchAdminHRApplications,
   fetchJDTemplates,
   finalizeHiring,
-  rejectApplication,
-  sendJD
+  rejectApplication
 } from '../utils/hrApi';
 import { createAcceptanceLetterPdf, createHiringFilePdf } from '../utils/hrPdf';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   display: grid;
@@ -82,6 +83,8 @@ const findTemplateForApplication = (templates, application, employmentType) => {
 };
 
 const AdminHRManagement = () => {
+  const { user } = useAuth();
+  const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'hr', 'full'));
   const [applications, setApplications] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +135,10 @@ const AdminHRManagement = () => {
   }), [applications]);
 
   const openComposer = (application) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to HR management.');
+      return;
+    }
     const employmentType = application.jd?.employment_type || 'Full-time';
     const template = findTemplateForApplication(templates, application, employmentType);
     const draft = template
@@ -157,6 +164,10 @@ const AdminHRManagement = () => {
 
   const handleSendJd = async (draft) => {
     if (!composerApplication) return;
+    if (!canMutate) {
+      toast.error('You have view-only access to HR management.');
+      return;
+    }
     setSubmitting(true);
     try {
       await sendJD(composerApplication.profile.id, {
@@ -174,12 +185,20 @@ const AdminHRManagement = () => {
   };
 
   const openFinalize = (application) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to HR management.');
+      return;
+    }
     setSelectedApplication(application);
     setFinalizeOpen(true);
   };
 
   const handleFinalize = async (adminNote) => {
     if (!selectedApplication) return;
+    if (!canMutate) {
+      toast.error('You have view-only access to HR management.');
+      return;
+    }
     setSubmitting(true);
     try {
       const date = new Date().toLocaleDateString();
@@ -217,6 +236,10 @@ const AdminHRManagement = () => {
   };
 
   const handleReject = async (application) => {
+    if (!canMutate) {
+      toast.error('You have view-only access to HR management.');
+      return;
+    }
     const reason = window.prompt('Enter rejection reason');
     if (!reason?.trim()) return;
     setSubmitting(true);
@@ -266,6 +289,7 @@ const AdminHRManagement = () => {
         ) : (
           <AdminHRTable
             applications={filteredApplications}
+            canMutate={canMutate}
             onView={(application) => {
               setSelectedApplication(application);
               setDrawerOpen(true);

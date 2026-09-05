@@ -9,6 +9,7 @@ import {
   FaExclamationCircle, FaUserPlus, FaComments, 
   FaWallet, FaUserFriends, FaGraduationCap, FaUpload, FaTimes
 } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 
 const Container = styled.div`
   display: flex;
@@ -301,10 +302,11 @@ const StudentTasks = () => {
   const { user } = useAuth();
   const { tasks, submitTask } = useTasks();
   
-  const studentName = user?.name || "Ali Hassan";
+  const studentName = user?.name || "";
   const studentCnic = user?.cnic || "";
-  const studentCourse = user?.assigned_course || "Web Development Bootcamp";
-  const studentBatch = user?.batch || "Batch 12";
+  const studentCourse = user?.assigned_course || "";
+  const studentBatch = user?.batch || "";
+  const isAssigned = Boolean(studentCourse && studentBatch);
 
   const [filter, setFilter] = useState('All');
   const [selectedTaskToSubmit, setSelectedTaskToSubmit] = useState(null);
@@ -314,7 +316,7 @@ const StudentTasks = () => {
   const todayString = new Date().toISOString().split('T')[0];
 
   // Filter tasks for this student's course & batch
-  const myTasks = tasks.filter(t => t.course === studentCourse && t.batch === studentBatch);
+  const myTasks = isAssigned ? tasks.filter(t => t.course === studentCourse && t.batch === studentBatch) : [];
 
   // Helper to determine student status on a task
   const getStatus = (task) => {
@@ -355,26 +357,58 @@ const StudentTasks = () => {
 
   const handleSubmitTask = async () => {
     if (!selectedTaskToSubmit) return;
+    if (!studentCnic) {
+      toast.error('Student CNIC is missing. Please re-login.');
+      return;
+    }
+    if (!fileToSubmit) {
+      toast.error('Please select a file to submit.');
+      return;
+    }
     setIsSubmitting(true);
     
-    // Sanitize the strings for a safe file name
-    const safeStudentName = studentName.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeBatch = studentBatch.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeTaskName = selectedTaskToSubmit.title.replace(/[^a-zA-Z0-9]/g, '_');
-    const customFileName = `${safeStudentName}_${safeBatch}_${safeTaskName}`;
+    try {
+      // Sanitize the strings for a safe file name
+      const safeStudentName = (studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+      const safeBatch = (studentBatch || 'Batch').replace(/[^a-zA-Z0-9]/g, '_');
+      const safeTaskName = selectedTaskToSubmit.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const customFileName = `${safeStudentName}_${safeBatch}_${safeTaskName}`;
 
-    await submitTask(selectedTaskToSubmit.id, {
-      studentName,
-      cnic: studentCnic,
-      file: fileToSubmit,
-      customFileName
-    });
+      await submitTask(selectedTaskToSubmit.id, {
+        studentName: studentName || 'Student',
+        cnic: studentCnic,
+        file: fileToSubmit,
+        customFileName
+      });
 
-    setIsSubmitting(false);
-    setSelectedTaskToSubmit(null);
-    setFileToSubmit(null);
-    alert("Task submitted successfully!");
+      setSelectedTaskToSubmit(null);
+      setFileToSubmit(null);
+      toast.success("Task submitted successfully!");
+    } catch (err) {
+      toast.error(err?.message || "Failed to submit task");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (!isAssigned) {
+    return (
+      <DashboardLayout>
+        <Container>
+          <Card initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <SectionTitle>Assigned Tasks</SectionTitle>
+            <div style={{ color: 'rgba(255,255,255,0.6)', padding: '30px 0', textAlign: 'center' }}>
+              <FaExclamationCircle style={{ fontSize: '2.5rem', color: '#ff9800', marginBottom: '12px' }} /><br />
+              <strong style={{ color: '#fff', fontSize: '1.1rem' }}>No Batch Assigned</strong>
+              <p style={{ marginTop: '8px', fontSize: '0.9rem' }}>
+                You are currently not enrolled in an active course batch. Tasks will appear here once you are assigned to a batch.
+              </p>
+            </div>
+          </Card>
+        </Container>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -518,7 +552,7 @@ const StudentTasks = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => { setSelectedTaskToSubmit(null); setFileToSubmit(''); }}
+            onClick={() => { setSelectedTaskToSubmit(null); setFileToSubmit(null); }}
           >
             <ModalContent
               initial={{ scale: 0.9, opacity: 0 }}
@@ -529,7 +563,7 @@ const StudentTasks = () => {
               <ModalHeader>
                 <h3>Submit: {selectedTaskToSubmit.title}</h3>
                 <button 
-                  onClick={() => { setSelectedTaskToSubmit(null); setFileToSubmit(''); }}
+                  onClick={() => { setSelectedTaskToSubmit(null); setFileToSubmit(null); }}
                   style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}
                 >
                   <FaTimes size={18} />

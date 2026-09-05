@@ -17,7 +17,7 @@ const StudentFinance = () => {
     try {
       if (!user?.cnic) return;
       const sessionToken = user?.sessionToken || (typeof window !== 'undefined' ? localStorage.getItem('deepskill_session_token') : '');
-      const response = await fetch('/api/student/finance.php', {
+      let response = await fetch('/api/student/finance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -25,6 +25,18 @@ const StudentFinance = () => {
         },
         body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
       });
+
+      if (response.status === 404) {
+        response = await fetch('/api/student/finance.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+          },
+          body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
+        });
+      }
+
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
         throw new Error(result.message || 'Failed to load finance details.');
@@ -52,7 +64,8 @@ const StudentFinance = () => {
     </DashboardLayout>
   );
 
-  const progress = (feePlan.paidAmount / feePlan.total_fee) * 100;
+  const payable = feePlan.final_fee != null ? Number(feePlan.final_fee) : Number(feePlan.total_fee || 0);
+  const progress = payable > 0 ? Math.min(100, (feePlan.paidAmount / payable) * 100) : 100;
 
   return (
     <DashboardLayout>
@@ -63,7 +76,12 @@ const StudentFinance = () => {
         >
           <div className="main-info">
             <span>Your Course Fee</span>
-            <h1>Rs. {feePlan.total_fee.toLocaleString()}</h1>
+            <h1>Rs. {payable.toLocaleString()}</h1>
+            {feePlan.discount > 0 && (
+              <p style={{ color: '#F59E0B', fontSize: '0.85rem', marginTop: '4px' }}>
+                (Standard: Rs. {Number(feePlan.total_fee).toLocaleString()} | Discount: Rs. {Number(feePlan.discount).toLocaleString()})
+              </p>
+            )}
             <p className="plan-type">Plan: {feePlan.plan_type === 'full' ? 'Full Payment' : `Installment Plan (${feePlan.installment_count} Months)`}</p>
           </div>
           
