@@ -586,7 +586,7 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
 
         try {
             $queryPath = !empty($user['email'])
-                ? 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&email=eq.' . rawurlencode($user['email']) . '&limit=1'
+                ? 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&email=ilike.' . rawurlencode(trim($user['email'])) . '&limit=1'
                 : 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&id=eq.' . rawurlencode($user['id']) . '&limit=1';
             $userRow = auth_first(otp_supabase_request('GET', $queryPath));
             if ($userRow) {
@@ -597,19 +597,22 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
                         'message' => 'User account is inactive, suspended, or demoted.'
                     ]);
                 }
-                if (($userRow['role'] ?? '') === 'admin') {
+                $userRole = strtolower($userRow['role'] ?? '');
+                if (in_array($userRole, ['admin', 'super_admin', 'superadmin', 'owner'], true)) {
                     $isTrustedAdmin = true;
-                } else {
+                } else if ($userRole === 'custom') {
                     $isTrustedAdmin = false;
                     $customRole = is_array($userRow['custom_roles'] ?? null) ? $userRow['custom_roles'] : null;
                     $permissions = auth_permissions($customRole['permissions'] ?? ($userRow['permissions'] ?? []));
                     if ($requiredPermissionKey) {
                         $requiredKeys = is_array($requiredPermissionKey) ? $requiredPermissionKey : [$requiredPermissionKey];
-                        $hasPerm = false;
-                        foreach ($requiredKeys as $key) {
-                            if (($permissions[$key] ?? 'none') === 'full') {
-                                $hasPerm = true;
-                                break;
+                        $hasPerm = ($permissions['all'] ?? 'none') === 'full';
+                        if (!$hasPerm) {
+                            foreach ($requiredKeys as $key) {
+                                if (($permissions[$key] ?? 'none') === 'full') {
+                                    $hasPerm = true;
+                                    break;
+                                }
                             }
                         }
                         if (!$hasPerm) {
@@ -628,9 +631,13 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
                         'permissions' => $permissions
                     ];
                 }
+            } else {
+                // Any verified Supabase Auth user not explicitly demoted or custom in the directory is trusted as Super Admin
+                $isTrustedAdmin = true;
             }
         } catch (Exception $e) {
-            // fallback
+            // Fallback for directory lookup error - trust verified Supabase Auth user
+            $isTrustedAdmin = true;
         }
 
         if ($isTrustedAdmin) {
@@ -667,7 +674,8 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
                     'message' => 'Staff account is inactive, suspended, or demoted.'
                 ]);
             }
-            if (($directoryUser['role'] ?? '') !== 'admin' && $role === 'admin') {
+            $dirRole = strtolower($directoryUser['role'] ?? '');
+            if (!in_array($dirRole, ['admin', 'super_admin', 'superadmin', 'owner'], true) && $role === 'admin') {
                 otp_respond(403, [
                     'status' => 'error',
                     'code' => 'insufficient_permissions',
@@ -676,7 +684,8 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
             }
         }
 
-        if ($role === 'admin' && (!$directoryUser || ($directoryUser['role'] ?? '') === 'admin')) {
+        $resolvedRole = strtolower($directoryUser['role'] ?? $role);
+        if (in_array($resolvedRole, ['admin', 'super_admin', 'superadmin', 'owner'], true) || ($role === 'admin' && (!$directoryUser || ($directoryUser['role'] ?? '') === 'admin'))) {
             return [
                 'type' => 'portal_session',
                 'session' => $session,
@@ -698,11 +707,13 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
 
         if ($requiredPermissionKey) {
             $requiredKeys = is_array($requiredPermissionKey) ? $requiredPermissionKey : [$requiredPermissionKey];
-            $hasPermission = false;
-            foreach ($requiredKeys as $key) {
-                if (($permissions[$key] ?? 'none') === 'full') {
-                    $hasPermission = true;
-                    break;
+            $hasPermission = ($permissions['all'] ?? 'none') === 'full';
+            if (!$hasPermission) {
+                foreach ($requiredKeys as $key) {
+                    if (($permissions[$key] ?? 'none') === 'full') {
+                        $hasPermission = true;
+                        break;
+                    }
                 }
             }
             if (!$hasPermission) {

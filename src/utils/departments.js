@@ -1,75 +1,76 @@
 import { canAccess } from './permissions.js';
 
 export const DEPARTMENTS = [
-  { id: 'all', label: 'All Departments', shortLabel: 'All Depts', icon: '🏠', color: '#9ca3af', activeBg: '#1f2127', path: '/admin/dashboard', superAdminOnly: true },
-  { id: 'counsellor', label: 'Counsellor', icon: '🎓', color: '#378ADD', activeBg: '#1a2540', path: '/admin/counsellor', permissionKey: 'counsellor' },
-  { id: 'hr', label: 'HR', icon: '👔', color: '#8B5CF6', activeBg: '#1d1830', path: '/admin/hr', permissionKey: 'hr' },
-  { id: 'finance', label: 'Finance', icon: '💰', color: '#10B981', activeBg: '#162318', path: '/admin/finance', permissionKey: 'finance' },
-  { id: 'academic', label: 'Academic', icon: '📚', color: '#F59E0B', activeBg: '#251d10', path: '/admin/academic' },
-  { id: 'management', label: 'Management', icon: '🏢', color: '#EF4444', activeBg: '#20101a', path: '/admin/management' }
+  { id: 'all', label: 'All Departments', shortLabel: 'All Depts', icon: '', color: '#9ca3af', activeBg: '#1f2127', path: '/admin/dashboard', superAdminOnly: true },
+  { id: 'counsellor', label: 'Counsellor', icon: '', color: '#378ADD', activeBg: '#1a2540', path: '/admin/counsellor', permissionKey: 'counsellor' },
+  { id: 'hr', label: 'HR', icon: '', color: '#8B5CF6', activeBg: '#1d1830', path: '/admin/hr', permissionKey: 'hr' },
+  { id: 'finance', label: 'Finance', icon: '', color: '#10B981', activeBg: '#162318', path: '/admin/finance', permissionKey: 'finance' },
+  { id: 'academic', label: 'Academic', icon: '', color: '#F59E0B', activeBg: '#251d10', path: '/admin/academic' },
+  { id: 'management', label: 'Management', icon: '', color: '#EF4444', activeBg: '#20101a', path: '/admin/management' }
 ];
 
 export const DEPARTMENT_NAV = {
   all: [
     { section: 'SUPER ADMIN' },
-    { label: 'Dashboard', icon: '🏠', path: '/admin/dashboard', permissionKey: 'dashboard' }
+    { label: 'Dashboard', icon: '', path: '/admin/dashboard', permissionKey: 'dashboard' }
   ],
   counsellor: [
     { section: 'COUNSELLOR' },
-    { label: 'Overview', icon: '🏠', path: '/admin/counsellor', permissionKey: 'counsellor' },
-    { label: 'Inquiries', icon: '📋', path: '/admin/counsellor/inquiries', permissionKey: 'counsellor', badgeKey: 'newInquiries' },
-    { label: 'Enroll Student', icon: '➕', path: '/admin/counsellor/enroll', permissionKey: 'counsellor' },
-    { label: 'My Students', icon: '👥', path: '/admin/counsellor/students', permissionKey: 'counsellor' },
-    { label: 'Performance', icon: '📊', path: '/admin/counsellor/performance', permissionKey: 'counsellor' }
+    { label: 'Overview', icon: '', path: '/admin/counsellor', permissionKey: 'counsellor' },
+    { label: 'Inquiries', icon: '', path: '/admin/counsellor/inquiries', permissionKey: 'counsellor', badgeKey: 'newInquiries' },
+    { label: 'Enroll Student', icon: '', path: '/admin/counsellor/enroll', permissionKey: 'counsellor' },
+    { label: 'My Students', icon: '', path: '/admin/counsellor/students', permissionKey: 'counsellor' },
+    { label: 'Performance', icon: '', path: '/admin/counsellor/performance', permissionKey: 'counsellor' }
   ],
   hr: [
     { section: 'HR DEPARTMENT' },
-    { label: 'Overview', icon: '🏠', path: '/admin/hr', permissionKey: 'hr' },
-    { label: 'Applications', icon: '📋', path: '/admin/hr/applications', permissionKey: 'hr', badgeKey: 'pendingHR' },
-    { label: 'JD Management', icon: '📄', path: '/admin/hr/jds', permissionKey: 'hr' },
-    { label: 'Signatures', icon: '✍️', path: '/admin/hr/signatures', permissionKey: 'hr' },
-    { label: 'Hiring Files', icon: '📁', path: '/admin/hr/files', permissionKey: 'hr' },
-    { label: 'All Teachers', icon: '👥', path: '/admin/hr/teachers', permissionKey: 'hr' },
+    { label: 'Overview', icon: '', path: '/admin/hr', permissionKey: 'hr' },
+    { label: 'Applications', icon: '', path: '/admin/hr/applications', permissionKey: 'hr', badgeKey: 'pendingHR' },
+    { label: 'JD Management', icon: '', path: '/admin/hr/jds', permissionKey: 'hr' },
+    { label: 'Signatures', icon: '', path: '/admin/hr/signatures', permissionKey: 'hr' },
+    { label: 'Hiring Files', icon: '', path: '/admin/hr/files', permissionKey: 'hr' },
+    { label: 'Leaves & Absence', icon: '', path: '/admin/hr/leaves', permissionKey: 'hr' },
+    { label: 'All Teachers', icon: '', path: '/admin/hr/teachers', permissionKey: 'hr' },
     { section: 'SETTINGS' },
-    { label: 'HR Settings', icon: '⚙️', path: '/admin/hr/settings', permissionKey: 'hr' }
+    { label: 'HR Settings', icon: '', path: '/admin/hr/settings', permissionKey: 'hr' }
   ],
   finance: [
     { section: 'FINANCE' },
-    { label: 'Overview', icon: '🏠', path: '/admin/finance', permissionKey: 'finance' },
-    { label: 'Student Fees', icon: '💳', path: '/admin/finance/fees', permissionKey: 'finance' },
-    { label: 'Transactions', icon: '📊', path: '/admin/finance/transactions', permissionKey: 'finance' },
-    { label: 'Teacher Salaries', icon: '🧑‍🏫', path: '/admin/finance/salaries', permissionKey: 'finance' },
-    { label: 'Referral Payouts', icon: '🔗', path: '/admin/finance/referrals', permissionKey: 'finance', badgeKey: 'pendingPayouts' },
-    { label: 'Revenue Report', icon: '📈', path: '/admin/finance/reports', permissionKey: 'finance' },
+    { label: 'Overview', icon: '', path: '/admin/finance', permissionKey: 'finance' },
+    { label: 'Student Fees', icon: '', path: '/admin/finance/fees', permissionKey: 'finance' },
+    { label: 'Transactions', icon: '', path: '/admin/finance/transactions', permissionKey: 'finance' },
+    { label: 'Teacher Salaries', icon: '', path: '/admin/finance/salaries', permissionKey: 'finance' },
+    { label: 'Referral Payouts', icon: '', path: '/admin/finance/referrals', permissionKey: 'finance', badgeKey: 'pendingPayouts' },
+    { label: 'Revenue Report', icon: '', path: '/admin/finance/reports', permissionKey: 'finance' },
     { section: 'SETTINGS' },
-    { label: 'Fee Settings', icon: '⚙️', path: '/admin/finance/settings', permissionKey: 'finance' }
+    { label: 'Fee Settings', icon: '', path: '/admin/finance/settings', permissionKey: 'finance' }
   ],
   academic: [
     { section: 'ACADEMIC' },
-    { label: 'Overview', icon: '🏠', path: '/admin/academic' },
-    { label: 'Attendance', icon: '📋', path: '/admin/academic/attendance', permissionKey: 'attendance' },
-    { label: 'Tasks', icon: '✅', path: '/admin/academic/tasks', permissionKey: 'tasks' },
-    { label: 'Results', icon: '📊', path: '/admin/academic/results', permissionKey: 'results' },
-    { label: 'Announcements', icon: '📢', path: '/admin/academic/announcements', permissionKey: 'announcements' },
-    { label: 'Complaints', icon: '💬', path: '/admin/academic/complaints', permissionKey: 'complaints', badgeKey: 'openComplaints' },
-    { label: 'Group Chats', icon: '💬', path: '/admin/academic/chats', permissionKey: 'tasks' },
+    { label: 'Overview', icon: '', path: '/admin/academic' },
+    { label: 'Attendance', icon: '', path: '/admin/academic/attendance', permissionKey: 'attendance' },
+    { label: 'Tasks', icon: '', path: '/admin/academic/tasks', permissionKey: 'tasks' },
+    { label: 'Results', icon: '', path: '/admin/academic/results', permissionKey: 'results' },
+    { label: 'Announcements', icon: '', path: '/admin/academic/announcements', permissionKey: 'announcements' },
+    { label: 'Complaints', icon: '', path: '/admin/academic/complaints', permissionKey: 'complaints', badgeKey: 'openComplaints' },
+    { label: 'Group Chats', icon: '', path: '/admin/academic/chats', permissionKey: 'tasks' },
     { section: 'REPORTS' },
-    { label: 'Academic Reports', icon: '📈', path: '/admin/academic/reports', permissionKey: 'reports' }
+    { label: 'Academic Reports', icon: '', path: '/admin/academic/reports', permissionKey: 'reports' }
   ],
   management: [
     { section: 'MANAGEMENT' },
-    { label: 'Overview', icon: '🏠', path: '/admin/management' },
-    { label: 'Students', icon: '👥', path: '/admin/management/students', permissionKey: 'students' },
-    { label: 'Teachers', icon: '🧑‍🏫', path: '/admin/management/teachers', permissionKey: 'teachers' },
-    { label: 'Courses & Batches', icon: '🎓', path: '/admin/management/courses', permissionKey: 'courses' },
-    { label: 'Referral Program', icon: '🔗', path: '/admin/management/referral', permissionKey: 'referral' },
-    { label: 'Certificates', icon: '🏅', path: '/admin/management/certificates', permissionKey: 'results' },
-    { label: 'Blog', icon: '📝', path: '/admin/management/blog', permissionKey: 'blog' },
-    { label: 'Media Library', icon: '🗂️', path: '/admin/management/media', permissionKey: 'settings' },
+    { label: 'Overview', icon: '', path: '/admin/management' },
+    { label: 'Students', icon: '', path: '/admin/management/students', permissionKey: 'students' },
+    { label: 'Teachers', icon: '', path: '/admin/management/teachers', permissionKey: 'teachers' },
+    { label: 'Courses & Batches', icon: '', path: '/admin/management/courses', permissionKey: 'courses' },
+    { label: 'Referral Program', icon: '', path: '/admin/management/referral', permissionKey: 'referral' },
+    { label: 'Certificates', icon: '', path: '/admin/management/certificates', permissionKey: 'results' },
+    { label: 'Blog', icon: '', path: '/admin/management/blog', permissionKey: 'blog' },
+    { label: 'Media Library', icon: '', path: '/admin/management/media', permissionKey: 'settings' },
     { section: 'SYSTEM' },
-    { label: 'User Management', icon: '👤', path: '/admin/management/users', permissionKey: 'users' },
-    { label: 'Reports', icon: '📊', path: '/admin/management/reports', permissionKey: 'reports' },
-    { label: 'Settings', icon: '⚙️', path: '/admin/management/settings', permissionKey: 'settings' }
+    { label: 'User Management', icon: '', path: '/admin/management/users', permissionKey: 'users' },
+    { label: 'Reports', icon: '', path: '/admin/management/reports', permissionKey: 'reports' },
+    { label: 'Settings', icon: '', path: '/admin/management/settings', permissionKey: 'settings' }
   ]
 };
 

@@ -3,7 +3,11 @@ import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FaChevronDown, FaChevronRight, FaBars, FaTimes, FaSignOutAlt
+  FaChevronDown, FaChevronRight, FaBars, FaTimes, FaSignOutAlt,
+  FaHome, FaGraduationCap, FaUserTie, FaMoneyBillWave, FaBook, FaBuilding,
+  FaClipboardList, FaPlus, FaUsers, FaChartBar, FaFileAlt, FaSignature,
+  FaFolder, FaCog, FaCalendarCheck, FaTasks, FaAward, FaBullhorn, FaComments,
+  FaLink, FaNewspaper
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useComplaints } from '../context/ComplaintsContext';
@@ -463,8 +467,12 @@ const LogoutBtn = styled.button`
 const ContentArea = styled.main`
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  max-width: 100%;
   padding: 28px;
   position: relative;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     padding: 20px 16px;
@@ -478,6 +486,81 @@ const ContentArea = styled.main`
     border-radius: 6px;
   }
 `;
+
+const renderDepartmentIcon = (deptId) => {
+  switch (deptId) {
+    case 'counsellor': return <FaGraduationCap />;
+    case 'hr': return <FaUserTie />;
+    case 'finance': return <FaMoneyBillWave />;
+    case 'academic': return <FaBook />;
+    case 'management': return <FaBuilding />;
+    default: return <FaHome />;
+  }
+};
+
+const renderNavItemIcon = (item) => {
+  if (React.isValidElement(item?.icon)) return item.icon;
+  const label = item?.label || '';
+  switch (label) {
+    case 'Dashboard':
+    case 'Overview':
+      return <FaHome />;
+    case 'Inquiries':
+    case 'Applications':
+      return <FaClipboardList />;
+    case 'Enroll Student':
+      return <FaPlus />;
+    case 'My Students':
+    case 'Students':
+    case 'All Teachers':
+    case 'Teachers':
+      return <FaUsers />;
+    case 'Performance':
+    case 'Revenue Report':
+    case 'Academic Reports':
+    case 'Reports':
+      return <FaChartBar />;
+    case 'JD Management':
+      return <FaFileAlt />;
+    case 'Signatures':
+      return <FaSignature />;
+    case 'Hiring Files':
+    case 'Media Library':
+      return <FaFolder />;
+    case 'HR Settings':
+    case 'Fee Settings':
+    case 'Settings':
+      return <FaCog />;
+    case 'Student Fees':
+    case 'Transactions':
+    case 'Teacher Salaries':
+    case 'Referral Payouts':
+      return <FaMoneyBillWave />;
+    case 'Attendance':
+    case 'Leaves & Absence':
+      return <FaCalendarCheck />;
+    case 'Tasks':
+      return <FaTasks />;
+    case 'Results':
+    case 'Certificates':
+      return <FaAward />;
+    case 'Announcements':
+      return <FaBullhorn />;
+    case 'Complaints':
+    case 'Group Chats':
+      return <FaComments />;
+    case 'Courses & Batches':
+      return <FaGraduationCap />;
+    case 'Referral Program':
+      return <FaLink />;
+    case 'Blog':
+      return <FaNewspaper />;
+    case 'User Management':
+      return <FaUserTie />;
+    default:
+      return null;
+  }
+};
 
 export const AdminLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -506,11 +589,39 @@ export const AdminLayout = ({ children }) => {
     pendingPayouts: false
   };
 
+  const isFromCounsellor = location.search.includes('from=counsellor');
   const normalizedPath = normalizeAdminPath(location.pathname);
-  const currentDepartment = getDepartmentByPath(normalizedPath);
+  const currentDepartment = isFromCounsellor ? (DEPARTMENTS.find(d => d.id === 'counsellor') || { id: 'counsellor' }) : getDepartmentByPath(normalizedPath);
   const activeDepartmentMeta = DEPARTMENTS.find((department) => department.id === (currentDepartment?.id || activeDepartment)) || DEPARTMENTS[0];
   const navItems = getDepartmentNav(user, activeDepartmentMeta.id, badges);
-  const routeMeta = getDepartmentTitle(normalizedPath);
+  const routeMeta = isFromCounsellor 
+    ? { title: 'Student Dossier', subtitle: 'View enrolled student academic, attendance, and fee profile' }
+    : getDepartmentTitle(normalizedPath);
+
+  const allNavPaths = navItems
+    .flatMap((item) => {
+      if (item.type === 'dropdown' && item.items) {
+        return item.items.map((c) => c.path);
+      }
+      return item.path ? [item.path] : [];
+    })
+    .filter(Boolean);
+
+  const isNavActive = (itemPath) => {
+    if (!itemPath) return false;
+    if (isFromCounsellor && itemPath === '/admin/counsellor/students') return true;
+    if (normalizedPath === itemPath) return true;
+    if (normalizedPath.startsWith(`${itemPath}/`)) {
+      const hasMoreSpecificMatch = allNavPaths.some(
+        (otherPath) =>
+          otherPath !== itemPath &&
+          (normalizedPath === otherPath || normalizedPath.startsWith(`${otherPath}/`)) &&
+          otherPath.length > itemPath.length
+      );
+      return !hasMoreSpecificMatch;
+    }
+    return false;
+  };
 
   const handleDepartmentSwitch = (department) => {
     setActiveDepartment(department.id);
@@ -552,7 +663,7 @@ export const AdminLayout = ({ children }) => {
 
         <DepartmentHeader $color={activeDepartmentMeta.color}>
           <div className="icon-wrap">
-            {activeDepartmentMeta.icon}
+            {renderDepartmentIcon(activeDepartmentMeta.id)}
           </div>
           <div className="text">
             <small>Department</small>
@@ -567,7 +678,7 @@ export const AdminLayout = ({ children }) => {
             }
 
             if (item.type === 'dropdown') {
-              const isChildActive = item.items.some(child => location.pathname === child.path);
+              const isChildActive = item.items.some(child => isNavActive(child.path));
               return (
                 <div key={`dropdown-${idx}`}>
                   <NavItem 
@@ -578,7 +689,7 @@ export const AdminLayout = ({ children }) => {
                     style={{ cursor: 'pointer' }}
                   >
                     <div className="content-left">
-                      <span className="icon">{item.icon}</span>
+                      <span className="icon">{renderNavItemIcon(item)}</span>
                       <span>{item.label}</span>
                     </div>
                     {item.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />}
@@ -594,7 +705,7 @@ export const AdminLayout = ({ children }) => {
                           <DropdownItem 
                             key={`child-${cIdx}`} 
                             to={child.path} 
-                            $active={location.pathname === child.path}
+                            $active={isNavActive(child.path)}
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             {child.label}
@@ -607,7 +718,7 @@ export const AdminLayout = ({ children }) => {
               );
             }
 
-            const isActive = normalizedPath === item.path || normalizedPath.startsWith(`${item.path}/`);
+            const isActive = isNavActive(item.path);
             return (
               <NavItem 
                 key={`nav-${idx}`} 
@@ -617,7 +728,7 @@ export const AdminLayout = ({ children }) => {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="content-left">
-                  <span className="icon">{item.icon}</span>
+                  <span className="icon">{renderNavItemIcon(item)}</span>
                   <span>{item.label}</span>
                 </div>
                 {item.badge && <span className="red-dot" />}
@@ -661,7 +772,7 @@ export const AdminLayout = ({ children }) => {
                   onClick={() => handleDepartmentSwitch(department)}
                 >
                   <span className="dot" />
-                  <span>{department.icon}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>{renderDepartmentIcon(department.id)}</span>
                   <span>{department.shortLabel || department.label}</span>
                 </DeptPill>
               );

@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     // 2. Fetch Student Fees (Joined with Admissions)
     const { data: fees } = await supabase
       .from('fee_plans')
-      .select('*, student:admissions(name, cnic, status)');
+      .select('*, student:admissions(name, cnic, status, phone, email)');
 
     const { data: payments } = await supabase
       .from('payments')

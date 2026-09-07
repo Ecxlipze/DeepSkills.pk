@@ -132,6 +132,10 @@ const nextConfig = {
       {
         source: '/api/admin/staff-access.php',
         destination: '/api/admin/staff-access'
+      },
+      {
+        source: '/api/hr/teacher.php',
+        destination: '/api/hr/teacher'
       }
     ];
   }

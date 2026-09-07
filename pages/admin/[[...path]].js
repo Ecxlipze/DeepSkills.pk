@@ -105,7 +105,6 @@ function getAdminPage(path = []) {
   if (section === 'dashboard') return <AdminDashboard />;
   if (section === 'admissions') return <EnrollmentManager />;
   if (section === 'counsellor') {
-    if (child === 'performance') return <ReportsSystem mode="counsellor" />;
     return <CounsellorPanel initialView={child || 'overview'} />;
   }
   if (section === 'students') return child ? <StudentProfile studentId={child} /> : <StudentManager />;
@@ -118,9 +117,8 @@ function getAdminPage(path = []) {
   if (section === 'chats') return <AdminGroupChatsPage />;
   if (section === 'certificates') return <CertificateManager />;
   if (section === 'hr') {
-    if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/hr/teachers" />;
-    if (child === 'settings') return <DepartmentHubRedirect departmentId="hr" currentPath="/admin/hr/settings" />;
-    return <AdminHRManagement />;
+    if (child === 'teachers' && subpath) return <TeacherProfile teacherId={subpath} />;
+    return <AdminHRManagement initialView={child || 'overview'} />;
   }
   if (section === 'announcements') return <AdminAnnouncements />;
   if (section === 'complaints') return <AdminComplaints />;
@@ -129,7 +127,7 @@ function getAdminPage(path = []) {
     if (child === 'referrals') return <AdminReferral />;
     if (child === 'reports') return <ReportsSystem mode="finance" />;
     if (child === 'settings') return <DepartmentHubRedirect departmentId="finance" currentPath="/admin/finance/settings" />;
-    return <AdminFinance />;
+    return <AdminFinance initialTab={child || 'overview'} />;
   }
   if (section === 'referral') return <AdminReferral />;
   if (section === 'reports') return <ReportsSystem mode="master" />;

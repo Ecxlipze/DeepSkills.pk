@@ -13,13 +13,20 @@ const Drawer = styled.div`
   top: 0;
   right: 0;
   width: min(720px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
   height: 100vh;
   background: #111318;
   z-index: 1060;
   padding: 24px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   color: #fff;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 600px) {
+    padding: 20px 16px;
+  }
 `;
 
 const Tabs = styled.div`

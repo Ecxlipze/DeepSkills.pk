@@ -103,6 +103,7 @@ const Login = () => {
         authType: 'supabase_admin'
       };
       localStorage.setItem('deepskill_user', JSON.stringify(adminUser));
+      localStorage.removeItem('deepskill_session_token');
       await logActivity({
         userId: null,
         userName: 'Administrator',

@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useRouter } from 'next/router';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -20,28 +22,23 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { createExperienceCertificatePdf, downloadBlob } from '../utils/hrPdf';
 
-const spin = keyframes`
+const spin = keyframes\`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-`;
+\`;
 
-const Container = styled.div`
+const Container = styled.div\`
   padding: 16px 0 40px;
   color: #f8fafc;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-`;
+\`;
 
-const BreadcrumbNav = styled.div`
+const BreadcrumbNav = styled.div\`
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.84rem;
   color: #64748b;
   margin-bottom: 18px;
-  flex-wrap: wrap;
 
   span.crumb {
     cursor: pointer;
@@ -56,9 +53,9 @@ const BreadcrumbNav = styled.div`
     color: #f1f5f9;
     font-weight: 600;
   }
-`;
+\`;
 
-const BackButton = styled.button`
+const BackButton = styled.button\`
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -77,26 +74,21 @@ const BackButton = styled.button`
     background: rgba(255, 255, 255, 0.07);
     border-color: rgba(255, 255, 255, 0.15);
   }
-`;
+\`;
 
-const Layout = styled.div`
+const Layout = styled.div\`
   display: grid;
   grid-template-columns: 340px 1fr;
   gap: 26px;
   align-items: start;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
 
   @media (max-width: 1100px) {
     grid-template-columns: 1fr;
-    gap: 20px;
   }
-`;
+\`;
 
 // SIDEBAR
-const SidebarCard = styled.div`
+const SidebarCard = styled.div\`
   background: #111318;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -107,21 +99,9 @@ const SidebarCard = styled.div`
   gap: 22px;
   position: sticky;
   top: 90px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
+\`;
 
-  @media (max-width: 1100px) {
-    position: static;
-    top: auto;
-  }
-
-  @media (max-width: 600px) {
-    padding: 20px 16px;
-  }
-`;
-
-const ProfileHeader = styled.div`
+const ProfileHeader = styled.div\`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -156,9 +136,9 @@ const ProfileHeader = styled.div`
     font-size: 0.85rem;
     margin-bottom: 12px;
   }
-`;
+\`;
 
-const StatusBadge = styled.div`
+const StatusBadge = styled.div\`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -168,36 +148,36 @@ const StatusBadge = styled.div`
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: ${props => {
+  background: \${props => {
     if (props.$variant === 'success' || props.$active) return 'rgba(16, 185, 129, 0.12)';
     if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.12)';
     if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.12)';
     return 'rgba(139, 92, 246, 0.12)';
   }};
-  color: ${props => {
+  color: \${props => {
     if (props.$variant === 'success' || props.$active) return '#34d399';
     if (props.$variant === 'warning') return '#fbbf24';
     if (props.$variant === 'danger') return '#f87171';
     return '#a78bfa';
   }};
-  border: 1px solid ${props => {
+  border: 1px solid \${props => {
     if (props.$variant === 'success' || props.$active) return 'rgba(16, 185, 129, 0.25)';
     if (props.$variant === 'warning') return 'rgba(245, 158, 11, 0.25)';
     if (props.$variant === 'danger') return 'rgba(239, 68, 68, 0.25)';
     return 'rgba(139, 92, 246, 0.25)';
   }};
-`;
+\`;
 
-const InfoGrid = styled.div`
+const InfoGrid = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-`;
+\`;
 
-const InfoRow = styled.div`
+const InfoRow = styled.div\`
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -218,9 +198,9 @@ const InfoRow = styled.div`
     word-break: break-word;
     max-width: 170px;
   }
-`;
+\`;
 
-const BatchChipsSection = styled.div`
+const BatchChipsSection = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -262,16 +242,16 @@ const BatchChipsSection = styled.div`
     background: #8b5cf6;
     &.assistant { background: #f59e0b; }
   }
-`;
+\`;
 
-const ActionButtons = styled.div`
+const ActionButtons = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding-top: 4px;
-`;
+\`;
 
-const ActionBtn = styled.button`
+const ActionBtn = styled.button\`
   width: 100%;
   padding: 11px 16px;
   border-radius: 10px;
@@ -329,49 +309,39 @@ const ActionBtn = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
-`;
+\`;
 
 // RIGHT COLUMN / MAIN
-const MainContent = styled.div`
+const MainContent = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-`;
+\`;
 
-const TabContainer = styled.div`
+const TabContainer = styled.div\`
   background: #111318;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-`;
+\`;
 
-const TabBar = styled.div`
+const TabBar = styled.div\`
   display: flex;
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0 12px;
   overflow-x: auto;
   gap: 4px;
-  max-width: 100%;
-  width: 100%;
-  box-sizing: border-box;
   &::-webkit-scrollbar { height: 3px; }
   &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
-`;
+\`;
 
-const Tab = styled.button`
+const Tab = styled.button\`
   padding: 16px 20px;
   background: none;
   border: none;
-  color: ${props => (props.$active ? '#ffffff' : '#64748b')};
+  color: \${props => (props.$active ? '#ffffff' : '#64748b')};
   font-weight: 600;
   font-size: 0.88rem;
   cursor: pointer;
@@ -390,8 +360,8 @@ const Tab = styled.button`
     font-size: 0.72rem;
     padding: 2px 7px;
     border-radius: 12px;
-    background: ${props => (props.$active ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.06)')};
-    color: ${props => (props.$active ? '#c4b5fd' : '#94a3b8')};
+    background: \${props => (props.$active ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255, 255, 255, 0.06)')};
+    color: \${props => (props.$active ? '#c4b5fd' : '#94a3b8')};
   }
 
   &:after {
@@ -402,25 +372,17 @@ const Tab = styled.button`
     width: 100%;
     height: 2px;
     background: linear-gradient(90deg, #8b5cf6, #7b1f2e);
-    transform: scaleX(${props => (props.$active ? 1 : 0)});
+    transform: scaleX(\${props => (props.$active ? 1 : 0)});
     transition: transform 0.2s ease;
   }
-`;
+\`;
 
-const TabBody = styled.div`
+const TabBody = styled.div\`
   padding: 26px 28px;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-
-  @media (max-width: 600px) {
-    padding: 18px 14px;
-  }
-`;
+\`;
 
 // OVERVIEW TAB STYLES
-const SectionCard = styled.div`
+const SectionCard = styled.div\`
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
@@ -433,9 +395,9 @@ const SectionCard = styled.div`
   &:last-child {
     margin-bottom: 0;
   }
-`;
+\`;
 
-const SectionTitle = styled.div`
+const SectionTitle = styled.div\`
   display: flex;
   align-items: center;
   gap: 10px;
@@ -453,9 +415,9 @@ const SectionTitle = styled.div`
     font-weight: 600;
     color: #64748b;
   }
-`;
+\`;
 
-const KeyValGrid = styled.div`
+const KeyValGrid = styled.div\`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -463,9 +425,9 @@ const KeyValGrid = styled.div`
   @media (max-width: 680px) {
     grid-template-columns: 1fr;
   }
-`;
+\`;
 
-const KeyValItem = styled.div`
+const KeyValItem = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -482,9 +444,9 @@ const KeyValItem = styled.div`
     font-weight: 600;
     color: #e2e8f0;
   }
-`;
+\`;
 
-const PipelineProgressCard = styled.div`
+const PipelineProgressCard = styled.div\`
   background: linear-gradient(135deg, rgba(123, 31, 46, 0.15) 0%, rgba(17, 19, 24, 0.9) 100%);
   border: 1px solid rgba(123, 31, 46, 0.3);
   border-radius: 14px;
@@ -554,17 +516,17 @@ const PipelineProgressCard = styled.div`
     background: linear-gradient(90deg, #8b5cf6, #10b981);
     transition: width 0.3s ease;
   }
-`;
+\`;
 
 // STATS
-const StatsGrid = styled.div`
+const StatsGrid = styled.div\`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 18px;
   margin-bottom: 24px;
-`;
+\`;
 
-const MiniStat = styled.div`
+const MiniStat = styled.div\`
   background: rgba(255, 255, 255, 0.03);
   padding: 18px 20px;
   border-radius: 14px;
@@ -585,9 +547,9 @@ const MiniStat = styled.div`
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-`;
+\`;
 
-const PerformanceBar = styled.div`
+const PerformanceBar = styled.div\`
   margin-bottom: 18px;
   .header {
     display: flex;
@@ -606,27 +568,23 @@ const PerformanceBar = styled.div`
   .fill {
     height: 100%;
     background: linear-gradient(90deg, #8b5cf6, #3b82f6);
-    width: ${props => props.percent}%;
+    width: \${props => props.percent}%;
     transition: width 0.5s ease;
   }
-`;
+\`;
 
-const TableWrap = styled.div`
+const TableWrap = styled.div\`
   background: rgba(0, 0, 0, 0.3);
   border-radius: 14px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.06);
   overflow-x: auto;
-  max-width: 100%;
-  width: 100%;
-  box-sizing: border-box;
-  -webkit-overflow-scrolling: touch;
-`;
+\`;
 
-const Table = styled.table`
+const Table = styled.table\`
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  min-width: 620px;
   font-size: 0.88rem;
 
   th {
@@ -651,10 +609,10 @@ const Table = styled.table`
   tr:last-child td {
     border-bottom: none;
   }
-`;
+\`;
 
 // MODALS
-const ModalOverlay = styled(motion.div)`
+const ModalOverlay = styled(motion.div)\`
   position: fixed;
   top: 0;
   left: 0;
@@ -667,9 +625,9 @@ const ModalOverlay = styled(motion.div)`
   justify-content: center;
   z-index: 1000;
   padding: 20px;
-`;
+\`;
 
-const ModalContent = styled(motion.div)`
+const ModalContent = styled(motion.div)\`
   background: #111318;
   width: 100%;
   max-width: 520px;
@@ -680,9 +638,9 @@ const ModalContent = styled(motion.div)`
   display: flex;
   flex-direction: column;
   gap: 20px;
-`;
+\`;
 
-const ModalHeader = styled.div`
+const ModalHeader = styled.div\`
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -705,9 +663,9 @@ const ModalHeader = styled.div`
     transition: all 0.15s;
     &:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
   }
-`;
+\`;
 
-const FormGroup = styled.div`
+const FormGroup = styled.div\`
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -739,16 +697,16 @@ const FormGroup = styled.div`
     resize: vertical;
     min-height: 80px;
   }
-`;
+\`;
 
-const ModalActionRow = styled.div`
+const ModalActionRow = styled.div\`
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   margin-top: 10px;
-`;
+\`;
 
-const PrimaryBtn = styled.button`
+const PrimaryBtn = styled.button\`
   padding: 11px 20px;
   background: linear-gradient(135deg, #7b1f2e 0%, #8b5cf6 100%);
   color: #fff;
@@ -771,10 +729,10 @@ const PrimaryBtn = styled.button`
     cursor: not-allowed;
     transform: none;
   }
-  .spin { animation: ${spin} 1s linear infinite; }
-`;
+  .spin { animation: \${spin} 1s linear infinite; }
+\`;
 
-const SecondaryBtn = styled.button`
+const SecondaryBtn = styled.button\`
   padding: 11px 18px;
   background: rgba(255, 255, 255, 0.05);
   color: #94a3b8;
@@ -789,7 +747,7 @@ const SecondaryBtn = styled.button`
     color: #fff;
     background: rgba(255, 255, 255, 0.08);
   }
-`;
+\`;
 
 const HR_STEPS = [
   { step: 1, label: 'Personal Info' },
@@ -1106,7 +1064,7 @@ const TeacherProfile = ({ teacherId }) => {
       toast.error('You do not have permission to modify teacher assignments.');
       return;
     }
-    if (!window.confirm(`Remove ${teacher.name} from ${batchName}?`)) return;
+    if (!window.confirm(\`Remove \${teacher.name} from \${batchName}?\`)) return;
     try {
       await supabase.from('teacher_batches').delete().eq('id', assId);
       await syncTeacherLoginAccess();
@@ -1124,14 +1082,14 @@ const TeacherProfile = ({ teacherId }) => {
       return;
     }
     const nextStatus = teacher.status === 'Active' ? 'Inactive' : 'Active';
-    if (!window.confirm(`Are you sure you want to mark this faculty member as ${nextStatus}?`)) return;
+    if (!window.confirm(\`Are you sure you want to mark this faculty member as \${nextStatus}?\`)) return;
     setProcessing(true);
     try {
       const { error } = await supabase.from('teachers').update({ status: nextStatus }).eq('id', id);
       if (error) throw error;
       await syncTeacherLoginAccess();
       setTeacher(prev => ({ ...prev, status: nextStatus }));
-      toast.success(`Teacher marked as ${nextStatus}.`);
+      toast.success(\`Teacher marked as \${nextStatus}.\`);
       fetchTeacherData();
     } catch (err) {
       toast.error(err.message);
@@ -1177,10 +1135,10 @@ const TeacherProfile = ({ teacherId }) => {
         coursesTaught: taughtCourses,
         startDate: teacher?.added_on || teacher?.created_at ? new Date(teacher.added_on || teacher.created_at).toLocaleDateString('en-GB') : 'N/A',
         endDate: teacher?.status === 'Inactive' ? new Date().toLocaleDateString('en-GB') : null,
-        adminNote: `Recognized for instructional leadership and student mentorship in ${taughtCourses.join(', ') || teacher?.specialization || 'Technical Training'}.`
+        adminNote: \`Recognized for instructional leadership and student mentorship in \${taughtCourses.join(', ') || teacher?.specialization || 'Technical Training'}.\`
       });
 
-      const fileName = `DeepSkills_ExpCert_${(teacher?.name || 'Faculty').replace(/\\s+/g, '_')}.pdf`;
+      const fileName = \`DeepSkills_ExpCert_\${(teacher?.name || 'Faculty').replace(/\\\\s+/g, '_')}.pdf\`;
       doc.save(fileName);
       toast.success('Experience certificate generated and downloaded!');
     } catch (err) {
@@ -1307,7 +1265,7 @@ const TeacherProfile = ({ teacherId }) => {
               </InfoRow>
               <InfoRow>
                 <span className="label"><FaBriefcase /> Experience</span>
-                <span className="value">{hrProfile?.years_experience ? `${hrProfile.years_experience} Years` : 'Not specified'}</span>
+                <span className="value">{hrProfile?.years_experience ? \`\${hrProfile.years_experience} Years\` : 'Not specified'}</span>
               </InfoRow>
               <InfoRow>
                 <span className="label"><FaCalendarAlt /> Joined</span>
@@ -1324,7 +1282,7 @@ const TeacherProfile = ({ teacherId }) => {
               <div className="chip-list">
                 {assignments.map(a => (
                   <div className="batch-chip" key={a.id}>
-                    <span className={`role-dot ${a.role === 'Assistant' ? 'assistant' : ''}`} />
+                    <span className={\`role-dot \${a.role === 'Assistant' ? 'assistant' : ''}\`} />
                     <span>{a.batches?.batch_name || 'Batch'}</span>
                   </div>
                 ))}
@@ -1399,7 +1357,7 @@ const TeacherProfile = ({ teacherId }) => {
                           <span>HR Onboarding Pipeline</span>
                         </div>
                         <StatusBadge $variant={hrProfile?.hr_status === 'hired' ? 'success' : hrProfile?.hr_status === 'rejected' ? 'danger' : 'info'}>
-                          {hrProfile?.hr_status ? `Status: ${hrProfile.hr_status.toUpperCase()}` : 'Status: ACTIVE FACULTY'}
+                          {hrProfile?.hr_status ? \`Status: \${hrProfile.hr_status.toUpperCase()}\` : 'Status: ACTIVE FACULTY'}
                         </StatusBadge>
                       </div>
 
@@ -1410,7 +1368,7 @@ const TeacherProfile = ({ teacherId }) => {
                           return (
                             <div 
                               key={s.step} 
-                              className={`step-pill ${isDone ? 'done' : isCur ? 'active' : ''}`}
+                              className={\`step-pill \${isDone ? 'done' : isCur ? 'active' : ''}\`}
                             >
                               {isDone ? <FaCheck style={{ fontSize: '0.65rem' }} /> : isCur ? <FaClock style={{ fontSize: '0.65rem' }} /> : <FaLock style={{ fontSize: '0.65rem' }} />}
                               <span>{s.step}. {s.label}</span>
@@ -1422,7 +1380,7 @@ const TeacherProfile = ({ teacherId }) => {
                       <div className="meter-bar">
                         <div 
                           className="meter-fill" 
-                          style={{ width: `${hrProfile?.hr_status === 'hired' ? 100 : Math.min(100, currentStepNum * 20)}%` }} 
+                          style={{ width: \`\${hrProfile?.hr_status === 'hired' ? 100 : Math.min(100, currentStepNum * 20)}%\` }} 
                         />
                       </div>
                     </PipelineProgressCard>
@@ -1440,7 +1398,7 @@ const TeacherProfile = ({ teacherId }) => {
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">Years of Teaching Experience</span>
-                          <span className="v">{hrProfile?.years_experience ? `${hrProfile.years_experience} Years` : 'Not provided'}</span>
+                          <span className="v">{hrProfile?.years_experience ? \`\${hrProfile.years_experience} Years\` : 'Not provided'}</span>
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">Last Employer / Institution</span>
@@ -1452,7 +1410,7 @@ const TeacherProfile = ({ teacherId }) => {
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">Expected Compensation</span>
-                          <span className="v">{hrProfile?.expected_salary ? `PKR ${Number(hrProfile.expected_salary).toLocaleString()} / Month` : '—'}</span>
+                          <span className="v">{hrProfile?.expected_salary ? \`PKR \${Number(hrProfile.expected_salary).toLocaleString()} / Month\` : '—'}</span>
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">LinkedIn / Portfolio</span>
@@ -2082,3 +2040,7 @@ const TeacherProfile = ({ teacherId }) => {
 };
 
 export default TeacherProfile;
+`;
+
+fs.writeFileSync('src/admin/TeacherProfile.js', code, 'utf8');
+console.log('TeacherProfile.js created successfully!');

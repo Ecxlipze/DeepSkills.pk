@@ -2,6 +2,19 @@ import { supabase } from '../supabaseClient';
 
 export async function getAuthHeaders() {
   if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('deepskill_user');
+      const parsed = stored ? JSON.parse(stored) : null;
+      if (parsed?.authType === 'supabase_admin' || parsed?.role === 'admin') {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.access_token) {
+          return { 'Authorization': `Bearer ${data.session.access_token}` };
+        }
+      }
+    } catch {
+      // Continue to session token
+    }
+
     const sessionToken = localStorage.getItem('deepskill_session_token');
     if (sessionToken) {
       return { 'Authorization': `Bearer ${sessionToken}` };

@@ -5,18 +5,23 @@ import { getSubmittedDocumentStats } from '../../utils/hrDocuments';
 const TableWrap = styled.div`
   background: #111318;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.06);
-  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
+  min-width: 680px;
 
   th, td {
     padding: 16px;
     text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     color: #fff;
   }
 
@@ -24,6 +29,7 @@ const Table = styled.table`
     color: #8e97a8;
     font-size: 0.85rem;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 `;
 
@@ -125,6 +131,13 @@ const AdminHRTable = ({
             </tr>
           );
         })}
+        {applications.length === 0 && (
+          <tr>
+            <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+              No candidates matching your filter or search criteria.
+            </td>
+          </tr>
+        )}
       </tbody>
     </Table>
   </TableWrap>

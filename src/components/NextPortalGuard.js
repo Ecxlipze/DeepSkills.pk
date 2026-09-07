@@ -59,8 +59,7 @@ const NextPortalGuard = ({
     !canAccessDepartment(user, departmentId)
   );
   const teacherBlocked = Boolean(
-    (isPendingTeacher && !isTeacherHR) ||
-    (isActiveTeacher && isTeacherHR)
+    isPendingTeacher && !isTeacherHR
   );
 
   useEffect(() => {
@@ -75,8 +74,6 @@ const NextPortalGuard = ({
       if (isPendingTeacher) {
         toast.error("Please complete your onboarding first.");
         router.replace('/teacher/hr');
-      } else if (isActiveTeacher) {
-        router.replace('/teacher/dashboard');
       }
       return;
     }

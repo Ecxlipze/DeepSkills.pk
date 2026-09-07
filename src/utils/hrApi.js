@@ -17,22 +17,46 @@ const getSessionToken = () => {
 
 const teacherHrRequest = async (payload) => {
   const sessionToken = getSessionToken();
-  const response = await fetch('/api/hr/teacher.php', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
-    },
-    body: JSON.stringify({
-      ...payload,
-      token: sessionToken
-    })
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+  };
+  const body = JSON.stringify({
+    ...payload,
+    token: sessionToken
   });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || result.status === 'error') {
-    throw new Error(result.message || 'HR request failed.');
+
+  let response;
+  try {
+    response = await fetch('/api/hr/teacher', {
+      method: 'POST',
+      headers,
+      body
+    });
+    if (response.status !== 404 && response.status !== 405) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || 'HR request failed.');
+      }
+      return result.data;
+    }
+  } catch (err) {
+    if (!err.message?.includes('404') && !err.message?.includes('405')) {
+      throw err;
+    }
   }
-  return result.data;
+
+  // Fallback for static PHP hosting
+  const phpResponse = await fetch('/api/hr/teacher.php', {
+    method: 'POST',
+    headers,
+    body
+  });
+  const phpResult = await phpResponse.json().catch(() => ({}));
+  if (!phpResponse.ok || phpResult.status === 'error') {
+    throw new Error(phpResult.message || 'HR request failed.');
+  }
+  return phpResult.data;
 };
 
 const safeSingle = async (query) => {
@@ -365,8 +389,7 @@ export const finalizeHiring = async ({
   const { error: teacherError } = await supabase
     .from('teachers')
     .update({
-      status: 'Active',
-      updated_at: nowIso()
+      status: 'Active'
     })
     .eq('id', teacher.id);
   if (teacherError) {
@@ -378,6 +401,17 @@ export const finalizeHiring = async ({
     name: teacher.name,
     assignedCourse: teacher.specialization || jd?.position_title || 'Teacher'
   });
+
+  // Auto-connect pre-agreed salary to Finance Department
+  if (jd?.salary && Number(jd.salary) > 0) {
+    try {
+      await supabase.from('teacher_salaries').upsert({
+        teacher_id: teacher.id,
+        monthly_amount: Number(jd.salary),
+        effective_from: new Date().toISOString().split('T')[0]
+      }, { onConflict: 'teacher_id' });
+    } catch (_) {}
+  }
 
   await fetch('/api/admin/hr/finalize.php', {
     method: 'POST',
@@ -418,4 +452,84 @@ export const shareHiringFiles = async (profileId) => {
   }
 
   return response.json();
+};
+
+export const fetchTeacherLeaves = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('teacher_leaves')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+
+    const { data: teachers } = await supabase.from('teachers').select('id, name, email, phone, specialization');
+    const teacherMap = new Map((teachers || []).map((t) => [t.id, t]));
+
+    return data.map((leave) => ({
+      ...leave,
+      teacher: teacherMap.get(leave.teacher_id) || null,
+      substitute: teacherMap.get(leave.substitute_teacher_id) || null
+    }));
+  } catch (_) {
+    return [];
+  }
+};
+
+export const recordTeacherLeave = async ({
+  teacherId,
+  startDate,
+  endDate,
+  leaveType = 'Casual',
+  reason,
+  adminNotes = '',
+  status = 'Approved',
+  substituteTeacherId = null,
+  substituteNotes = '',
+  reviewedBy = 'HR'
+}) => {
+  const payload = {
+    teacher_id: teacherId,
+    start_date: startDate,
+    end_date: endDate,
+    leave_type: leaveType,
+    reason,
+    admin_notes: adminNotes || null,
+    status,
+    substitute_teacher_id: substituteTeacherId || null,
+    substitute_notes: substituteNotes || null,
+    reviewed_by: reviewedBy,
+    reviewed_at: nowIso(),
+    created_at: nowIso(),
+    updated_at: nowIso()
+  };
+
+  const { data, error } = await supabase.from('teacher_leaves').insert([payload]).select();
+  if (error) {
+    throw new Error('Could not record leave: ' + error.message);
+  }
+  return data?.[0] || payload;
+};
+
+export const reviewTeacherLeave = async (leaveId, {
+  status,
+  adminNotes,
+  substituteTeacherId,
+  substituteNotes,
+  reviewedBy = 'HR'
+}) => {
+  const payload = {
+    status,
+    admin_notes: adminNotes || null,
+    substitute_teacher_id: substituteTeacherId || null,
+    substitute_notes: substituteNotes || null,
+    reviewed_by: reviewedBy,
+    reviewed_at: nowIso(),
+    updated_at: nowIso()
+  };
+
+  const { data, error } = await supabase.from('teacher_leaves').update(payload).eq('id', leaveId).select();
+  if (error) {
+    throw new Error('Could not update leave: ' + error.message);
+  }
+  return data?.[0] || payload;
 };

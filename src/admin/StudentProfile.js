@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaArrowLeft, FaEdit, FaUserSlash, FaCheckCircle, 
-  FaTimesCircle, FaTimes, FaDollarSign, FaCalendarAlt, FaTrash
+  FaTimesCircle, FaTimes, FaDollarSign, FaCalendarAlt, FaTrash,
+  FaWhatsapp, FaPhone, FaEnvelope, FaEye
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
@@ -391,8 +392,32 @@ const StudentProfile = ({ studentId }) => {
   const [processing, setProcessing] = useState(false);
 
   const { user } = useAuth();
-  const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'full');
-  const canMutateFinance = user?.role === 'admin' || canAccess(user?.permissions || {}, 'finance', 'full') || canAccess(user?.permissions || {}, 'students', 'full');
+  const location = useLocation();
+  const searchParams = React.useMemo(() => {
+    const search = location?.search || (typeof window !== 'undefined' ? window.location.search : '');
+    return new URLSearchParams(search);
+  }, [location?.search]);
+  const fromCounsellor = searchParams.get('from') === 'counsellor' || searchParams.get('view') === 'counsellor';
+  const isCounsellor = user?.role === 'counsellor' || fromCounsellor;
+
+  const canMutate = !isCounsellor && (user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'full'));
+  const canMutateFinance = !isCounsellor && (user?.role === 'admin' || canAccess(user?.permissions || {}, 'finance', 'full') || canAccess(user?.permissions || {}, 'students', 'full'));
+
+  const getStudentWhatsAppUrl = (phone, name, course) => {
+    if (!phone) return null;
+    const clean = String(phone).replace(/\D/g, '');
+    if (!clean) return null;
+    let intlPhone = clean;
+    if (clean.startsWith('0')) {
+      intlPhone = `92${clean.slice(1)}`;
+    } else if (!clean.startsWith('92') && clean.length === 10) {
+      intlPhone = `92${clean}`;
+    }
+    const text = encodeURIComponent(
+      `Assalam-o-Alaikum ${name || 'Student'},\nThis is DeepSkills regarding your enrolled course ${course || ''}. Please let us know if you have any questions!`
+    );
+    return `https://wa.me/${intlPhone}?text=${text}`;
+  };
 
   // Fee generation states
   const [setupTotalFee, setSetupTotalFee] = useState(25000);
@@ -814,7 +839,9 @@ const StudentProfile = ({ studentId }) => {
     return (
       <AdminLayout>
         <Container style={{ textAlign: 'center', paddingTop: '100px' }}>
-          <BackLink to="/admin/management/students"><FaArrowLeft /> Back to Students</BackLink>
+          <BackLink to={fromCounsellor ? "/admin/counsellor/students" : "/admin/management/students"}>
+            <FaArrowLeft /> {fromCounsellor ? 'Back to Counsellor Panel' : 'Back to Students'}
+          </BackLink>
           <div style={{ color: '#888' }}>Student not found.</div>
         </Container>
       </AdminLayout>
@@ -829,7 +856,9 @@ const StudentProfile = ({ studentId }) => {
   return (
     <AdminLayout>
       <Container>
-        <BackLink to="/admin/management/students"><FaArrowLeft /> Back to Students</BackLink>
+        <BackLink to={fromCounsellor ? "/admin/counsellor/students" : "/admin/management/students"}>
+          <FaArrowLeft /> {fromCounsellor ? 'Back to Counsellor Panel' : 'Back to Students'}
+        </BackLink>
         
         {/* TOP ALERT IF INACTIVE */}
         {student.status !== 'Active' && (
@@ -905,9 +934,71 @@ const StudentProfile = ({ studentId }) => {
                 </Button>
               </ActionButtons>
             ) : (
-              <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', color: '#888', fontSize: '0.8rem', textAlign: 'center', marginTop: '15px' }}>
-                Read-only view
-              </div>
+              <ActionButtons>
+                <div style={{
+                  padding: '10px 14px',
+                  background: 'rgba(55, 138, 221, 0.12)',
+                  border: '1px solid rgba(55, 138, 221, 0.3)',
+                  borderRadius: '10px',
+                  color: '#60a5fa',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}>
+                  <FaEye /> Counsellor Profile View
+                </div>
+
+                {student.phone && (
+                  <Button
+                    as="a"
+                    href={getStudentWhatsAppUrl(student.phone, student.name, student.course)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      background: '#25D366',
+                      color: '#fff',
+                      border: 'none',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <FaWhatsapp style={{ fontSize: '1rem' }} /> WhatsApp Student
+                  </Button>
+                )}
+
+                {student.phone && (
+                  <Button
+                    as="a"
+                    href={`tel:${String(student.phone).replace(/[^\d+]/g, '')}`}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      color: '#fff',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <FaPhone /> Call ({student.phone})
+                  </Button>
+                )}
+
+                {student.email && (
+                  <Button
+                    as="a"
+                    href={`mailto:${student.email}?subject=DeepSkills - Student Follow-up`}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      color: '#cbd5e1',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <FaEnvelope /> Email Student
+                  </Button>
+                )}
+              </ActionButtons>
             )}
           </SidebarCard>
 
@@ -957,6 +1048,54 @@ const StudentProfile = ({ studentId }) => {
                         </ActivityItem>
                       ))}
                     </ActivityFeed>
+
+                    <div style={{ marginTop: '30px' }}>
+                      <h4 style={{ marginBottom: '14px', color: '#888', textTransform: 'uppercase', fontSize: '0.8rem' }}>
+                        Admissions & Counsellor Notes
+                      </h4>
+                      {student.counsellor_notes ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {String(student.counsellor_notes)
+                            .split(/\n\s*\n/)
+                            .map((n) => n.trim())
+                            .filter(Boolean)
+                            .map((noteItem, idx) => {
+                              const match = noteItem.match(/^\[(.*?)\]:\s*([\s\S]*)$/);
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                                    borderLeft: '3px solid #7B1F2E',
+                                    borderRadius: '8px',
+                                    padding: '12px 14px'
+                                  }}
+                                >
+                                  {match ? (
+                                    <>
+                                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                                        {match[1]}
+                                      </div>
+                                      <div style={{ fontSize: '0.88rem', color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
+                                        {match[2]}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div style={{ fontSize: '0.88rem', color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
+                                      {noteItem}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.06)', color: '#666', fontSize: '0.85rem' }}>
+                          No counsellor follow-up notes recorded for this student.
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 )}
 
@@ -1113,10 +1252,11 @@ const StudentProfile = ({ studentId }) => {
                       <div style={{ textAlign: 'center', padding: '50px 0', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '15px' }}>
                         <FaDollarSign size={40} style={{ color: '#555', marginBottom: '15px' }} />
                         <h3 style={{ marginBottom: '10px' }}>No Fee Plan Initialized</h3>
-                        <p style={{ color: '#666', marginBottom: '25px' }}>This student does not have an active finance record yet.</p>
-                        <SubmitBtn style={{ width: '250px', margin: '0 auto' }} onClick={() => setIsSetupFinanceOpen(true)}>
-                          Initialize Fee Plan
-                        </SubmitBtn>
+                        {canMutateFinance && (
+                          <SubmitBtn style={{ width: '250px', margin: '0 auto' }} onClick={() => setIsSetupFinanceOpen(true)}>
+                            Initialize Fee Plan
+                          </SubmitBtn>
+                        )}
                       </div>
                     ) : (
                       <>

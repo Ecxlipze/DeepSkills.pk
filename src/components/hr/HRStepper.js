@@ -1,71 +1,114 @@
 import React from 'react';
 import styled from 'styled-components';
+import { FaCheck, FaLock } from 'react-icons/fa';
 
 const STEPS = [
-  'Personal Info',
-  'Documents',
-  'JD Review',
-  'Signature',
-  'Hiring Files'
+  { name: 'Personal Info', desc: 'Core teacher details' },
+  { name: 'Documents', desc: 'CNIC, degrees & CV' },
+  { name: 'JD Review', desc: 'Job role & deliverables' },
+  { name: 'Signature', desc: 'Digital contract sign' },
+  { name: 'Hiring Files', desc: 'Offer & agreement' }
 ];
 
-const StepperWrap = styled.div`
+const StepperContainer = styled.div`
+  background: rgba(17, 19, 24, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 
   &::-webkit-scrollbar {
     height: 4px;
   }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+  }
 `;
 
 const StepItem = styled.div`
-  min-width: 140px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: ${({ $state }) => {
-    if ($state === 'complete') return '#2ecc71';
-    if ($state === 'current') return '#4F8EF7';
-    return '#7b8190';
-  }};
+  gap: 12px;
+  min-width: fit-content;
+  opacity: ${({ $state }) => ($state === 'locked' ? 0.45 : 1)};
+  transition: all 0.2s ease;
 `;
 
-const Circle = styled.div`
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+const StepIconCircle = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  border: 2px solid ${({ $state }) => {
-    if ($state === 'complete') return '#2ecc71';
-    if ($state === 'current') return '#4F8EF7';
-    return 'rgba(255,255,255,0.16)';
-  }};
-  background: ${({ $state }) => {
-    if ($state === 'complete') return 'rgba(46, 204, 113, 0.14)';
-    if ($state === 'current') return '#4F8EF7';
-    return 'transparent';
-  }};
-  color: ${({ $state }) => ($state === 'current' ? '#fff' : 'inherit')};
   flex-shrink: 0;
+  transition: all 0.2s ease;
+
+  ${({ $state }) => {
+    if ($state === 'complete') {
+      return `
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+      `;
+    }
+    if ($state === 'current') {
+      return `
+        background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
+      `;
+    }
+    return `
+      background: rgba(255, 255, 255, 0.04);
+      color: #64748b;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    `;
+  }}
 `;
 
-const StepLabel = styled.div`
-  font-size: 0.9rem;
-  font-weight: 600;
-  white-space: nowrap;
+const StepMeta = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .step-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: ${({ $state }) => {
+      if ($state === 'complete') return '#34d399';
+      if ($state === 'current') return '#ffffff';
+      return '#64748b';
+    }};
+    white-space: nowrap;
+  }
+
+  .step-desc {
+    font-size: 0.72rem;
+    color: ${({ $state }) => ($state === 'current' ? '#c4b5fd' : '#475569')};
+    white-space: nowrap;
+  }
 `;
 
-const Connector = styled.div`
-  width: 24px;
-  height: 1px;
-  background: rgba(255,255,255,0.12);
-  flex-shrink: 0;
+const ConnectorLine = styled.div`
+  flex: 1;
+  min-width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: ${({ $complete }) =>
+    $complete
+      ? 'linear-gradient(90deg, #10b981, rgba(16, 185, 129, 0.4))'
+      : 'rgba(255, 255, 255, 0.06)'};
 `;
 
 const getStepState = (index, currentStep) => {
@@ -75,27 +118,38 @@ const getStepState = (index, currentStep) => {
   return 'locked';
 };
 
-const getStepSymbol = (state, index) => {
-  if (state === 'complete') return '✓';
-  if (state === 'current') return index + 1;
-  return '';
-};
+const HRStepper = ({ currentStep = 1 }) => {
+  return (
+    <StepperContainer>
+      {STEPS.map((step, index) => {
+        const state = getStepState(index, currentStep);
+        const isCompletedOrPassed = index + 1 < currentStep;
 
-const HRStepper = ({ currentStep = 1 }) => (
-  <StepperWrap>
-    {STEPS.map((step, index) => {
-      const state = getStepState(index, currentStep);
-      return (
-        <React.Fragment key={step}>
-          <StepItem $state={state}>
-            <Circle $state={state}>{getStepSymbol(state, index)}</Circle>
-            <StepLabel>{step}</StepLabel>
-          </StepItem>
-          {index !== STEPS.length - 1 && <Connector />}
-        </React.Fragment>
-      );
-    })}
-  </StepperWrap>
-);
+        return (
+          <React.Fragment key={step.name}>
+            <StepItem $state={state}>
+              <StepIconCircle $state={state}>
+                {state === 'complete' ? (
+                  <FaCheck />
+                ) : state === 'current' ? (
+                  index + 1
+                ) : (
+                  <FaLock style={{ fontSize: '0.75rem' }} />
+                )}
+              </StepIconCircle>
+              <StepMeta $state={state}>
+                <span className="step-name">{step.name}</span>
+                <span className="step-desc">{step.desc}</span>
+              </StepMeta>
+            </StepItem>
+            {index !== STEPS.length - 1 && (
+              <ConnectorLine $complete={isCompletedOrPassed} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </StepperContainer>
+  );
+};
 
 export default HRStepper;
