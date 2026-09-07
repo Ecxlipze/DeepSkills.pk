@@ -3,19 +3,26 @@ import { supabase } from '../supabaseClient';
 export async function getAuthHeaders() {
   if (typeof window !== 'undefined') {
     try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        return { 'Authorization': `Bearer ${data.session.access_token}` };
+      }
+    } catch (_) {}
+
+    try {
       const stored = localStorage.getItem('deepskill_user');
       const parsed = stored ? JSON.parse(stored) : null;
-      if (parsed?.authType === 'supabase_admin' || parsed?.role === 'admin') {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session?.access_token) {
-          return { 'Authorization': `Bearer ${data.session.access_token}` };
-        }
+      if (parsed?.sessionToken) {
+        return { 'Authorization': `Bearer ${parsed.sessionToken}` };
       }
-    } catch {
-      // Continue to session token
-    }
+      if (parsed?.token) {
+        return { 'Authorization': `Bearer ${parsed.token}` };
+      }
+    } catch (_) {}
 
-    const sessionToken = localStorage.getItem('deepskill_session_token');
+    const sessionToken = localStorage.getItem('deepskill_session_token') ||
+      localStorage.getItem('admin_token') ||
+      localStorage.getItem('token');
     if (sessionToken) {
       return { 'Authorization': `Bearer ${sessionToken}` };
     }
@@ -26,9 +33,7 @@ export async function getAuthHeaders() {
     if (data?.session?.access_token) {
       return { 'Authorization': `Bearer ${data.session.access_token}` };
     }
-  } catch {
-    // Ignore Supabase auth lookup failure
-  }
+  } catch (_) {}
 
   return {};
 }

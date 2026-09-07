@@ -615,6 +615,19 @@ const TeacherManager = ({ basePath }) => {
           console.warn('HR profile sync notice:', hrProfileErr);
         }
 
+        // Auto-connect salary into teacher_salaries for Finance department
+        if (formData.salary && !isNaN(parseFloat(formData.salary))) {
+          try {
+            await supabase.from('teacher_salaries').upsert({
+              teacher_id: teacherRecord.id,
+              monthly_amount: parseFloat(formData.salary),
+              effective_from: new Date().toISOString().split('T')[0]
+            }, { onConflict: 'teacher_id' });
+          } catch (salErr) {
+            console.warn('Teacher salary record notice:', salErr);
+          }
+        }
+
         const loginUrl = `${window.location.origin}/login`;
         const waText = `Assalam-o-Alaikum ${formData.name},\n\nWelcome to DeepSkills! Your faculty onboarding account is ready.\n\nLogin Instructions:\n1. Open portal: ${loginUrl}\n2. Enter your CNIC: ${formData.cnic}\n3. Enter the 6-digit OTP sent to your email (${formData.email})\n4. Complete your profile and document upload at /teacher/hr.\n\nOnce reviewed and approved by HR, your full teaching dashboard and assigned batches will unlock automatically.\n\nDeepSkills HR Department`;
         const waUrl = getTeacherWhatsAppUrl(formData.phone, waText);

@@ -403,11 +403,15 @@ export const finalizeHiring = async ({
   });
 
   // Auto-connect pre-agreed salary to Finance Department
-  if (jd?.salary && Number(jd.salary) > 0) {
+  const resolvedSalary = (jd?.salary && Number(jd.salary) > 0)
+    ? Number(jd.salary)
+    : (profile?.expected_salary && Number(profile.expected_salary) > 0 ? Number(profile.expected_salary) : 0);
+
+  if (resolvedSalary > 0) {
     try {
       await supabase.from('teacher_salaries').upsert({
         teacher_id: teacher.id,
-        monthly_amount: Number(jd.salary),
+        monthly_amount: resolvedSalary,
         effective_from: new Date().toISOString().split('T')[0]
       }, { onConflict: 'teacher_id' });
     } catch (_) {}

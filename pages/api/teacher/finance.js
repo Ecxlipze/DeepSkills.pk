@@ -50,41 +50,90 @@ export default async function handler(req, res) {
       return res.status(403).json({ status: 'error', message: 'Active teacher profile not found.' });
     }
 
-    const { data: salaryRows } = await supabase
-      .from('teacher_salaries')
-      .select('*')
-      .eq('teacher_id', teacher.id)
-      .limit(1);
+    // 1. Fetch Salary Config (check teacher_salaries first, then hr_profiles expected_salary)
+    const [salRes, hrRes] = await Promise.all([
+      supabase.from('teacher_salaries').select('*').eq('teacher_id', teacher.id).maybeSingle(),
+      supabase.from('hr_profiles').select('expected_salary').eq('teacher_id', teacher.id).maybeSingle()
+    ]);
 
-    const salary = salaryRows?.[0];
+    let monthlyAmount = 0;
+    if (salRes.data?.monthly_amount != null && Number(salRes.data.monthly_amount) > 0) {
+      monthlyAmount = Number(salRes.data.monthly_amount);
+    } else if (hrRes.data?.expected_salary != null && Number(hrRes.data.expected_salary) > 0) {
+      monthlyAmount = Number(hrRes.data.expected_salary);
+    }
 
-    const { data: payments } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('entity_id', teacher.id)
-      .eq('entity_type', 'teacher')
-      .order('paid_date', { ascending: false });
+    // 2. Fetch Payments from both teacher_payments (Finance manager) and payments (legacy/profile)
+    const [tpRes, pRes] = await Promise.all([
+      supabase.from('teacher_payments').select('*').eq('teacher_id', teacher.id).order('paid_on', { ascending: false }),
+      supabase.from('payments').select('*').eq('entity_id', teacher.id).eq('entity_type', 'teacher').order('paid_date', { ascending: false })
+    ]);
 
-    const paymentList = payments || [];
-    const currentMonth = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    let isPaidThisMonth = false;
+    const teacherPayments = (tpRes.data || []).map(tp => ({
+      id: tp.id,
+      description: tp.month_year ? `Monthly Salary (${tp.month_year})` : (tp.notes || 'Monthly Salary'),
+      amount: Number(tp.amount || 0),
+      paid_date: tp.paid_on || (tp.created_at ? tp.created_at.split('T')[0] : 'N/A'),
+      method: tp.payment_method || 'bank_transfer',
+      reference_number: tp.notes || 'Disbursed',
+      status: 'paid',
+      month_year: tp.month_year || null
+    }));
 
-    for (const payment of paymentList) {
-      if (payment.status === 'paid' && String(payment.description || '').includes(currentMonth)) {
-        isPaidThisMonth = true;
-        break;
+    const legacyPayments = (pRes.data || []).map(p => ({
+      id: p.id,
+      description: p.description || 'Monthly Salary',
+      amount: Number(p.amount || 0),
+      paid_date: p.paid_date || (p.created_at ? p.created_at.split('T')[0] : 'N/A'),
+      method: p.method || 'bank_transfer',
+      reference_number: p.reference_number || null,
+      status: p.status || 'paid',
+      month_year: null
+    }));
+
+    // Merge and deduplicate by ID, then sort by paid_date descending
+    const seenIds = new Set();
+    const combinedHistory = [];
+    for (const p of [...teacherPayments, ...legacyPayments]) {
+      if (!seenIds.has(p.id)) {
+        seenIds.add(p.id);
+        combinedHistory.push(p);
       }
     }
 
-    const lastPayment = paymentList[0] || null;
+    combinedHistory.sort((a, b) => {
+      const dateA = new Date(a.paid_date || 0).getTime();
+      const dateB = new Date(b.paid_date || 0).getTime();
+      return dateB - dateA;
+    });
+
+    // Determine current month disbursement status
+    const now = new Date();
+    const currentMonthIso = now.toISOString().slice(0, 7); // e.g. "2026-09"
+    const currentMonthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' }); // e.g. "September 2026"
+
+    let isPaidThisMonth = false;
+    for (const payment of combinedHistory) {
+      if (payment.status === 'paid') {
+        const isMatchingMonthYear = payment.month_year && payment.month_year === currentMonthIso;
+        const isMatchingDate = payment.paid_date && payment.paid_date.startsWith(currentMonthIso);
+        const isMatchingDesc = payment.description && payment.description.includes(currentMonthName);
+        if (isMatchingMonthYear || isMatchingDate || isMatchingDesc) {
+          isPaidThisMonth = true;
+          break;
+        }
+      }
+    }
+
+    const lastPayment = combinedHistory[0] || null;
 
     return res.status(200).json({
       status: 'success',
       data: {
-        monthlyAmount: salary?.monthly_amount || 0,
+        monthlyAmount,
         status: isPaidThisMonth ? 'Paid' : 'Pending',
         lastPaymentDate: lastPayment?.paid_date || 'N/A',
-        history: paymentList
+        history: combinedHistory
       }
     });
   } catch (err) {

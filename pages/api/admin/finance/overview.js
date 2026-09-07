@@ -93,26 +93,45 @@ export default async function handler(req, res) {
       };
     });
 
-    // 3. Fetch Teachers (Joined with Salaries)
+    // 3. Fetch Teachers (Joined with Salaries and HR Profiles)
     const { data: teachers } = await supabase
       .from('teachers')
-      .select('id, name, specialization, salary_config:teacher_salaries(monthly_amount)');
+      .select('id, name, specialization, cnic, phone, email, status, salary_config:teacher_salaries(monthly_amount), hr_profile:hr_profiles(expected_salary)');
 
     const { data: directTPayments } = await supabase.from('teacher_payments').select('*');
+    const { data: legacyTeacherPayments } = await supabase.from('payments').select('*').eq('entity_type', 'teacher');
 
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
     const processedTeachers = (teachers || []).map(t => {
-      const monthly = t.salary_config?.[0]?.monthly_amount || 0;
-      const directPay = directTPayments?.filter(p => p.teacher_id === t.id) || [];
+      const rawSal = Array.isArray(t.salary_config) ? t.salary_config[0] : t.salary_config;
+      const rawHr = Array.isArray(t.hr_profile) ? t.hr_profile[0] : t.hr_profile;
+      const monthly = rawSal?.monthly_amount != null && Number(rawSal.monthly_amount) > 0
+        ? Number(rawSal.monthly_amount)
+        : (rawHr?.expected_salary != null && Number(rawHr.expected_salary) > 0
+          ? Number(rawHr.expected_salary)
+          : 0);
 
-      const allPaidDates = directPay
+      const directPay = directTPayments?.filter(p => p.teacher_id === t.id) || [];
+      const legacyPay = (legacyTeacherPayments?.filter(p => p.entity_id === t.id) || []).map(lp => ({
+        id: lp.id,
+        amount: lp.amount,
+        month: lp.paid_date ? lp.paid_date.slice(0, 7) : null,
+        paid_on: lp.paid_date,
+        method: lp.method || 'cash',
+        reference: lp.reference_number,
+        notes: lp.notes || lp.description,
+        status: lp.status === 'paid' ? 'Paid' : 'Pending'
+      }));
+
+      const combinedHistory = [...directPay, ...legacyPay].sort((a, b) => new Date(b.paid_on || 0) - new Date(a.paid_on || 0));
+
+      const allPaidDates = combinedHistory
         .map(p => p.paid_on)
-        .filter(Boolean)
-        .sort((a, b) => new Date(b) - new Date(a));
+        .filter(Boolean);
       const lastPaid = allPaidDates.length > 0 ? allPaidDates[0] : 'Never';
 
-      const paidThisMonth = directPay.some(
-        p => p.month === currentMonth && p.status?.toLowerCase() === 'paid'
+      const paidThisMonth = combinedHistory.some(
+        p => (p.month === currentMonth || (p.paid_on && p.paid_on.startsWith(currentMonth))) && p.status?.toLowerCase() === 'paid'
       );
 
       return {
@@ -120,7 +139,7 @@ export default async function handler(req, res) {
         monthlySalary: Number(monthly) || 0,
         status: paidThisMonth ? 'Paid' : 'Pending',
         lastPaid,
-        paymentHistory: directPay
+        paymentHistory: combinedHistory
       };
     });
 

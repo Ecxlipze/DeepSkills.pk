@@ -50,10 +50,18 @@ if ($teacherId) {
                 ]], 'resolution=merge-duplicates,return=minimal');
             }
         }
+        // 5. Connect salary to Finance Department
+        if (!empty($profile['expected_salary']) && is_numeric($profile['expected_salary'])) {
+            otp_supabase_request('POST', 'teacher_salaries?on_conflict=teacher_id', [[
+                'teacher_id' => $teacherId,
+                'monthly_amount' => (float)$profile['expected_salary'],
+                'effective_from' => gmdate('Y-m-d')
+            ]], 'resolution=merge-duplicates,return=minimal');
+        }
     }
 }
 
-// 5. Send notification email
+// 6. Send notification email
 $to = "info@deepskills.pk";
 $subject = "DeepSkill HR: Hiring finalized";
 $body = "

@@ -109,29 +109,92 @@ if (!$teacher || ($teacher['status'] ?? '') !== 'Active') {
 }
 
 $salary = finance_first(finance_supabase_request('GET', 'teacher_salaries?select=*&teacher_id=eq.' . rawurlencode($teacher['id']) . '&limit=1'));
-$payments = finance_supabase_request(
-    'GET',
-    'payments?select=*&entity_id=eq.' . rawurlencode($teacher['id']) . '&entity_type=eq.teacher&order=paid_date.desc'
-);
-$payments = is_array($payments) ? $payments : [];
-
-$currentMonth = date('F Y');
-$isPaidThisMonth = false;
-foreach ($payments as $payment) {
-    if (($payment['status'] ?? '') === 'paid' && strpos($payment['description'] ?? '', $currentMonth) !== false) {
-        $isPaidThisMonth = true;
-        break;
+$monthlyAmount = (float)($salary['monthly_amount'] ?? 0);
+if ($monthlyAmount <= 0) {
+    $hrProfile = finance_first(finance_supabase_request('GET', 'hr_profiles?select=expected_salary&teacher_id=eq.' . rawurlencode($teacher['id']) . '&limit=1'));
+    if (!empty($hrProfile['expected_salary']) && is_numeric($hrProfile['expected_salary'])) {
+        $monthlyAmount = (float)$hrProfile['expected_salary'];
     }
 }
 
-$lastPayment = $payments[0] ?? null;
+$teacherPayments = finance_supabase_request(
+    'GET',
+    'teacher_payments?select=*&teacher_id=eq.' . rawurlencode($teacher['id']) . '&order=paid_on.desc'
+);
+$teacherPayments = is_array($teacherPayments) ? $teacherPayments : [];
+
+$legacyPayments = finance_supabase_request(
+    'GET',
+    'payments?select=*&entity_id=eq.' . rawurlencode($teacher['id']) . '&entity_type=eq.teacher&order=paid_date.desc'
+);
+$legacyPayments = is_array($legacyPayments) ? $legacyPayments : [];
+
+$combinedHistory = [];
+$seenIds = [];
+$currentMonthIso = date('Y-m');
+$currentMonthName = date('F Y');
+$isPaidThisMonth = false;
+
+foreach ($teacherPayments as $tp) {
+    $id = $tp['id'] ?? uniqid('tp_');
+    if (isset($seenIds[$id])) continue;
+    $seenIds[$id] = true;
+    $paidDate = $tp['paid_on'] ?? (!empty($tp['created_at']) ? substr($tp['created_at'], 0, 10) : 'N/A');
+    $monthYear = $tp['month_year'] ?? '';
+    $desc = $monthYear ? "Monthly Salary ($monthYear)" : ($tp['notes'] ?: 'Monthly Salary');
+
+    if ($monthYear === $currentMonthIso || strpos($paidDate, $currentMonthIso) === 0 || strpos($desc, $currentMonthName) !== false) {
+        $isPaidThisMonth = true;
+    }
+
+    $combinedHistory[] = [
+        'id' => $id,
+        'description' => $desc,
+        'amount' => (float)($tp['amount'] ?? 0),
+        'paid_date' => $paidDate,
+        'method' => $tp['payment_method'] ?? 'bank_transfer',
+        'reference_number' => $tp['notes'] ?? 'Disbursed',
+        'status' => 'paid',
+        'month_year' => $monthYear
+    ];
+}
+
+foreach ($legacyPayments as $lp) {
+    $id = $lp['id'] ?? uniqid('lp_');
+    if (isset($seenIds[$id])) continue;
+    $seenIds[$id] = true;
+    $paidDate = $lp['paid_date'] ?? (!empty($lp['created_at']) ? substr($lp['created_at'], 0, 10) : 'N/A');
+    $desc = $lp['description'] ?? 'Monthly Salary';
+    $status = $lp['status'] ?? 'paid';
+
+    if ($status === 'paid' && (strpos($paidDate, $currentMonthIso) === 0 || strpos($desc, $currentMonthName) !== false)) {
+        $isPaidThisMonth = true;
+    }
+
+    $combinedHistory[] = [
+        'id' => $id,
+        'description' => $desc,
+        'amount' => (float)($lp['amount'] ?? 0),
+        'paid_date' => $paidDate,
+        'method' => $lp['method'] ?? 'bank_transfer',
+        'reference_number' => $lp['reference_number'] ?? null,
+        'status' => $status,
+        'month_year' => null
+    ];
+}
+
+usort($combinedHistory, function($a, $b) {
+    return strcmp($b['paid_date'] ?? '', $a['paid_date'] ?? '');
+});
+
+$lastPayment = $combinedHistory[0] ?? null;
 finance_respond(200, [
     'status' => 'success',
     'data' => [
-        'monthlyAmount' => $salary['monthly_amount'] ?? 0,
+        'monthlyAmount' => $monthlyAmount,
         'status' => $isPaidThisMonth ? 'Paid' : 'Pending',
         'lastPaymentDate' => $lastPayment['paid_date'] ?? 'N/A',
-        'history' => $payments,
+        'history' => $combinedHistory,
     ],
 ]);
 ?>

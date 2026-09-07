@@ -19,7 +19,7 @@ import { Skeleton, SkeletonCard, SkeletonTable } from '../components/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
-import { createFeeReceiptPdf } from '../utils/financePdf';
+import { createFeeReceiptPdf, createTeacherPayslipPdf } from '../utils/financePdf';
 
 const normalizeTab = (raw) => {
   if (!raw || raw === 'overview') return 'overview';
@@ -67,6 +67,8 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
   const [studentCourseFilter, setStudentCourseFilter] = useState('all');
   const [studentBatchFilter, setStudentBatchFilter] = useState('all');
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
+  const [teacherSpecializationFilter, setTeacherSpecializationFilter] = useState('all');
+  const [teacherStatusFilter, setTeacherStatusFilter] = useState('all');
   const [generatingPdf, setGeneratingPdf] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -74,6 +76,8 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
   const [selectedInstallment, setSelectedInstallment] = useState(null);
   const [selectedTeacherForPay, setSelectedTeacherForPay] = useState(null);
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+  const [selectedTeacherForHistory, setSelectedTeacherForHistory] = useState(null);
+  const [isSalaryHistoryModalOpen, setIsSalaryHistoryModalOpen] = useState(false);
   const [paymentData, setPaymentData] = useState({
     method: 'cash',
     reference: '',
@@ -174,40 +178,60 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
 
       setStudentFees(processedFees || []);
 
-      // 3. Fetch Teachers (Joined with Salaries)
+      // 3. Fetch Teachers (Joined with Salaries & HR Profile)
       const { data: teachers } = await supabase
         .from('teachers')
         .select(`
-          id, name, specialization,
-          salary_config:teacher_salaries(monthly_amount)
+          id, name, specialization, cnic, phone, email, status,
+          salary_config:teacher_salaries(monthly_amount),
+          hr_profile:hr_profiles(expected_salary)
         `);
 
+      const { data: directSalaries } = await supabase.from('teacher_salaries').select('*');
+      const { data: hrProfiles } = await supabase.from('hr_profiles').select('teacher_id, expected_salary');
       const { data: tPayments } = await supabase.from('payments').select('*').eq('entity_type', 'teacher');
       const { data: directTPayments } = await supabase.from('teacher_payments').select('*');
 
       const processedTeachers = teachers?.map(t => {
-        const monthly = t.salary_config?.[0]?.monthly_amount || 0;
-        const teacherPay = tPayments?.filter(p => p.entity_id === t.id) || [];
+        const matchedSal = directSalaries?.find(s => s.teacher_id === t.id);
+        const matchedHr = hrProfiles?.find(h => h.teacher_id === t.id);
+        const rawSal = Array.isArray(t.salary_config) ? t.salary_config[0] : (t.salary_config || matchedSal);
+        const rawHr = Array.isArray(t.hr_profile) ? t.hr_profile[0] : (t.hr_profile || matchedHr);
+
+        const monthly = rawSal?.monthly_amount != null && Number(rawSal.monthly_amount) > 0
+          ? Number(rawSal.monthly_amount)
+          : (rawHr?.expected_salary != null && Number(rawHr.expected_salary) > 0
+            ? Number(rawHr.expected_salary)
+            : 0);
+
+        const teacherPay = (tPayments?.filter(p => p.entity_id === t.id) || []).map(lp => ({
+          id: lp.id,
+          amount: lp.amount,
+          month: lp.paid_date ? lp.paid_date.slice(0, 7) : null,
+          paid_on: lp.paid_date,
+          method: lp.method || 'cash',
+          reference: lp.reference_number,
+          notes: lp.notes || lp.description,
+          status: lp.status === 'paid' ? 'Paid' : 'Pending'
+        }));
         const directPay = directTPayments?.filter(p => p.teacher_id === t.id) || [];
 
-        const allPaidDates = [
-          ...teacherPay.map(p => p.paid_date),
-          ...directPay.map(p => p.paid_on)
-        ].filter(Boolean).sort((a, b) => new Date(b) - new Date(a));
+        const combinedHistory = [...directPay, ...teacherPay].sort((a, b) => new Date(b.paid_on || 0) - new Date(a.paid_on || 0));
+        const allPaidDates = combinedHistory.map(p => p.paid_on).filter(Boolean);
         const lastPaid = allPaidDates.length > 0 ? allPaidDates[0] : 'Never';
 
         // Determine this month status
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-        const paidThisMonth =
-          teacherPay.some(p => p.description?.includes(currentMonth) && p.status === 'paid') ||
-          directPay.some(p => p.month === currentMonth && p.status?.toLowerCase() === 'paid');
+        const paidThisMonth = combinedHistory.some(
+          p => (p.month === currentMonth || (p.paid_on && p.paid_on.startsWith(currentMonth))) && p.status?.toLowerCase() === 'paid'
+        );
 
         return {
           ...t,
-          monthlySalary: monthly,
+          monthlySalary: Number(monthly) || 0,
           status: paidThisMonth ? 'Paid' : 'Pending',
           lastPaid,
-          paymentHistory: teacherPay
+          paymentHistory: combinedHistory
         };
       });
 
@@ -288,15 +312,17 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
     if (!selectedTeacherForPay) return;
     try {
       const currentMonth = formData.month || new Date().toISOString().slice(0, 7);
+      const payAmount = Number(formData.amount);
 
       const headers = await getAuthHeaders();
       const payload = {
         teacherId: selectedTeacherForPay.id,
-        amount: Number(formData.amount),
+        amount: payAmount,
         month: currentMonth,
         paidDate: formData.paidDate,
         method: formData.method,
-        reference: formData.reference || null
+        reference: formData.reference || null,
+        notes: formData.notes || null
       };
 
       let response = await fetch('/api/admin/finance/pay-teacher', {
@@ -319,9 +345,42 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       }
 
       toast.success(result.message || `Salary paid successfully for ${selectedTeacherForPay.name}!`);
+
+      // Immediately sync local teacherSalaries state
+      setTeacherSalaries(prev => prev.map(t => {
+        if (t.id === selectedTeacherForPay.id) {
+          const inserted = result.data || {
+            id: Date.now(),
+            amount: payAmount,
+            month: currentMonth,
+            paid_on: formData.paidDate,
+            method: formData.method,
+            reference: formData.reference,
+            notes: formData.notes,
+            status: 'Paid'
+          };
+          const newHistory = [inserted, ...(t.paymentHistory || [])];
+          return {
+            ...t,
+            monthlySalary: (t.monthlySalary || 0) > 0 ? t.monthlySalary : payAmount,
+            status: 'Paid',
+            lastPaid: formData.paidDate,
+            paymentHistory: newHistory
+          };
+        }
+        return t;
+      }));
+
+      // Update stats locally
+      setStats(prev => ({
+        ...prev,
+        teacherSalaries: prev.teacherSalaries + payAmount,
+        netBalance: prev.netBalance - payAmount
+      }));
+
       setIsSalaryModalOpen(false);
       setSelectedTeacherForPay(null);
-      fetchFinanceData();
+      fetchFinanceData(); // Full refresh in background
     } catch (err) {
       toast.error(err.message || "Failed to record salary payment");
     }
@@ -416,14 +475,94 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
     return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
   };
 
+  const uniqueTeacherSpecializations = useMemo(() => {
+    const set = new Set();
+    teacherSalaries.forEach(t => {
+      if (t.specialization) set.add(t.specialization);
+    });
+    return Array.from(set).sort();
+  }, [teacherSalaries]);
+
   const filteredTeacherSalaries = useMemo(() => {
-    const q = teacherSearchQuery.trim().toLowerCase();
-    if (!q) return teacherSalaries;
-    return teacherSalaries.filter(t =>
-      t.name?.toLowerCase().includes(q) ||
-      t.specialization?.toLowerCase().includes(q)
-    );
-  }, [teacherSalaries, teacherSearchQuery]);
+    return teacherSalaries.filter((t) => {
+      const q = teacherSearchQuery.trim().toLowerCase();
+      if (q) {
+        const nameMatch = t.name?.toLowerCase().includes(q);
+        const specMatch = t.specialization?.toLowerCase().includes(q);
+        const cnicMatch = t.cnic?.includes(q);
+        const phoneMatch = t.phone?.includes(q);
+        const emailMatch = t.email?.toLowerCase().includes(q);
+        if (!nameMatch && !specMatch && !cnicMatch && !phoneMatch && !emailMatch) return false;
+      }
+
+      if (teacherSpecializationFilter !== 'all' && t.specialization !== teacherSpecializationFilter) {
+        return false;
+      }
+
+      if (teacherStatusFilter !== 'all') {
+        if (teacherStatusFilter === 'Paid' && t.status !== 'Paid') return false;
+        if (teacherStatusFilter === 'Pending' && (t.status === 'Paid' || (t.monthlySalary || 0) <= 0)) return false;
+        if (teacherStatusFilter === 'Unconfigured' && (t.monthlySalary || 0) > 0) return false;
+      }
+
+      return true;
+    });
+  }, [teacherSalaries, teacherSearchQuery, teacherSpecializationFilter, teacherStatusFilter]);
+
+  const hasActiveTeacherFilters = teacherSearchQuery.trim() !== '' ||
+    teacherSpecializationFilter !== 'all' ||
+    teacherStatusFilter !== 'all';
+
+  const handleResetTeacherFilters = () => {
+    setTeacherSearchQuery('');
+    setTeacherSpecializationFilter('all');
+    setTeacherStatusFilter('all');
+  };
+
+  const handleDownloadTeacherPayslip = async (teacher, payment = null) => {
+    try {
+      const targetKey = `payslip_${teacher.id}`;
+      setGeneratingPdf(targetKey);
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const chosenPayment = payment ||
+        teacher.paymentHistory?.find(p => p.month === currentMonth && p.status?.toLowerCase() === 'paid') ||
+        teacher.paymentHistory?.[0] ||
+        null;
+      const targetMonth = chosenPayment?.month || currentMonth;
+      const doc = await createTeacherPayslipPdf({
+        teacher,
+        payment: chosenPayment,
+        month: targetMonth
+      });
+      const cleanName = (teacher.name || 'Faculty').replace(/\s+/g, '_');
+      doc.save(`DeepSkills_Payslip_${cleanName}_${targetMonth}.pdf`);
+      toast.success("Official Faculty Payslip generated successfully!");
+    } catch (err) {
+      console.error("Failed to generate payslip:", err);
+      toast.error("Failed to generate faculty payslip");
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  const getTeacherWhatsAppNotificationUrl = (teacher) => {
+    const phone = teacher.phone;
+    if (!phone) return null;
+    const clean = String(phone).replace(/\D/g, '');
+    const formattedPhone = clean.startsWith('92') ? clean : clean.startsWith('0') ? `92${clean.slice(1)}` : `92${clean}`;
+    const teacherName = teacher.name || 'Faculty Member';
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const isPaid = teacher.status === 'Paid';
+    const salaryAmt = Number(teacher.monthlySalary || 0).toLocaleString();
+
+    let msg;
+    if (isPaid) {
+      msg = `Assalam-o-Alaikum ${teacherName},\nThis is DeepSkills Accounts & Finance Department.\n\nYour monthly instructional honorarium for *${currentMonth}* (PKR ${salaryAmt}) has been successfully processed and disbursed. Please verify your account or download your official payslip.\n\nThank you for your valuable contribution to DeepSkills Institute!`;
+    } else {
+      msg = `Assalam-o-Alaikum ${teacherName},\nThis is DeepSkills Accounts & Finance Department regarding your monthly instructional honorarium for *${currentMonth}*.\n\nYour compensation is currently queued in payroll processing. For questions or bank verification, please contact the Accounts Office.\n\nThank you,\nDeepSkills Accounts & Finance`;
+    }
+    return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
+  };
 
   const hasActiveStudentFilters = searchQuery.trim() !== '' ||
     studentCourseFilter !== 'all' ||
@@ -979,7 +1118,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                   <FaSearch className="search-icon" />
                   <input
                     type="text"
-                    placeholder="Search faculty by name, specialization..."
+                    placeholder="Search faculty by name, specialization, CNIC, phone..."
                     value={teacherSearchQuery}
                     onChange={(e) => setTeacherSearchQuery(e.target.value)}
                   />
@@ -994,19 +1133,41 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                     </button>
                   )}
                 </SearchInputWrap>
+
+                <Select
+                  value={teacherSpecializationFilter}
+                  onChange={(e) => setTeacherSpecializationFilter(e.target.value)}
+                  title="Filter by Specialization"
+                >
+                  <option value="all">All Specializations ({uniqueTeacherSpecializations.length})</option>
+                  {uniqueTeacherSpecializations.map(spec => (
+                    <option key={spec} value={spec}>{spec}</option>
+                  ))}
+                </Select>
+
+                <Select
+                  value={teacherStatusFilter}
+                  onChange={(e) => setTeacherStatusFilter(e.target.value)}
+                  title="Filter by Disbursement Status"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Paid">Paid This Month ({teachersPaidThisMonth})</option>
+                  <option value="Pending">Pending Disbursement ({teachersPendingThisMonth})</option>
+                  <option value="Unconfigured">Unconfigured Salary</option>
+                </Select>
               </FilterGroup>
 
               <FilterMeta>
                 <span className="counter">
                   {filteredTeacherSalaries.length} of {teacherSalaries.length} Faculty Members
                 </span>
-                {teacherSearchQuery && (
+                {hasActiveTeacherFilters && (
                   <button
                     type="button"
                     className="reset-link"
-                    onClick={() => setTeacherSearchQuery('')}
+                    onClick={handleResetTeacherFilters}
                   >
-                    Clear Search
+                    Reset Filters
                   </button>
                 )}
               </FilterMeta>
@@ -1017,12 +1178,12 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ minWidth: '220px' }}>Teacher</th>
-                      <th style={{ minWidth: '180px' }}>Specialization</th>
-                      <th style={{ minWidth: '140px' }}>Monthly Salary</th>
-                      <th style={{ minWidth: '120px' }}>This Month</th>
-                      <th style={{ minWidth: '130px' }}>Last Paid</th>
-                      <th style={{ minWidth: '200px', textAlign: 'right' }}>Actions</th>
+                      <th style={{ minWidth: '230px' }}>Faculty Member</th>
+                      <th style={{ minWidth: '170px' }}>Specialization</th>
+                      <th style={{ minWidth: '150px' }}>Base Honorarium</th>
+                      <th style={{ minWidth: '130px' }}>This Month</th>
+                      <th style={{ minWidth: '140px' }}>Last Disbursement</th>
+                      <th style={{ minWidth: '240px', textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1036,43 +1197,119 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                               </div>
                               <div className="info">
                                 <span className="name">{t.name}</span>
-                                <span className="cnic">Faculty Member</span>
+                                <span className="cnic">
+                                  {t.cnic ? `CNIC: ${t.cnic}` : t.phone ? `Phone: ${t.phone}` : 'Faculty Member'}
+                                </span>
                               </div>
                             </StudentCell>
                           </td>
                           <td>
-                            <span style={{ color: '#cbd5e1' }}>{t.specialization || 'Instructor'}</span>
+                            <PlanBadge style={{ background: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.25)', color: '#c4b5fd' }}>
+                              {t.specialization || 'Instructor'}
+                            </PlanBadge>
                           </td>
                           <td>
-                            <strong style={{ color: '#fff' }}>Rs. {Number(t.monthlySalary || 0).toLocaleString()}</strong>
+                            {(t.monthlySalary || 0) > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <strong style={{ color: '#fff', fontSize: '0.92rem' }}>Rs. {Number(t.monthlySalary).toLocaleString()}</strong>
+                                <span style={{ fontSize: '0.74rem', color: '#64748b' }}>Per Month</span>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#f59e0b', fontSize: '0.78rem', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                                Not Configured
+                              </span>
+                            )}
                           </td>
                           <td>
-                            <StatusDotBadge $status={t.status}>
+                            <StatusDotBadge $status={t.status === 'Paid' ? 'Paid' : (t.monthlySalary || 0) <= 0 ? 'Overdue' : 'Pending'}>
                               <span className="dot" />
-                              {t.status}
+                              {t.status === 'Paid' ? 'Paid' : (t.monthlySalary || 0) <= 0 ? 'Unconfigured' : 'Pending'}
                             </StatusDotBadge>
                           </td>
                           <td>
-                            <span style={{ color: t.lastPaid === 'Never' ? '#64748b' : '#cbd5e1', fontSize: '0.85rem' }}>
-                              {t.lastPaid}
-                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ color: t.lastPaid === 'Never' ? '#64748b' : '#cbd5e1', fontSize: '0.85rem' }}>
+                                {t.lastPaid}
+                              </span>
+                              {t.paymentHistory?.[0]?.method && (
+                                <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'capitalize' }}>
+                                  {t.paymentHistory[0].method.replace('_', ' ')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                              <ActionButton
-                                disabled={!canMutate || t.status === 'Paid' || (t.monthlySalary || 0) <= 0}
+                            <ActionsGroup>
+                              <button
+                                type="button"
+                                className="action-btn pay-btn"
+                                disabled={!canMutate}
                                 onClick={() => {
                                   setSelectedTeacherForPay(t);
                                   setIsSalaryModalOpen(true);
                                 }}
-                                title={(t.monthlySalary || 0) <= 0 ? "No monthly salary configured" : t.status === 'Paid' ? "Salary already paid for this month" : ""}
+                                title={!canMutate ? "View-only permissions" : t.status === 'Paid' ? "Salary already disbursed for this month (click to review or record additional payout)" : "Disburse monthly honorarium"}
+                                style={t.status === 'Paid' ? {
+                                  background: 'rgba(16, 185, 129, 0.15)',
+                                  borderColor: 'rgba(16, 185, 129, 0.35)',
+                                  color: '#34d399'
+                                } : undefined}
                               >
-                                <FaPlus /> Pay Salary
-                              </ActionButton>
-                              <ActionButton onClick={() => navigate(`/admin/finance/transactions?search=${encodeURIComponent(t.name)}`)}>
+                                {t.status === 'Paid' ? (
+                                  <>
+                                    <FaCheckCircle /> Paid
+                                  </>
+                                ) : (
+                                  <>
+                                    <FaPlus /> Pay
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="action-btn receipt-btn"
+                                onClick={() => handleDownloadTeacherPayslip(t)}
+                                disabled={generatingPdf === `payslip_${t.id}`}
+                                title="Download Official DeepSkills Faculty Payslip / Salary Voucher PDF"
+                                style={{
+                                  background: 'rgba(139, 92, 246, 0.15)',
+                                  borderColor: 'rgba(139, 92, 246, 0.35)',
+                                  color: '#c4b5fd'
+                                }}
+                              >
+                                {generatingPdf === `payslip_${t.id}` ? (
+                                  <FaSyncAlt className="spin" />
+                                ) : (
+                                  <FaFilePdf />
+                                )}
+                                Payslip
+                              </button>
+
+                              <button
+                                type="button"
+                                className="action-btn view-btn"
+                                onClick={() => {
+                                  setSelectedTeacherForHistory(t);
+                                  setIsSalaryHistoryModalOpen(true);
+                                }}
+                                title="View salary disbursement history"
+                              >
                                 <FaHistory /> History
-                              </ActionButton>
-                            </div>
+                              </button>
+
+                              {t.phone && (
+                                <a
+                                  href={getTeacherWhatsAppNotificationUrl(t)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="action-btn wa-btn"
+                                  title="Send WhatsApp salary notification"
+                                >
+                                  <FaWhatsapp />
+                                </a>
+                              )}
+                            </ActionsGroup>
                           </td>
                         </tr>
                       ))
@@ -1083,13 +1320,13 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                             <div className="empty-icon"><FaChalkboardTeacher /></div>
                             <h3>No faculty records found</h3>
                             <p>
-                              {teacherSearchQuery
-                                ? "No faculty members matched your search query."
-                                : "There are no faculty members registered in the system."}
+                              {hasActiveTeacherFilters
+                                ? "No faculty members matched your active search and filter criteria."
+                                : "There are no faculty members registered in the system yet."}
                             </p>
-                            {teacherSearchQuery && (
-                              <Button type="button" onClick={() => setTeacherSearchQuery('')}>
-                                <FaUndo /> Clear Search
+                            {hasActiveTeacherFilters && (
+                              <Button type="button" onClick={handleResetTeacherFilters}>
+                                <FaUndo /> Reset All Filters
                               </Button>
                             )}
                           </EmptyState>
@@ -1410,49 +1647,317 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       {/* Pay Teacher Salary Modal */}
       <AnimatePresence>
         {isSalaryModalOpen && selectedTeacherForPay && (
-          <ModalOverlay style={{ zIndex: 2000 }}>
-            <ModalContent style={{ maxWidth: '450px' }}>
+          <ModalOverlay
+            style={{ zIndex: 2000 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <ModalContent
+              style={{ maxWidth: '520px' }}
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+            >
               <ModalHeader>
-                <div>
-                  <h2>Pay Salary: {selectedTeacherForPay.name}</h2>
-                  <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>{selectedTeacherForPay.specialization}</p>
+                <div className="modal-title-col">
+                  <h2>Disburse Salary: {selectedTeacherForPay.name}</h2>
+                  <p>
+                    <span>{selectedTeacherForPay.specialization || 'Faculty Instructor'}</span>
+                    {selectedTeacherForPay.cnic && (
+                      <>
+                        <span>•</span>
+                        <span>CNIC: {selectedTeacherForPay.cnic}</span>
+                      </>
+                    )}
+                  </p>
                 </div>
-                <CloseBtn onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }}><FaTimes /></CloseBtn>
+                <CloseBtn onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }} title="Close Modal">
+                  <FaTimes />
+                </CloseBtn>
               </ModalHeader>
+
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.target);
                 handlePaySalary(Object.fromEntries(formData));
               }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Salary Amount (PKR)</label>
-                    <Input type="number" name="amount" defaultValue={selectedTeacherForPay.monthlySalary} required min="1" />
+                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Faculty Base Salary Info Card */}
+                  <div style={{
+                    background: 'rgba(139, 92, 246, 0.08)',
+                    border: '1px solid rgba(139, 92, 246, 0.25)',
+                    borderRadius: '12px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '10px',
+                        background: 'linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.9rem'
+                      }}>
+                        {getInitials(selectedTeacherForPay.name)}
+                      </div>
+                      <div>
+                        <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.92rem' }}>
+                          {selectedTeacherForPay.name}
+                        </div>
+                        <div style={{ color: '#a78bfa', fontSize: '0.78rem' }}>
+                          {selectedTeacherForPay.email || selectedTeacherForPay.specialization || 'Instructional Staff'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#94a3b8', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 600 }}>
+                        Base Monthly
+                      </div>
+                      <div style={{ color: (selectedTeacherForPay.monthlySalary || 0) > 0 ? '#fff' : '#f59e0b', fontWeight: 800, fontSize: '1.05rem' }}>
+                        {(selectedTeacherForPay.monthlySalary || 0) > 0 ? `Rs. ${Number(selectedTeacherForPay.monthlySalary).toLocaleString()}` : 'Custom / Unconfigured'}
+                      </div>
+                    </div>
                   </div>
+
                   <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Month</label>
-                    <Input type="month" name="month" defaultValue={new Date().toISOString().slice(0, 7)} required />
+                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                      Disbursement Amount (PKR)
+                    </label>
+                    <Input
+                      type="number"
+                      name="amount"
+                      defaultValue={(selectedTeacherForPay.monthlySalary || 0) > 0 ? selectedTeacherForPay.monthlySalary : ''}
+                      placeholder="Enter salary amount in PKR (e.g. 50000)"
+                      required
+                      min="1"
+                    />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Payment Date</label>
-                    <Input type="date" name="paidDate" defaultValue={new Date().toISOString().split('T')[0]} required />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                        Payroll Month
+                      </label>
+                      <Input
+                        type="month"
+                        name="month"
+                        defaultValue={new Date().toISOString().slice(0, 7)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                        Disbursement Date
+                      </label>
+                      <Input
+                        type="date"
+                        name="paidDate"
+                        defaultValue={new Date().toISOString().split('T')[0]}
+                        required
+                      />
+                    </div>
                   </div>
+
                   <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Payment Method</label>
-                    <Select name="method" required>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="cash">Cash</option>
-                      <option value="online">Online</option>
+                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                      Payment Method
+                    </label>
+                    <Select name="method" defaultValue="bank_transfer" style={{ width: '100%' }} required>
+                      <option value="bank_transfer">Bank Transfer / IBFT</option>
+                      <option value="cash">Cash Voucher</option>
+                      <option value="online">Online / EasyPaisa / JazzCash</option>
                       <option value="cheque">Cheque</option>
                     </Select>
                   </div>
+
                   <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#6b7280' }}>Reference #</label>
-                    <Input type="text" name="reference" placeholder="Bank Ref / Cheque # / Slip #" />
+                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                      Bank Slip / Transaction Reference # (Optional)
+                    </label>
+                    <Input
+                      type="text"
+                      name="reference"
+                      placeholder="e.g. IBFT-982138 or Cheque #49281"
+                    />
                   </div>
-                  <SubmitBtn type="submit">Confirm & Record Salary</SubmitBtn>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
+                      Payroll Remarks / Notes (Optional)
+                    </label>
+                    <Input
+                      type="text"
+                      name="notes"
+                      placeholder="e.g. Cleared via HBL corporate payroll account"
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <Button
+                      type="button"
+                      onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }}
+                      style={{ flex: 1, justifyContent: 'center' }}
+                    >
+                      Cancel
+                    </Button>
+                    <SubmitBtn
+                      type="submit"
+                      style={{
+                        flex: 2,
+                        margin: 0,
+                        justifyContent: 'center',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%)',
+                        borderColor: 'rgba(139, 92, 246, 0.4)'
+                      }}
+                    >
+                      <FaCheckCircle /> Confirm & Disburse Salary
+                    </SubmitBtn>
+                  </div>
                 </div>
               </form>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+      </AnimatePresence>
+
+      {/* Faculty Salary History Modal */}
+      <AnimatePresence>
+        {isSalaryHistoryModalOpen && selectedTeacherForHistory && (
+          <ModalOverlay
+            style={{ zIndex: 2000 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <ModalContent
+              style={{ maxWidth: '820px' }}
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+            >
+              <ModalHeader>
+                <div className="modal-title-col">
+                  <h2>Disbursement History: {selectedTeacherForHistory.name}</h2>
+                  <p>
+                    <span>{selectedTeacherForHistory.specialization || 'Faculty Instructor'}</span>
+                    <span>•</span>
+                    <span>Base Honorarium: Rs. {Number(selectedTeacherForHistory.monthlySalary || 0).toLocaleString()} / month</span>
+                  </p>
+                </div>
+                <div className="modal-actions">
+                  <Button
+                    type="button"
+                    onClick={() => navigate(`/admin/finance/transactions?search=${encodeURIComponent(selectedTeacherForHistory.name)}`)}
+                    title="Open in global transaction ledger"
+                  >
+                    <FaHistory /> Global Ledger
+                  </Button>
+                  <CloseBtn onClick={() => { setIsSalaryHistoryModalOpen(false); setSelectedTeacherForHistory(null); }} title="Close Modal">
+                    <FaTimes />
+                  </CloseBtn>
+                </div>
+              </ModalHeader>
+
+              <ModalBody>
+                <CardPanel style={{ background: 'rgba(255, 255, 255, 0.015)' }}>
+                  <TableWrap>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Payroll Month</th>
+                          <th>Disbursed Amount</th>
+                          <th>Paid Date</th>
+                          <th>Method</th>
+                          <th>Reference / Notes</th>
+                          <th>Status</th>
+                          <th style={{ textAlign: 'right' }}>Official Payslip</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedTeacherForHistory.paymentHistory && selectedTeacherForHistory.paymentHistory.length > 0 ? (
+                          selectedTeacherForHistory.paymentHistory.map((p, idx) => (
+                            <tr key={p.id || idx}>
+                              <td>
+                                <strong style={{ color: '#fff' }}>{p.month || 'Current'}</strong>
+                              </td>
+                              <td>
+                                <strong style={{ color: '#10B981' }}>Rs. {Number(p.amount || 0).toLocaleString()}</strong>
+                              </td>
+                              <td>
+                                <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>
+                                  {p.paid_on || p.created_at?.slice(0, 10) || '—'}
+                                </span>
+                              </td>
+                              <td>
+                                <span style={{ color: '#cbd5e1', fontSize: '0.85rem', textTransform: 'capitalize' }}>
+                                  {(p.method || 'bank_transfer').replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ color: p.reference ? '#cbd5e1' : '#64748b', fontSize: '0.82rem' }}>
+                                    {p.reference || '—'}
+                                  </span>
+                                  {p.notes && (
+                                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{p.notes}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <StatusDotBadge $status={p.status || 'Paid'}>
+                                  <span className="dot" />
+                                  {p.status || 'Paid'}
+                                </StatusDotBadge>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                  <button
+                                    type="button"
+                                    className="receipt-mini-btn"
+                                    onClick={() => handleDownloadTeacherPayslip(selectedTeacherForHistory, p)}
+                                    disabled={generatingPdf === `payslip_${selectedTeacherForHistory.id}`}
+                                    title="Download PDF payslip for this month"
+                                    style={{
+                                      background: 'rgba(139, 92, 246, 0.15)',
+                                      borderColor: 'rgba(139, 92, 246, 0.35)',
+                                      color: '#c4b5fd'
+                                    }}
+                                  >
+                                    {generatingPdf === `payslip_${selectedTeacherForHistory.id}` ? (
+                                      <FaSyncAlt className="spin" />
+                                    ) : (
+                                      <FaFilePdf />
+                                    )}
+                                    Payslip PDF
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                              No past disbursement records found for this faculty member.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </TableWrap>
+                </CardPanel>
+              </ModalBody>
             </ModalContent>
           </ModalOverlay>
         )}
@@ -2468,6 +2973,20 @@ const ActionsGroup = styled.div`
       }
       &:disabled {
         opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+
+    &.pay-btn {
+      background: rgba(139, 92, 246, 0.18);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: #ddd6fe;
+      &:hover:not(:disabled) {
+        background: #8B5CF6;
+        color: #fff;
+      }
+      &:disabled {
+        opacity: 0.45;
         cursor: not-allowed;
       }
     }

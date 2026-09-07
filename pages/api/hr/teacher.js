@@ -208,6 +208,19 @@ export default async function handler(req, res) {
         if (stepUpdated) profile = stepUpdated;
       }
 
+      // Non-blocking sync to teacher_salaries if expected_salary provided
+      if (payload.expected_salary && Number(payload.expected_salary) > 0) {
+        try {
+          await supabase.from('teacher_salaries').upsert({
+            teacher_id: teacher.id,
+            monthly_amount: Number(payload.expected_salary),
+            effective_from: new Date().toISOString().split('T')[0]
+          }, { onConflict: 'teacher_id' });
+        } catch (salErr) {
+          console.warn('[hr/teacher] salary sync notice:', salErr);
+        }
+      }
+
       return res.status(200).json({ status: 'success', data: profile });
     }
 

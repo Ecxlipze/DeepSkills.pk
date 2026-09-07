@@ -233,6 +233,20 @@ if ($action === 'save_profile') {
             'return=representation'
         ));
     }
+
+    if (!empty($payload['expected_salary']) && is_numeric($payload['expected_salary'])) {
+        hr_supabase_request(
+            'POST',
+            'teacher_salaries?on_conflict=teacher_id',
+            [[
+                'teacher_id' => $teacher['id'],
+                'monthly_amount' => (float)$payload['expected_salary'],
+                'effective_from' => gmdate('Y-m-d')
+            ]],
+            'resolution=merge-duplicates,return=minimal'
+        );
+    }
+
     hr_respond(200, ['status' => 'success', 'data' => $profile]);
 }
 

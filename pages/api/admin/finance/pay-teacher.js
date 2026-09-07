@@ -150,6 +150,18 @@ export default async function handler(req, res) {
         return res.status(500).json({ status: 'error', message: 'Failed to record salary payment.' });
       }
 
+      // Optionally sync salary_config if not yet configured
+      try {
+        const { data: tData } = await supabase.from('teachers').select('salary_config').eq('id', teacherId).single();
+        const currentSalary = Number(tData?.salary_config?.monthly_amount || 0);
+        if (currentSalary <= 0) {
+          const updatedConfig = { ...(tData?.salary_config || {}), monthly_amount: numAmount };
+          await supabase.from('teachers').update({ salary_config: updatedConfig }).eq('id', teacherId);
+        }
+      } catch (_) {
+        // Non-blocking best-effort sync
+      }
+
       return res.status(200).json({
         status: 'success',
         message: `Salary paid successfully for ${teacher.name || 'teacher'}!`,

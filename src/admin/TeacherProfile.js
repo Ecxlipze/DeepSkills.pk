@@ -849,14 +849,15 @@ const TeacherProfile = ({ teacherId }) => {
     if (!id) return;
     setLoading(true);
     try {
-      const [tRes, hrRes, assRes, batchRes, courseRes, salRes, payRes] = await Promise.all([
+      const [tRes, hrRes, assRes, batchRes, courseRes, salRes, payRes, directPayRes] = await Promise.all([
         supabase.from('teachers').select('*').eq('id', id).single(),
         supabase.from('hr_profiles').select('*').eq('teacher_id', id).maybeSingle(),
         supabase.from('teacher_batches').select('*, batches(*)').eq('teacher_id', id),
         supabase.from('batches').select('*'),
         supabase.from('courses').select('*'),
         supabase.from('teacher_salaries').select('*').eq('teacher_id', id).maybeSingle(),
-        supabase.from('payments').select('*').eq('entity_id', id).eq('entity_type', 'teacher').order('paid_date', { ascending: false })
+        supabase.from('payments').select('*').eq('entity_id', id).eq('entity_type', 'teacher').order('paid_date', { ascending: false }),
+        supabase.from('teacher_payments').select('*').eq('teacher_id', id).order('paid_on', { ascending: false })
       ]);
 
       if (tRes.error) throw tRes.error;
@@ -960,16 +961,37 @@ const TeacherProfile = ({ teacherId }) => {
         setAttendanceStats({ totalSessions: 0, attendanceRate: 0 });
       }
 
-      // Salary Config & Payments
-      if (salRes.data) {
-        setSalaryConfig(salRes.data);
-        setMonthlySalary(salRes.data.monthly_amount || 0);
+      // Salary Config & Payments (Synced between Finance and HR)
+      const resolvedMonthly = salRes.data?.monthly_amount != null && Number(salRes.data.monthly_amount) > 0
+        ? Number(salRes.data.monthly_amount)
+        : (hrRes.data?.expected_salary != null && Number(hrRes.data.expected_salary) > 0
+          ? Number(hrRes.data.expected_salary)
+          : 0);
+
+      if (salRes.data || resolvedMonthly > 0) {
+        setSalaryConfig(salRes.data || { monthly_amount: resolvedMonthly });
+        setMonthlySalary(resolvedMonthly);
       } else {
         setSalaryConfig(null);
         setMonthlySalary(0);
       }
 
-      setPaymentHistory(payRes.data || []);
+      // Merge direct teacher_payments and legacy payments
+      const directPaymentsFormatted = (directPayRes.data || []).map(dp => ({
+        id: dp.id,
+        amount: dp.amount,
+        paid_date: dp.paid_on,
+        method: dp.method,
+        reference_number: dp.reference,
+        notes: dp.notes,
+        description: `Disbursed for ${dp.month || 'payroll period'}`,
+        status: dp.status?.toLowerCase() === 'paid' ? 'paid' : 'pending'
+      }));
+      const legacyPayments = payRes.data || [];
+      const combinedPayments = [...directPaymentsFormatted, ...legacyPayments]
+        .sort((a, b) => new Date(b.paid_date || 0) - new Date(a.paid_date || 0));
+
+      setPaymentHistory(combinedPayments);
     } catch (err) {
       toast.error('Error loading teacher profile: ' + (err.message || ''));
       if (router.asPath?.includes('/admin/hr/')) {
@@ -1051,6 +1073,17 @@ const TeacherProfile = ({ teacherId }) => {
             updated_at: new Date().toISOString()
           })
           .eq('id', hrProfile.id);
+      } else {
+        await supabase
+          .from('hr_profiles')
+          .update({
+            full_name: editForm.name,
+            personal_phone: editForm.phone,
+            personal_email: editForm.email,
+            specialization: editForm.specialization,
+            updated_at: new Date().toISOString()
+          })
+          .eq('teacher_id', id);
       }
 
       toast.success('Teacher details updated successfully!');
@@ -1148,13 +1181,32 @@ const TeacherProfile = ({ teacherId }) => {
     }
     setProcessing(true);
     try {
+      const parsedAmount = Number(monthlySalary) || 0;
       const { error } = await supabase.from('teacher_salaries').upsert({
         teacher_id: id,
-        monthly_amount: monthlySalary,
+        monthly_amount: parsedAmount,
         effective_from: new Date().toISOString().split('T')[0]
       }, { onConflict: 'teacher_id' });
 
       if (error) throw error;
+
+      // Bidirectional sync: keep HR profile expected_salary in lockstep
+      try {
+        if (hrProfile?.id) {
+          await supabase
+            .from('hr_profiles')
+            .update({ expected_salary: parsedAmount, updated_at: new Date().toISOString() })
+            .eq('id', hrProfile.id);
+        } else {
+          await supabase
+            .from('hr_profiles')
+            .update({ expected_salary: parsedAmount, updated_at: new Date().toISOString() })
+            .eq('teacher_id', id);
+        }
+      } catch (hrSyncErr) {
+        console.warn('[TeacherProfile] Non-blocking sync to hr_profiles failed:', hrSyncErr);
+      }
+
       toast.success('Salary configuration updated.');
       setIsSalarySetupOpen(false);
       fetchTeacherData();
@@ -1452,7 +1504,7 @@ const TeacherProfile = ({ teacherId }) => {
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">Expected Compensation</span>
-                          <span className="v">{hrProfile?.expected_salary ? `PKR ${Number(hrProfile.expected_salary).toLocaleString()} / Month` : '—'}</span>
+                          <span className="v">{(hrProfile?.expected_salary || salaryConfig?.monthly_amount) ? `PKR ${Number(hrProfile?.expected_salary || salaryConfig?.monthly_amount).toLocaleString()} / Month` : '—'}</span>
                         </KeyValItem>
                         <KeyValItem>
                           <span className="k">LinkedIn / Portfolio</span>
