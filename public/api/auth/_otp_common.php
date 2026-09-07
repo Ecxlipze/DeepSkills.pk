@@ -1,5 +1,8 @@
 <?php
 function otp_respond($status, $payload) {
+    if (isset($GLOBALS['__OTP_TEST_HOOK__']) && is_callable($GLOBALS['__OTP_TEST_HOOK__'])) {
+        call_user_func($GLOBALS['__OTP_TEST_HOOK__'], $status, $payload);
+    }
     if (!headers_sent()) {
         http_response_code($status);
     }
@@ -46,6 +49,9 @@ function otp_normalize_cnic($value) {
 }
 
 function otp_supabase_request($method, $path, $payload = null, $prefer = '', $throwOnError = false) {
+    if (isset($GLOBALS['__OTP_REQUEST_HOOK__']) && is_callable($GLOBALS['__OTP_REQUEST_HOOK__'])) {
+        return call_user_func($GLOBALS['__OTP_REQUEST_HOOK__'], $method, $path, $payload, $prefer, $throwOnError);
+    }
     $env = otp_load_env_file();
     $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
     $key = $env['SUPABASE_SERVICE_ROLE_KEY'] ?? '';
@@ -96,6 +102,13 @@ function otp_supabase_request($method, $path, $payload = null, $prefer = '', $th
 }
 
 function otp_json_input() {
+    if (isset($GLOBALS['__OTP_INPUT__'])) {
+        $data = is_string($GLOBALS['__OTP_INPUT__']) ? json_decode($GLOBALS['__OTP_INPUT__'], true) : $GLOBALS['__OTP_INPUT__'];
+        if (!is_array($data)) {
+            otp_respond(400, ['status' => 'error', 'message' => 'Invalid request data.']);
+        }
+        return $data;
+    }
     $data = json_decode(file_get_contents('php://input'), true);
     if (!is_array($data)) {
         otp_respond(400, ['status' => 'error', 'message' => 'Invalid request data.']);
@@ -120,6 +133,9 @@ function otp_bootstrap($allowedMethods = ['POST']) {
 }
 
 function otp_send_mail($email, $name, $code) {
+    if (isset($GLOBALS['__OTP_MAIL_HOOK__']) && is_callable($GLOBALS['__OTP_MAIL_HOOK__'])) {
+        return call_user_func($GLOBALS['__OTP_MAIL_HOOK__'], $email, $name, $code);
+    }
     $safeName = htmlspecialchars($name ?: 'DeepSkills user', ENT_QUOTES, 'UTF-8');
     $safeCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
     $subject = 'DeepSkills login OTP';
@@ -429,7 +445,24 @@ function portal_require_session($allowedRoles = [], $requestedCnic = null, $toke
         ]);
     }
 
-    if (!empty($row['expires_at']) && $row['expires_at'] < $now) {
+    if (empty($row['expires_at'])) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'session_expiry_missing',
+            'message' => 'Session expiry is missing. Please log in again.'
+        ]);
+    }
+
+    $expiry = strtotime($row['expires_at']);
+    if ($expiry === false) {
+        otp_respond(401, [
+            'status' => 'error',
+            'code' => 'session_expiry_invalid',
+            'message' => 'Session expiry is invalid. Please log in again.'
+        ]);
+    }
+
+    if ($expiry <= time()) {
         otp_respond(401, [
             'status' => 'error',
             'code' => 'session_expired',
@@ -514,37 +547,105 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
 
     // 1. Supabase JWT (Super Admin)
     if (count($segments) === 3) {
-        $env = otp_load_env_file();
-        $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
-        $anonKey = $env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? $env['REACT_APP_SUPABASE_ANON_KEY'] ?? '';
+        $user = null;
+        if (isset($GLOBALS['__OTP_AUTH_HOOK__']) && is_callable($GLOBALS['__OTP_AUTH_HOOK__'])) {
+            $user = call_user_func($GLOBALS['__OTP_AUTH_HOOK__'], $token);
+        } else {
+            $env = otp_load_env_file();
+            $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
+            $anonKey = $env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? $env['REACT_APP_SUPABASE_ANON_KEY'] ?? '';
 
-        $ch = curl_init($url . '/auth/v1/user');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'apikey: ' . $anonKey,
-            'Authorization: Bearer ' . $token,
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        $res = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $ch = curl_init($url . '/auth/v1/user');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'apikey: ' . $anonKey,
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json'
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $res = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if ($code === 200) {
-            $user = json_decode($res, true);
-            if (is_array($user) && !empty($user['id'])) {
-                return [
-                    'type' => 'supabase_admin',
-                    'user' => $user,
-                    'role' => 'admin',
-                    'permissions' => ['all' => 'full']
-                ];
+            if ($code === 200) {
+                $user = json_decode($res, true);
             }
         }
 
-        otp_respond(401, [
+        if (!is_array($user) || empty($user['id'])) {
+            otp_respond(401, [
+                'status' => 'error',
+                'code' => 'invalid_admin_token',
+                'message' => 'Invalid or expired Super Admin credentials.'
+            ]);
+        }
+
+        $isTrustedAdmin = false;
+        if (($user['app_metadata']['role'] ?? '') === 'admin' || !empty($user['app_metadata']['claims_admin'])) {
+            $isTrustedAdmin = true;
+        }
+
+        try {
+            $queryPath = !empty($user['email'])
+                ? 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&email=eq.' . rawurlencode($user['email']) . '&limit=1'
+                : 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&id=eq.' . rawurlencode($user['id']) . '&limit=1';
+            $userRow = auth_first(otp_supabase_request('GET', $queryPath));
+            if ($userRow) {
+                if (($userRow['status'] ?? '') !== 'active') {
+                    otp_respond(403, [
+                        'status' => 'error',
+                        'code' => 'account_inactive',
+                        'message' => 'User account is inactive, suspended, or demoted.'
+                    ]);
+                }
+                if (($userRow['role'] ?? '') === 'admin') {
+                    $isTrustedAdmin = true;
+                } else {
+                    $isTrustedAdmin = false;
+                    $customRole = is_array($userRow['custom_roles'] ?? null) ? $userRow['custom_roles'] : null;
+                    $permissions = auth_permissions($customRole['permissions'] ?? ($userRow['permissions'] ?? []));
+                    if ($requiredPermissionKey) {
+                        $requiredKeys = is_array($requiredPermissionKey) ? $requiredPermissionKey : [$requiredPermissionKey];
+                        $hasPerm = false;
+                        foreach ($requiredKeys as $key) {
+                            if (($permissions[$key] ?? 'none') === 'full') {
+                                $hasPerm = true;
+                                break;
+                            }
+                        }
+                        if (!$hasPerm) {
+                            $keyList = implode(' or ', $requiredKeys);
+                            otp_respond(403, [
+                                'status' => 'error',
+                                'code' => 'insufficient_permissions',
+                                'message' => "Insufficient permissions (requires 'full' on {$keyList})."
+                            ]);
+                        }
+                    }
+                    return [
+                        'type' => 'supabase_admin',
+                        'user' => $user,
+                        'role' => 'custom',
+                        'permissions' => $permissions
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            // fallback
+        }
+
+        if ($isTrustedAdmin) {
+            return [
+                'type' => 'supabase_admin',
+                'user' => $user,
+                'role' => 'admin',
+                'permissions' => ['all' => 'full']
+            ];
+        }
+
+        otp_respond(403, [
             'status' => 'error',
-            'code' => 'invalid_admin_token',
-            'message' => 'Invalid or expired Super Admin credentials.'
+            'code' => 'insufficient_permissions',
+            'message' => 'Access denied: administrator privileges required.'
         ]);
     }
 
@@ -553,7 +654,29 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
         $session = portal_require_session(['admin', 'custom'], null, $token);
         $role = $session['role'];
 
-        if ($role === 'admin') {
+        $directoryUser = auth_first(otp_supabase_request(
+            'GET',
+            'users?select=*,custom_roles(permissions)&cnic=eq.' . rawurlencode($session['cnic']) . '&limit=1'
+        ));
+
+        if ($directoryUser) {
+            if (($directoryUser['status'] ?? '') !== 'active') {
+                otp_respond(403, [
+                    'status' => 'error',
+                    'code' => 'account_inactive',
+                    'message' => 'Staff account is inactive, suspended, or demoted.'
+                ]);
+            }
+            if (($directoryUser['role'] ?? '') !== 'admin' && $role === 'admin') {
+                otp_respond(403, [
+                    'status' => 'error',
+                    'code' => 'insufficient_permissions',
+                    'message' => 'Access denied: administrator role has been revoked.'
+                ]);
+            }
+        }
+
+        if ($role === 'admin' && (!$directoryUser || ($directoryUser['role'] ?? '') === 'admin')) {
             return [
                 'type' => 'portal_session',
                 'session' => $session,
@@ -562,16 +685,11 @@ function portal_authorize_admin_operation($requiredPermissionKey = null) {
             ];
         }
 
-        $directoryUser = auth_first(otp_supabase_request(
-            'GET',
-            'users?select=*,custom_roles(permissions)&cnic=eq.' . rawurlencode($session['cnic']) . '&limit=1'
-        ));
-
-        if (!$directoryUser || ($directoryUser['status'] ?? '') !== 'active') {
+        if (!$directoryUser) {
             otp_respond(403, [
                 'status' => 'error',
                 'code' => 'account_inactive',
-                'message' => 'User account is inactive or not found in directory.'
+                'message' => 'Staff account not found in directory.'
             ]);
         }
 

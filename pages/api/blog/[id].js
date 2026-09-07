@@ -1,4 +1,5 @@
-import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+import { getSupabaseServerClient } from '../../../lib/supabaseServer.js';
+import { authenticateBlogActor } from '../../../lib/portalAuthServer.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'DELETE') {
@@ -6,14 +7,23 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = req.__supabase || getSupabaseServerClient();
   if (!supabase) {
     return res.status(500).json({ error: 'Supabase environment variables are missing.' });
   }
 
-  const { id } = req.query;
-  if (req.body?.actor?.role !== 'admin') {
+  const auth = await authenticateBlogActor(req, supabase);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ error: auth.error });
+  }
+
+  if (!auth.isAdmin) {
     return res.status(403).json({ error: 'Only admins can delete blog posts.' });
+  }
+
+  const { id } = req.query;
+  if (!id) {
+    return res.status(400).json({ error: 'Blog post id is required.' });
   }
 
   const { error } = await supabase.from('blog_posts').delete().eq('id', id);

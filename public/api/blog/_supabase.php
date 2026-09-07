@@ -1,10 +1,15 @@
 <?php
 function blog_json($status, $payload) {
-    http_response_code($status);
-    header('Content-Type: application/json');
-    header('Access-Control-Allow-Origin: https://deepskills.pk');
-    header('Access-Control-Allow-Methods: POST, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
+    if (isset($GLOBALS['__BLOG_TEST_HOOK__']) && is_callable($GLOBALS['__BLOG_TEST_HOOK__'])) {
+        call_user_func($GLOBALS['__BLOG_TEST_HOOK__'], $status, $payload);
+    }
+    if (!headers_sent()) {
+        http_response_code($status);
+        header('Content-Type: application/json');
+        header('Access-Control-Allow-Origin: https://deepskills.pk');
+        header('Access-Control-Allow-Methods: POST, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    }
     echo json_encode($payload);
     exit();
 }
@@ -45,6 +50,9 @@ function blog_config() {
 }
 
 function blog_request($method, $path, $payload = null, $extraHeaders = []) {
+    if (isset($GLOBALS['__BLOG_REQUEST_HOOK__']) && is_callable($GLOBALS['__BLOG_REQUEST_HOOK__'])) {
+        return call_user_func($GLOBALS['__BLOG_REQUEST_HOOK__'], $method, $path, $payload, $extraHeaders);
+    }
     [$url, $key] = blog_config();
     $headers = [
         'apikey: ' . $key,
@@ -66,8 +74,8 @@ function blog_request($method, $path, $payload = null, $extraHeaders = []) {
     }
 
     $response = file_get_contents($url . '/rest/v1/' . $path, false, stream_context_create($context));
-    $status = 0;
-    if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $matches)) {
+    $headersOut = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : ($http_response_header ?? []);
+    if (isset($headersOut[0]) && preg_match('/\s(\d{3})\s/', $headersOut[0], $matches)) {
         $status = (int) $matches[1];
     }
 
@@ -174,5 +182,243 @@ function blog_row($input) {
         'related_course_ids' => $input['relatedCourseIds'] ?? $input['related_course_ids'] ?? [],
         'updated_at' => gmdate('c'),
     ];
+}
+
+function blog_get_bearer_token() {
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if (preg_match('/^Bearer\s+(.+)$/i', trim($authHeader), $matches)) {
+        return trim($matches[1]);
+    }
+    return '';
+}
+
+function blog_authenticate() {
+    $token = blog_get_bearer_token();
+    if (!$token) {
+        blog_json(401, ['error' => 'Authentication token is required.']);
+    }
+
+    $parts = explode('.', $token);
+
+    // 1. Supabase JWT (Super Admin)
+    if (count($parts) === 3) {
+        $user = null;
+        if (isset($GLOBALS['__BLOG_AUTH_HOOK__']) && is_callable($GLOBALS['__BLOG_AUTH_HOOK__'])) {
+            $user = call_user_func($GLOBALS['__BLOG_AUTH_HOOK__'], $token);
+        } else {
+            $env = blog_load_env();
+            $url = rtrim($env['NEXT_PUBLIC_SUPABASE_URL'] ?? $env['REACT_APP_SUPABASE_URL'] ?? '', '/');
+            $anonKey = $env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? $env['REACT_APP_SUPABASE_ANON_KEY'] ?? ($env['SUPABASE_SERVICE_ROLE_KEY'] ?? '');
+
+            if (!$url || !$anonKey) {
+                blog_json(500, ['error' => 'Supabase environment configuration missing.']);
+            }
+
+            $headers = [
+                'apikey: ' . $anonKey,
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json'
+            ];
+            $context = [
+                'http' => [
+                    'method' => 'GET',
+                    'header' => implode("\r\n", $headers),
+                    'ignore_errors' => true
+                ]
+            ];
+            $res = file_get_contents($url . '/auth/v1/user', false, stream_context_create($context));
+            $status = 0;
+            $headersOut = function_exists('http_get_last_response_headers') ? http_get_last_response_headers() : ($http_response_header ?? []);
+            if (isset($headersOut[0]) && preg_match('/\s(\d{3})\s/', $headersOut[0], $matches)) {
+                $status = (int)$matches[1];
+            }
+
+            if ($status === 200) {
+                $user = json_decode($res, true);
+            }
+        }
+
+        if (!is_array($user) || empty($user['id'])) {
+            blog_json(401, ['error' => 'Invalid or expired Super Admin credentials.']);
+        }
+
+        $isTrustedAdmin = false;
+        $isTrustedContributor = false;
+        $actorId = $user['id'];
+        $actorName = $user['email'] ?? 'Administrator';
+        $permissions = [];
+
+        // Check server app_metadata (service role only; cannot be edited by client)
+        if (($user['app_metadata']['role'] ?? '') === 'admin' || !empty($user['app_metadata']['claims_admin'])) {
+            $isTrustedAdmin = true;
+        }
+
+        // Query users table for server authority and active status
+        $userRecord = null;
+        try {
+            $queryPath = !empty($user['email'])
+                ? 'users?select=id,full_name,email,role,status,custom_roles(permissions),permissions&email=eq.' . rawurlencode($user['email']) . '&limit=1'
+                : 'users?select=id,full_name,email,role,status,custom_roles(permissions),permissions&id=eq.' . rawurlencode($user['id']) . '&limit=1';
+            $userRows = blog_request('GET', $queryPath);
+            $userRecord = is_array($userRows) ? ($userRows[0] ?? null) : null;
+        } catch (Exception $e) {
+            // Ignore lookup error
+        }
+
+        if ($userRecord) {
+            if (($userRecord['status'] ?? '') !== 'active') {
+                blog_json(403, ['error' => 'Account is inactive, suspended, or demoted.']);
+            }
+
+            $actorId = $userRecord['id'] ?? $actorId;
+            $actorName = $userRecord['full_name'] ?? $actorName;
+
+            if (($userRecord['role'] ?? '') === 'admin') {
+                $isTrustedAdmin = true;
+            } else {
+                $isTrustedAdmin = false;
+                $perms = $userRecord['custom_roles']['permissions'] ?? ($userRecord['permissions'] ?? []);
+                if (($perms['blog'] ?? '') === 'full') {
+                    $isTrustedContributor = true;
+                    $permissions = $perms;
+                }
+            }
+        }
+
+        if ($isTrustedAdmin) {
+            return [
+                'isAdmin' => true,
+                'isContributor' => false,
+                'actorId' => $actorId,
+                'actorName' => $actorName,
+                'role' => 'admin'
+            ];
+        }
+
+        if ($isTrustedContributor) {
+            return [
+                'isAdmin' => false,
+                'isContributor' => true,
+                'actorId' => $actorId,
+                'actorName' => $actorName,
+                'role' => 'contributor',
+                'permissions' => $permissions
+            ];
+        }
+
+        blog_json(403, ['error' => 'Access denied: account does not have blog management authority.']);
+    }
+
+    // 2. Portal Session Token (<uuid>.<secret>)
+    if (count($parts) === 2 && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $parts[0])) {
+        $rowId = $parts[0];
+        $rawSecret = $parts[1];
+
+        // Check portal_sessions table
+        $row = null;
+        try {
+            $rows = blog_request('GET', 'portal_sessions?select=*&id=eq.' . rawurlencode($rowId) . '&limit=1');
+            $row = is_array($rows) ? ($rows[0] ?? null) : null;
+        } catch (Exception $e) {
+            // fallback
+        }
+
+        if (!$row) {
+            $rows = blog_request('GET', 'login_otps?select=id,cnic,role,token_hash,token_expires_at&id=eq.' . rawurlencode($rowId) . '&limit=1');
+            $row = is_array($rows) ? ($rows[0] ?? null) : null;
+            if ($row) {
+                $row['expires_at'] = $row['token_expires_at'] ?? null;
+                $row['revoked_at'] = null;
+                $row['actor_id'] = null;
+            }
+        }
+
+        if (!$row || empty($row['token_hash'])) {
+            blog_json(401, ['error' => 'Session not found or expired. Please log in again.']);
+        }
+
+        if (!empty($row['revoked_at'])) {
+            blog_json(401, ['error' => 'Session has been revoked. Please log in again.']);
+        }
+
+        if (empty($row['expires_at'])) {
+            blog_json(401, ['error' => 'Session expiry is missing. Please log in again.']);
+        }
+
+        $expiry = strtotime($row['expires_at']);
+        if ($expiry === false) {
+            blog_json(401, ['error' => 'Session expiry is invalid. Please log in again.']);
+        }
+
+        if ($expiry <= time()) {
+            blog_json(401, ['error' => 'Session expired. Please log in again.']);
+        }
+
+        if (!password_verify($rawSecret, $row['token_hash'])) {
+            blog_json(401, ['error' => 'Invalid authentication token.']);
+        }
+
+        // Check users table by CNIC for trusted authority
+        $directoryUser = null;
+        try {
+            $userRows = blog_request('GET', 'users?select=id,full_name,role,status,custom_roles(permissions),permissions&cnic=eq.' . rawurlencode($row['cnic']) . '&limit=1');
+            $directoryUser = is_array($userRows) ? ($userRows[0] ?? null) : null;
+        } catch (Exception $e) {
+            // fallback
+        }
+
+        if ($directoryUser) {
+            if (($directoryUser['status'] ?? '') !== 'active') {
+                blog_json(403, ['error' => 'Staff account is inactive, suspended, or demoted.']);
+            }
+
+            if (($directoryUser['role'] ?? '') === 'admin') {
+                return [
+                    'isAdmin' => true,
+                    'isContributor' => false,
+                    'actorId' => $directoryUser['id'] ?? ($row['actor_id'] ?? $row['cnic']),
+                    'actorName' => $directoryUser['full_name'] ?? 'DeepSkills Admin',
+                    'role' => 'admin'
+                ];
+            }
+
+            $perms = $directoryUser['custom_roles']['permissions'] ?? ($directoryUser['permissions'] ?? []);
+            if (($perms['blog'] ?? '') === 'full') {
+                return [
+                    'isAdmin' => false,
+                    'isContributor' => true,
+                    'actorId' => $directoryUser['id'] ?? ($row['actor_id'] ?? $row['cnic']),
+                    'actorName' => $directoryUser['full_name'] ?? 'Blog Contributor',
+                    'role' => 'contributor',
+                    'permissions' => $perms
+                ];
+            }
+
+            blog_json(403, ['error' => 'Access denied: insufficient permissions to manage blog posts.']);
+        }
+
+        // If user is not in users table, check allowed_cnics where role = 'admin'
+        if (($row['role'] ?? '') === 'admin') {
+            try {
+                $allowedRows = blog_request('GET', 'allowed_cnics?select=cnic,role,name&cnic=eq.' . rawurlencode($row['cnic']) . '&limit=1');
+                $allowed = is_array($allowedRows) ? ($allowedRows[0] ?? null) : null;
+                if ($allowed && ($allowed['role'] ?? '') === 'admin') {
+                    return [
+                        'isAdmin' => true,
+                        'isContributor' => false,
+                        'actorId' => $row['actor_id'] ?? $row['cnic'],
+                        'actorName' => $allowed['name'] ?? 'DeepSkills Admin',
+                        'role' => 'admin'
+                    ];
+                }
+            } catch (Exception $e) {
+                // fallback
+            }
+        }
+
+        blog_json(403, ['error' => 'Access denied: account does not have blog management authority.']);
+    }
+
+    blog_json(401, ['error' => 'Invalid authentication token format.']);
 }
 ?>

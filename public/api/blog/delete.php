@@ -10,8 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'DELETE') {
     blog_json(405, ['error' => 'Method not allowed']);
 }
 
-$payload = json_decode(file_get_contents('php://input'), true) ?: [];
-if (($payload['actor']['role'] ?? '') !== 'admin') {
+$auth = blog_authenticate();
+if (empty($auth['isAdmin'])) {
     blog_json(403, ['error' => 'Only admins can delete blog posts.']);
 }
 

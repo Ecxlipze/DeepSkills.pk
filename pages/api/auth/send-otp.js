@@ -1,5 +1,5 @@
-import { getSupabaseServerClient } from '../../../lib/supabaseServer';
-import { normalizeCnic, findAccountByCnic, hashPassword, sendOtpEmail } from '../../../lib/portalAuthServer';
+import { getSupabaseServerClient } from '../../../lib/supabaseServer.js';
+import { normalizeCnic, findAccountByCnic, hashPassword, sendOtpEmail } from '../../../lib/portalAuthServer.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ status: 'error', message: 'Method not allowed' });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = req.__supabase || getSupabaseServerClient();
   if (!supabase) {
     return res.status(500).json({ status: 'error', message: 'Database client unavailable.' });
   }
@@ -61,13 +61,16 @@ export default async function handler(req, res) {
     }
 
     const masked = account.email.replace(/(^.).*(@.*$)/, '$1***$2');
-    return res.status(200).json({
+    const responsePayload = {
       status: 'success',
       message: 'OTP sent to your registered email.',
       email: masked,
-      expiresInSeconds: 600,
-      devOtp: mailResult.devOtp
-    });
+      expiresInSeconds: 600
+    };
+    if (mailResult.devOtp) {
+      responsePayload.devOtp = mailResult.devOtp;
+    }
+    return res.status(200).json(responsePayload);
   } catch (err) {
     console.error('[send-otp] Unexpected error:', err);
     return res.status(500).json({ status: 'error', message: err.message || 'Unable to process login request.' });

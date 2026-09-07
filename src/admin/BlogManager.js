@@ -15,6 +15,7 @@ import { supabase } from '../supabaseClient';
 import { BLOG_CATEGORIES, calculateReadingTime, countWords, makeExcerpt, slugify } from '../../lib/blog';
 import { requestRevalidate } from '../utils/revalidatePublic';
 import { canAccess } from '../utils/permissions';
+import { getAuthHeaders } from '../utils/adminAccessApi';
 
 const EMPTY_CONTENT = '<p></p>';
 const MAX_TITLE_LENGTH = 120;
@@ -159,13 +160,25 @@ function BlogList() {
       toast.error('You have view-only access to blog management.');
       return;
     }
-    if (!selectedIds.length || !window.confirm('Delete selected blog posts?')) return;
-    const { error } = await supabase.from('blog_posts').delete().in('id', selectedIds);
-    if (error) {
-      toast.error(error.message);
-      return;
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} selected blog posts?`)) return;
+    const authHeaders = await getAuthHeaders();
+    const results = await Promise.all(
+      selectedIds.map((id) =>
+        fetch(`/api/blog/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          }
+        })
+      )
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length > 0) {
+      toast.error(`Failed to delete ${failed.length} post(s). Admin access is required.`);
+    } else {
+      toast.success('Selected posts deleted');
     }
-    toast.success('Selected posts deleted');
     setSelectedIds([]);
     fetchPosts();
   };
@@ -176,10 +189,13 @@ function BlogList() {
       return;
     }
     if (!window.confirm(`Delete "${post.title}"?`)) return;
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(`/api/blog/${post.id}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actor: { id: actorId, role: user?.role || '', permissions: user?.permissions || {} } })
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      }
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -204,10 +220,14 @@ function BlogList() {
       is_featured: false,
       published_at: null
     };
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/blog', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...dbToForm(copy), actor: { id: actorId, role: user?.role || '', permissions: user?.permissions || {} } })
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify(dbToForm(copy))
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -224,10 +244,14 @@ function BlogList() {
       return;
     }
     const nextStatus = post.status === 'published' ? 'draft' : 'published';
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/blog', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...dbToForm({ ...post, status: nextStatus }), actor: { id: actorId, role: user?.role || '', permissions: user?.permissions || {} } })
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify(dbToForm({ ...post, status: nextStatus }))
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -599,14 +623,7 @@ function BlogEditor({ postId }) {
       slug: slugify(form.slug || form.title),
       excerpt: form.excerpt || makeExcerpt(form.contentHtml),
       readingTime: calculateReadingTime(form.contentHtml),
-      authorId: form.authorId || actorId,
-      authorName: form.authorName || user?.name || 'Blog Writer',
-      isFeatured: isAdmin ? form.isFeatured : false,
-      actor: {
-        id: actorId,
-        role: user?.role || '',
-        permissions: user?.permissions || {}
-      }
+      isFeatured: isAdmin ? form.isFeatured : false
     };
 
     if (!payload.title || !payload.slug) {
@@ -627,9 +644,13 @@ function BlogEditor({ postId }) {
     }
 
     setSaving(true);
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/blog', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
       body: JSON.stringify(payload)
     });
     const body = await response.json().catch(() => ({}));

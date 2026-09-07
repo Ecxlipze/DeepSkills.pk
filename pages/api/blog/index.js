@@ -1,7 +1,6 @@
-import { getSupabaseServerClient } from '../../../lib/supabaseServer';
-import { BLOG_LIMITS, countWords, slugify, toBlogRow, normalizePost } from '../../../lib/blog';
-
-const isAdminActor = (actor = {}) => actor.role === 'admin';
+import { getSupabaseServerClient } from '../../../lib/supabaseServer.js';
+import { BLOG_LIMITS, countWords, slugify, toBlogRow, normalizePost } from '../../../lib/blog.js';
+import { authenticateBlogActor } from '../../../lib/portalAuthServer.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,24 +8,32 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = req.__supabase || getSupabaseServerClient();
   if (!supabase) {
     return res.status(500).json({ error: 'Supabase environment variables are missing.' });
   }
 
+  const auth = await authenticateBlogActor(req, supabase);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ error: auth.error });
+  }
+
   const payload = req.body || {};
-  const actor = payload.actor || {};
-  const adminActor = isAdminActor(actor);
   const requestedRow = toBlogRow(payload);
-  const row = adminActor
-    ? requestedRow
+  const row = auth.isAdmin
+    ? {
+        ...requestedRow,
+        author_id: requestedRow.author_id || auth.actorId,
+        author_name: requestedRow.author_name || auth.actorName
+      }
     : {
         ...requestedRow,
         status: 'draft',
         is_featured: false,
         published_at: null,
         scheduled_at: null,
-        author_id: requestedRow.author_id || actor.id || null
+        author_id: auth.actorId,
+        author_name: auth.actorName
       };
 
   if (!row.title || !row.slug) {
@@ -42,7 +49,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Tags exceed the allowed limit.' });
   }
 
-  if (!adminActor && payload.id) {
+  if (!auth.isAdmin && payload.id) {
     const { data: existing, error: existingError } = await supabase
       .from('blog_posts')
       .select('id, author_id, status')
@@ -53,12 +60,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Draft not found.' });
     }
 
-    if (existing.author_id !== actor.id || existing.status !== 'draft') {
+    if (existing.status !== 'draft') {
+      return res.status(403).json({ error: 'Contributors can only edit draft posts.' });
+    }
+
+    if (existing.author_id !== auth.actorId) {
       return res.status(403).json({ error: 'Contributors can only edit their own drafts.' });
     }
   }
 
-  if (adminActor && row.is_featured) {
+  if (auth.isAdmin && row.is_featured) {
     await supabase.from('blog_posts').update({ is_featured: false }).eq('is_featured', true);
   }
 

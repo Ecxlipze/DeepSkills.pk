@@ -10,17 +10,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     blog_json(405, ['error' => 'Method not allowed']);
 }
 
-$payload = json_decode(file_get_contents('php://input'), true) ?: [];
-$actor = $payload['actor'] ?? [];
-$isAdmin = ($actor['role'] ?? '') === 'admin';
-$row = blog_row($payload);
+$auth = blog_authenticate();
+$isAdmin = !empty($auth['isAdmin']);
+$actorId = $auth['actorId'];
+$actorName = $auth['actorName'];
 
-if (!$isAdmin) {
+$payload = isset($GLOBALS['__BLOG_INPUT__'])
+    ? (is_string($GLOBALS['__BLOG_INPUT__']) ? json_decode($GLOBALS['__BLOG_INPUT__'], true) : $GLOBALS['__BLOG_INPUT__'])
+    : (json_decode(file_get_contents('php://input'), true) ?: []);
+$row = blog_row($payload ?: []);
+
+if ($isAdmin) {
+    $row['author_id'] = $row['author_id'] ?: $actorId;
+    $row['author_name'] = $row['author_name'] ?: $actorName;
+} else {
     $row['status'] = 'draft';
     $row['is_featured'] = false;
     $row['published_at'] = null;
     $row['scheduled_at'] = null;
-    $row['author_id'] = $row['author_id'] ?: ($actor['id'] ?? null);
+    $row['author_id'] = $actorId;
+    $row['author_name'] = $actorName;
 }
 
 if (!$row['title'] || !$row['slug']) {
@@ -36,7 +45,10 @@ if (!$isAdmin && !empty($payload['id'])) {
     $existing = blog_request('GET', "blog_posts?id=eq.$id&select=id,author_id,status");
     $existing = $existing[0] ?? null;
     if (!$existing) blog_json(404, ['error' => 'Draft not found.']);
-    if (($existing['author_id'] ?? '') !== ($actor['id'] ?? '') || ($existing['status'] ?? '') !== 'draft') {
+    if (($existing['status'] ?? '') !== 'draft') {
+        blog_json(403, ['error' => 'Contributors can only edit draft posts.']);
+    }
+    if (($existing['author_id'] ?? '') !== $actorId) {
         blog_json(403, ['error' => 'Contributors can only edit their own drafts.']);
     }
 }

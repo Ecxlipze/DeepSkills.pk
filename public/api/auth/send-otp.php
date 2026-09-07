@@ -64,12 +64,12 @@ otp_supabase_request(
     'return=minimal'
 );
 
-$isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true) ||
-    strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false ||
-    strpos($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') !== false;
+$env = otp_load_env_file();
+$appEnv = getenv('APP_ENV') ?: (getenv('NODE_ENV') ?: ($env['APP_ENV'] ?? ($env['NODE_ENV'] ?? 'production')));
+$isDev = ($appEnv === 'development');
 
 $mailSent = otp_send_mail($email, $name, $code);
-if (!$mailSent && !$isLocal) {
+if (!$mailSent && !$isDev) {
     otp_respond(500, ['status' => 'error', 'message' => 'Unable to send OTP email. Please try again.']);
 }
 
@@ -80,7 +80,7 @@ $responsePayload = [
     'email' => $masked,
     'expiresInSeconds' => 600,
 ];
-if ($isLocal) {
+if ($isDev) {
     $responsePayload['devOtp'] = $code;
 }
 
