@@ -1,14 +1,15 @@
 export const site = {
   name: 'DeepSkills',
-  url: process.env.NEXT_PUBLIC_SITE_URL || 'https://deepskills.pk',
+  url: (process.env.NEXT_PUBLIC_SITE_URL || 'https://deepskills.pk').replace(/\/+$/, ''),
   title: 'DeepSkills - Online Skill Development Courses in Pakistan',
   description:
     'DeepSkills offers practical skill development courses in Pakistan for full stack development, Laravel, WordPress, graphic design, UI/UX, and digital marketing.',
-  phone: '+92 300 0000000',
+  phone: (process.env.NEXT_PUBLIC_BUSINESS_PHONE || '').trim(),
   email: 'info@deepskills.pk',
   logo: '/favicon.svg',
   socialImage: '/logo512.png',
   address: {
+    street: '58 A2, Tipu Road Gulberg III',
     locality: 'Lahore',
     region: 'Punjab',
     country: 'PK'

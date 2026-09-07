@@ -103,7 +103,9 @@ export default function BlogPost({ post, relatedPosts, relatedCourses }) {
   if (!livePost) {
     return (
       <PublicLayout>
-        <Seo title="Blog" path="/blogs" noindex />
+        {/* Keep the initial export shell crawlable. Google may skip rendering
+            HTML that starts with noindex, even if JS later removes it. */}
+        <Seo title="Blog" path={null} noindex={notFound} />
         <ArticleShell>
           <EmptyState>{notFound ? 'Blog post not found.' : 'Loading blog post...'}</EmptyState>
           <BackLink href="/blogs" whileHover={{ x: -4 }} whileTap={{ scale: 0.98 }}>Back to Blogs</BackLink>

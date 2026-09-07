@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   FaCopy, FaShareAlt, FaWhatsapp, FaInfoCircle,
   FaHourglassHalf, FaUserFriends,
-  FaWallet, FaCheck
+  FaWallet, FaCheck, FaMoneyBillWave
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
@@ -39,13 +39,15 @@ const HeroCard = styled(motion.div)`
   box-shadow: 0 20px 40px rgba(31, 66, 123, 0.3);
 
   &::after {
-    content: '💸';
+    content: '';
     position: absolute;
-    top: -10px;
-    right: -10px;
-    font-size: 120px;
-    opacity: 0.1;
-    transform: rotate(15deg);
+    top: -50px;
+    right: -50px;
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
   }
 `;
 
@@ -318,7 +320,9 @@ const ReferralPage = () => {
           animate={{ opacity: 1, y: 0 }}
         >
           <HeroContent>
-            <h1>Refer & Earn 💸</h1>
+            <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              Refer &amp; Earn <FaMoneyBillWave style={{ color: '#fbbf24', fontSize: '2rem' }} />
+            </h1>
             <p>Invite friends to join DeepSkill and earn rewards when they enroll in their first course.</p>
 
             <CodeBox>
@@ -385,6 +389,11 @@ const ReferralPage = () => {
                   <div className="info">
                     <h4>{ref.referred_name}</h4>
                     <p>{new Date(ref.referred_at).toLocaleDateString()}</p>
+                    {ref.payout_reference && (
+                      <span style={{ fontSize: '0.72rem', color: '#10b981', display: 'block', marginTop: '2px' }}>
+                        Ref: {ref.payout_reference}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -406,9 +415,9 @@ const ReferralPage = () => {
 
                 <div className={`reward-badge ${ref.payout_status}`}>
                   {ref.payout_status === 'paid' ? (
-                    <><FaCheck /> Rs. {ref.reward_amount} — Paid</>
+                    <><FaCheck /> Rs. {Number(ref.reward_amount || 1000).toLocaleString()} — Paid {ref.payout_method ? `(${ref.payout_method.replace('_', ' ')})` : ''}</>
                   ) : ref.payout_status === 'pending' ? (
-                    <><FaHourglassHalf /> Rs. {ref.reward_amount} — Pending</>
+                    <><FaHourglassHalf /> Rs. {Number(ref.reward_amount || 1000).toLocaleString()} — Pending Disbursal</>
                   ) : (
                     "Reward pending enrollment"
                   )}

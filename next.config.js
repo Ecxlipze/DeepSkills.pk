@@ -16,7 +16,8 @@ const isExport = process.env.NEXT_OUTPUT === 'export';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  ...(isExport ? { output: 'export', trailingSlash: true } : {}),
+  ...(isExport ? { output: 'export' } : {}),
+  trailingSlash: true,
   // Next writes the static export into distDir, so give it its own directory
   // to keep deployable output separate from the Node build.
   distDir: isExport ? 'out' : 'next-build',
@@ -73,6 +74,11 @@ const nextConfig = {
   async redirects() {
     if (isExport) return [];
     return [
+      {
+        source: '/blogs/post',
+        destination: '/blogs/',
+        permanent: true
+      },
       {
         source: '/full-stack-react',
         destination: '/courses/full-stack-react',

@@ -14,7 +14,8 @@ export default function Seo({
   modifiedTime
 }) {
   const fullTitle = pageTitle(title);
-  const url = canonical(path);
+  // A client-loaded article has no known canonical until its slug is resolved.
+  const url = path === null ? null : canonical(path);
   const socialImage = absoluteUrl(image || site.socialImage);
   const structuredData = Array.isArray(jsonLd) ? jsonLd : [jsonLd];
   const gscVerification = process.env.NEXT_PUBLIC_GSC_VERIFICATION;
@@ -24,14 +25,14 @@ export default function Seo({
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
       <meta name="robots" content={noindex ? 'noindex,nofollow' : 'index,follow'} />
-      <link rel="canonical" href={url} />
+      {url ? <link rel="canonical" href={url} /> : null}
       {gscVerification ? <meta name="google-site-verification" content={gscVerification} /> : null}
       <meta property="og:site_name" content={site.name} />
       <meta property="og:locale" content="en_PK" />
       <meta property="og:type" content={type} />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
-      <meta property="og:url" content={url} />
+      {url ? <meta property="og:url" content={url} /> : null}
       <meta property="og:image" content={socialImage} />
       {publishedTime ? <meta property="article:published_time" content={publishedTime} /> : null}
       {modifiedTime ? <meta property="article:modified_time" content={modifiedTime} /> : null}

@@ -429,6 +429,7 @@ const StudentProfile = ({ studentId }) => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentReference, setPaymentReference] = useState('');
+  const [referralInfo, setReferralInfo] = useState({ code: null, list: [] });
 
   const fetchStudentData = React.useCallback(async () => {
     setLoading(true);
@@ -486,6 +487,24 @@ const StudentProfile = ({ studentId }) => {
         paid: paidAmount,
         plan: plan,
         payments: payments || []
+      });
+
+      // 6. Fetch Referral Code & Referral History
+      const { data: codeData } = await supabase
+        .from('referral_codes')
+        .select('code')
+        .eq('user_id', id)
+        .maybeSingle();
+
+      const { data: userRefs } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('referrer_id', id)
+        .order('referred_at', { ascending: false });
+
+      setReferralInfo({
+        code: codeData?.code || null,
+        list: userRefs || []
       });
 
     } catch (err) {
@@ -1293,6 +1312,93 @@ const StudentProfile = ({ studentId }) => {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+
+                        {/* Referral Rewards & Recruitment Section */}
+                        <div style={{ marginTop: '30px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div>
+                              <h4 style={{ margin: 0, color: '#fff', fontSize: '0.95rem', fontWeight: '700' }}>
+                                Referral Program &amp; Concessions
+                              </h4>
+                              <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '0.8rem' }}>
+                                Commission rewards and fee discounts earned by this student for referring new enrollments.
+                              </p>
+                            </div>
+                            {referralInfo.code && (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <span style={{ fontSize: '0.74rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '700' }}>Code:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#38bdf8' }}>{referralInfo.code}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {student?.referred_by && (
+                            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.84rem', color: '#bae6fd' }}>
+                              Referred to DeepSkills by: <strong>{student.referred_by}</strong>
+                            </div>
+                          )}
+
+                          <StatsGrid style={{ marginBottom: '16px' }}>
+                            <MiniStat>
+                              <div className="val">{referralInfo.list.length}</div>
+                              <div className="lab">Referrals Made</div>
+                            </MiniStat>
+                            <MiniStat>
+                              <div className="val" style={{ color: '#10B981' }}>
+                                {referralInfo.list.filter(r => r.status === 'enrolled' || r.status === 'approved').length}
+                              </div>
+                              <div className="lab">Enrolled</div>
+                            </MiniStat>
+                            <MiniStat>
+                              <div className="val" style={{ color: '#A78BFA' }}>
+                                Rs. {referralInfo.list.filter(r => r.payout_status === 'paid').reduce((sum, r) => sum + Number(r.reward_amount || 0), 0).toLocaleString()}
+                              </div>
+                              <div className="lab">Rewards Earned</div>
+                            </MiniStat>
+                          </StatsGrid>
+
+                          {referralInfo.list.length > 0 && (
+                            <div style={{ background: '#0a0a0a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.86rem' }}>
+                                <thead>
+                                  <tr style={{ textAlign: 'left', color: '#666', background: 'rgba(255,255,255,0.02)' }}>
+                                    <th style={{ padding: '12px 15px' }}>Referred Person</th>
+                                    <th style={{ padding: '12px 15px' }}>Reward</th>
+                                    <th style={{ padding: '12px 15px' }}>Logged Date</th>
+                                    <th style={{ padding: '12px 15px' }}>Enrollment</th>
+                                    <th style={{ padding: '12px 15px' }}>Payout Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {referralInfo.list.map(r => (
+                                    <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                      <td style={{ padding: '12px 15px', fontWeight: '600', color: '#fff' }}>
+                                        {r.referred_name || 'Prospective Student'}
+                                        {r.referred_phone && <span style={{ display: 'block', fontSize: '0.74rem', color: '#64748b' }}>{r.referred_phone}</span>}
+                                      </td>
+                                      <td style={{ padding: '12px 15px', color: '#34D399', fontWeight: '700' }}>
+                                        Rs. {Number(r.reward_amount || 1000).toLocaleString()} ({r.reward_type === 'fee_discount' ? 'Fee Concession' : 'Cash'})
+                                      </td>
+                                      <td style={{ padding: '12px 15px', color: '#94a3b8' }}>
+                                        {r.referred_at ? r.referred_at.slice(0, 10) : '—'}
+                                      </td>
+                                      <td style={{ padding: '12px 15px' }}>
+                                        <span style={{ fontSize: '0.74rem', fontWeight: '700', padding: '2px 8px', borderRadius: '6px', background: r.status === 'enrolled' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: r.status === 'enrolled' ? '#10B981' : '#F59E0B' }}>
+                                          {r.status || 'Registered'}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding: '12px 15px' }}>
+                                        <span style={{ fontSize: '0.74rem', fontWeight: '700', color: r.payout_status === 'paid' ? '#10B981' : (r.payout_status === 'pending' ? '#F59E0B' : '#64748b') }}>
+                                          {r.payout_status === 'paid' ? 'Disbursed' : (r.payout_status === 'pending' ? 'Pending Approval' : 'Ineligible')}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}

@@ -1,9 +1,10 @@
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://deepskills.pk';
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://deepskills.pk').replace(/\/+$/, '');
 const isExport = process.env.NEXT_OUTPUT === 'export';
 
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
   siteUrl,
+  trailingSlash: true,
   generateRobotsTxt: true,
   sitemapSize: 7000,
   // Static export writes pages to out/, and the sitemap must ship with them.

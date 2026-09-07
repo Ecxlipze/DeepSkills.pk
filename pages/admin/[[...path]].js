@@ -38,6 +38,7 @@ const AdminComplaints = dynamic(() => import('../../src/admin/AdminComplaints'),
 const AdminFinance = dynamic(() => import('../../src/admin/FinanceManager'), { ssr: false });
 const AdminFinanceTransactions = dynamic(() => import('../../src/admin/TransactionHistory'), { ssr: false });
 const AdminReferral = dynamic(() => import('../../src/admin/AdminReferral'), { ssr: false });
+const AdminRevenueReport = dynamic(() => import('../../src/admin/RevenueReport'), { ssr: false });
 const AdminResults = dynamic(() => import('../../src/admin/AdminResults'), { ssr: false });
 const BlogManager = dynamic(() => import('../../src/admin/BlogManager'), { ssr: false });
 const TestimonialManager = dynamic(() => import('../../src/admin/TestimonialManager'), { ssr: false });
@@ -125,7 +126,7 @@ function getAdminPage(path = []) {
   if (section === 'finance') {
     if (child === 'transactions') return <AdminFinanceTransactions />;
     if (child === 'referrals') return <AdminReferral />;
-    if (child === 'reports') return <ReportsSystem mode="finance" />;
+    if (child === 'reports') return <AdminRevenueReport />;
     if (child === 'settings') return <DepartmentHubRedirect departmentId="finance" currentPath="/admin/finance/settings" />;
     return <AdminFinance initialTab={child || 'overview'} />;
   }

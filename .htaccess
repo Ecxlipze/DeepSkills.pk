@@ -8,6 +8,16 @@ RewriteRule (^|/)\. - [F]
 RewriteRule ^(node_modules|next-build|src|pages|lib|components|supabase|scripts)(/|$) - [F]
 RewriteRule \.(env|lock|log|md|sql|zip|tar\.gz)$ - [F]
 
+# The fallback shell is an implementation detail, not a public article URL.
+# Match the original request so internal blog rewrites do not redirect.
+RewriteCond %{THE_REQUEST} \s/+blogs/post(?:/index\.html|/)?(?:[?\s]) [NC]
+RewriteRule ^blogs/post(?:/index\.html|/)?$ /blogs/ [R=301,L]
+
+# Match the trailing-slash canonicals, including new blog slugs without a
+# generated directory. Limit this to public pages; API requests are unchanged.
+RewriteCond %{THE_REQUEST} \s/+[^?\s]*[^/\s](?:\?[^\s]*)?\s
+RewriteRule ^((?:about|contact|courses|founder-message|inquiry|login|media|trainers|verify-certificate|blogs)|(?:courses|blogs)/[a-z0-9-]+)$ /$1/ [R=301,L]
+
 # Portal routes must always use the latest generated shell. Keep these before
 # the existing-file checks so stale nested folders cannot shadow new builds.
 RewriteRule ^admin(?:/(?!index\.html).*)?$ /admin/index.html [L]

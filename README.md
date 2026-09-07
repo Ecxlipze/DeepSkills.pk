@@ -43,6 +43,7 @@ npm run dev            # http://localhost:3000
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only key used by `getStaticProps` and Next API routes |
 | `REVALIDATE_SECRET` / `NEXT_PUBLIC_REVALIDATE_SECRET` | Same value; authorizes on-demand ISR from the admin panel |
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin (defaults to `https://deepskills.pk`) |
+| `NEXT_PUBLIC_BUSINESS_PHONE` | Verified public phone for structured data; omitted when unset. For GitHub Actions, set the repository variable of the same name. |
 | `NEXT_PUBLIC_GSC_VERIFICATION` | Optional Google Search Console meta tag |
 | `CRON_SECRET` | Auth for the notifications-cleanup cron route |
 
@@ -66,6 +67,8 @@ npm run build:static   # writes a deployable static site to out/
 ```
 
 Upload `out/` plus the root `.htaccess`. ISR is unavailable in this mode — content publishes require a rebuild + re-upload (`public/api/revalidate.php` is the hook point for automating this via CI). New blog posts are served by the `/blogs/post` client-side shell until the next rebuild.
+
+Public page canonicals and sitemaps use trailing slashes in both deployment modes. The static blog fallback starts without `noindex` or a canonical pointing to the blog list; after loading, a published article supplies its own metadata, while a missing article receives `noindex`. New posts still need JavaScript until rebuilt, so keep the content rebuild workflow enabled. Direct requests to `/blogs/post/` redirect to `/blogs/`.
 
 ## Project Structure
 
