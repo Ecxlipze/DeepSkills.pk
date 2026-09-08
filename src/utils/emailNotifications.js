@@ -1,3 +1,5 @@
+import { getAuthHeaders } from './adminAccessApi';
+
 const EMAIL_ENDPOINT = process.env.NEXT_PUBLIC_EMAIL_ENDPOINT || '/api/admission-email.php';
 const FALLBACK_EMAIL_ENDPOINT = '/api/admission-email.php';
 
@@ -22,6 +24,7 @@ export async function sendAdmissionEmail(event, payload = {}) {
 
   try {
     const requestBody = JSON.stringify({ event, ...payload });
+    const headers = { 'Content-Type': 'application/json', ...await getAuthHeaders() };
     let response;
     let result;
 
@@ -32,7 +35,7 @@ export async function sendAdmissionEmail(event, payload = {}) {
     try {
       response = await fetch('/api/admission-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: requestBody
       });
       result = await response.json().catch(() => ({}));
@@ -41,12 +44,12 @@ export async function sendAdmissionEmail(event, payload = {}) {
     }
 
     // 2. Fall back to PHP endpoint ONLY if not on localhost and Next route is not present (404)
-    if (!isLocalhost && (!response || response.status === 404)) {
+    if (!isLocalhost && response?.status === 404) {
       const targetEndpoint = EMAIL_ENDPOINT || FALLBACK_EMAIL_ENDPOINT;
       try {
         response = await fetch(targetEndpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: requestBody
         });
         result = await response.json().catch(() => ({}));
@@ -55,10 +58,10 @@ export async function sendAdmissionEmail(event, payload = {}) {
       }
     }
 
-    if (!response.ok || result.status === 'error') {
+    if (!response?.ok || result?.status !== 'success') {
       return {
         ok: false,
-        message: result.message || `Email request failed with status ${response.status}.`
+        message: result?.message || `Email could not be confirmed${response ? ` (HTTP ${response.status})` : ''}.`
       };
     }
 

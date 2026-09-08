@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       // 2. Fetch Active Admissions
       let admQuery = supabase
         .from('admissions')
-        .select('id, name, cnic, phone, email, course, batch, batch_timing, photo_url, status')
+        .select('id, name, cnic, phone, email, course, batch, batch_timing, status')
         .in('status', ['Active', 'Graduated'])
         .order('name', { ascending: true });
       

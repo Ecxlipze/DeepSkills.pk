@@ -7,6 +7,7 @@ module.exports = {
   trailingSlash: true,
   generateRobotsTxt: true,
   sitemapSize: 7000,
+  sourceDir: isExport ? 'out' : 'next-build',
   // Static export writes pages to out/, and the sitemap must ship with them.
   outDir: isExport ? 'out' : 'public',
   exclude: ['/admin/*', '/admin/blog/*', '/student/*', '/teacher/*', '/api/*', '/login', '/profile', '/server-sitemap.xml', '/blogs/post'],

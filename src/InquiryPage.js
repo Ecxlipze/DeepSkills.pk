@@ -86,6 +86,7 @@ const InquiryPage = () => {
       }
 
       sendAdmissionEmail(EMAIL_EVENTS.INQUIRY_RECEIVED, {
+        inquiry_id: result.data?.id,
         email: payload.email,
         name: payload.name,
         cnic: payload.cnic,

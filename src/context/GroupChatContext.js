@@ -365,7 +365,8 @@ export const GroupChatProvider = ({ children }) => {
       uploadChatFile,
       muteStudent,
       unmuteStudent,
-      fetchMessages
+      fetchMessages,
+      hasAdminChatAccess
     }}>
       {children}
     </GroupChatContext.Provider>

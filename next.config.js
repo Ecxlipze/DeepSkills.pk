@@ -118,32 +118,11 @@ const nextConfig = {
   },
   async rewrites() {
     if (isExport) return [];
-    return [
-      {
-        source: '/api/admin/enroll-counsellor-student.php',
-        destination: '/api/admin/enroll-counsellor-student'
-      },
-      {
-        source: '/api/admission-email.php',
-        destination: '/api/admission-email'
-      },
-      {
-        source: '/api/admin/student-access.php',
-        destination: '/api/admin/student-access'
-      },
-      {
-        source: '/api/admin/teacher-access.php',
-        destination: '/api/admin/teacher-access'
-      },
-      {
-        source: '/api/admin/staff-access.php',
-        destination: '/api/admin/staff-access'
-      },
-      {
-        source: '/api/hr/teacher.php',
-        destination: '/api/hr/teacher'
-      }
-    ];
+    return {
+      beforeFiles: require('./deployment/cpanel/node-api-aliases.json'),
+      afterFiles: [],
+      fallback: []
+    };
   }
 };
 

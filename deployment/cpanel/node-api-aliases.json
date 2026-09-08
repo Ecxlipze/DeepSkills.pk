@@ -1,0 +1,130 @@
+[
+  {
+    "source": "/api/admin/academic/announcements.php",
+    "destination": "/api/admin/academic/announcements"
+  },
+  {
+    "source": "/api/admin/academic/attendance.php",
+    "destination": "/api/admin/academic/attendance"
+  },
+  {
+    "source": "/api/admin/academic/chats.php",
+    "destination": "/api/admin/academic/chats"
+  },
+  {
+    "source": "/api/admin/academic/complaints.php",
+    "destination": "/api/admin/academic/complaints"
+  },
+  {
+    "source": "/api/admin/academic/overview.php",
+    "destination": "/api/admin/academic/overview"
+  },
+  {
+    "source": "/api/admin/academic/results.php",
+    "destination": "/api/admin/academic/results"
+  },
+  {
+    "source": "/api/admin/academic/tasks.php",
+    "destination": "/api/admin/academic/tasks"
+  },
+  {
+    "source": "/api/admin/enroll-counsellor-student.php",
+    "destination": "/api/admin/enroll-counsellor-student"
+  },
+  {
+    "source": "/api/admin/finance/overview.php",
+    "destination": "/api/admin/finance/overview"
+  },
+  {
+    "source": "/api/admin/finance/pay-teacher.php",
+    "destination": "/api/admin/finance/pay-teacher"
+  },
+  {
+    "source": "/api/admin/finance/referrals.php",
+    "destination": "/api/admin/finance/referrals"
+  },
+  {
+    "source": "/api/admin/finance/revenue-report.php",
+    "destination": "/api/admin/finance/revenue-report"
+  },
+  {
+    "source": "/api/admin/finance/settings.php",
+    "destination": "/api/admin/finance/settings"
+  },
+  {
+    "source": "/api/admin/finance/transactions.php",
+    "destination": "/api/admin/finance/transactions"
+  },
+  {
+    "source": "/api/admin/staff-access.php",
+    "destination": "/api/admin/staff-access"
+  },
+  {
+    "source": "/api/admin/student-access.php",
+    "destination": "/api/admin/student-access"
+  },
+  {
+    "source": "/api/admin/teacher-access.php",
+    "destination": "/api/admin/teacher-access"
+  },
+  {
+    "source": "/api/admission-email.php",
+    "destination": "/api/admission-email"
+  },
+  {
+    "source": "/api/auth/logout.php",
+    "destination": "/api/auth/logout"
+  },
+  {
+    "source": "/api/auth/send-otp.php",
+    "destination": "/api/auth/send-otp"
+  },
+  {
+    "source": "/api/auth/validate-session.php",
+    "destination": "/api/auth/validate-session"
+  },
+  {
+    "source": "/api/auth/validate-token.php",
+    "destination": "/api/auth/validate-token"
+  },
+  {
+    "source": "/api/auth/verify-otp.php",
+    "destination": "/api/auth/verify-otp"
+  },
+  {
+    "source": "/api/blog/index.php",
+    "destination": "/api/blog"
+  },
+  {
+    "source": "/api/blog-view.php",
+    "destination": "/api/blog-view"
+  },
+  {
+    "source": "/api/hr/teacher.php",
+    "destination": "/api/hr/teacher"
+  },
+  {
+    "source": "/api/notifications/cleanup.php",
+    "destination": "/api/notifications/cleanup"
+  },
+  {
+    "source": "/api/revalidate.php",
+    "destination": "/api/revalidate"
+  },
+  {
+    "source": "/api/student/attendance.php",
+    "destination": "/api/student/attendance"
+  },
+  {
+    "source": "/api/student/finance.php",
+    "destination": "/api/student/finance"
+  },
+  {
+    "source": "/api/student/results.php",
+    "destination": "/api/student/results"
+  },
+  {
+    "source": "/api/teacher/finance.php",
+    "destination": "/api/teacher/finance"
+  }
+]

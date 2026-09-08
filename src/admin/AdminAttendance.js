@@ -652,7 +652,8 @@ export default function AdminAttendance() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       let url = `/api/admin/academic/attendance?month=${selectedMonth}&date=${selectedDate}`;
       if (selectedBatchId) url += `&batch_id=${encodeURIComponent(selectedBatchId)}`;
 
@@ -660,8 +661,9 @@ export default function AdminAttendance() {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || `Attendance request failed (HTTP ${res.status}).`);
       if (res.ok) {
-        const json = await res.json();
         if (json.status === 'success') {
           const d = json.data || {};
           setBatches(d.batches || []);
@@ -682,52 +684,19 @@ export default function AdminAttendance() {
         }
       }
 
-      // Client Fallback: Direct Supabase Queries
-      const { data: bList } = await supabase.from('batches').select('*').order('batch_name');
-      setBatches(bList || []);
-      const activeBatchId = selectedBatchId || bList?.[0]?.id;
-      if (!selectedBatchId && activeBatchId) setSelectedBatchId(activeBatchId);
-
-      const targetBatch = bList?.find(b => b.id === activeBatchId);
-
-      const { data: sList } = await supabase
-        .from('admissions')
-        .select('id, name, cnic, phone, email, course, batch, photo_url')
-        .in('status', ['Active', 'Graduated'])
-        .eq('batch', targetBatch?.batch_name || '');
-
-      const { data: attList } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('date', selectedDate)
-        .eq('batch_id', activeBatchId);
-
-      const attMap = {};
-      (attList || []).forEach(r => { attMap[r.student_id] = r; });
-
-      const mappedSheet = (sList || []).map(s => {
-        const rec = attMap[s.id];
-        return {
-          student_id: s.id,
-          student_name: s.name,
-          student_cnic: s.cnic,
-          phone: s.phone,
-          status: rec?.status || 'unmarked',
-          reason: rec?.absence_reason || '',
-          is_locked: Boolean(rec?.is_locked),
-          history_pct: 100
-        };
-      });
-
-      setSheetRecords(mappedSheet);
-      setSheetLocked(attList?.length > 0 && attList.every(r => r.is_locked));
+      throw new Error('Failed to load attendance. Please refresh or sign in again.');
     } catch (err) {
-      console.warn('Fallback attendance fetch error:', err);
-      toast.error('Failed to load attendance.');
+      setSheetRecords([]);
+      setStudents([]);
+      setSessions([]);
+      setDefaulters([]);
+      setStats({});
+      console.warn('Attendance fetch error:', err);
+      toast.error(err.message || 'Failed to load attendance.', { duration: 8000 });
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth, selectedDate, selectedBatchId]);
+  }, [selectedMonth, selectedDate, selectedBatchId, user?.sessionToken]);
 
   useEffect(() => {
     fetchData();
@@ -796,7 +765,8 @@ export default function AdminAttendance() {
 
     setSavingSheet(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       const payload = {
         action: 'save_bulk',
         batch_id: selectedBatchId,
@@ -819,7 +789,7 @@ export default function AdminAttendance() {
         throw new Error(json.message || 'Failed to save attendance.');
       }
 
-      toast.success(shouldLock ? 'Attendance saved & locked successfully!' : 'Attendance draft saved!');
+      toast.success(shouldLock ? 'Attendance saved & locked successfully!' : 'Attendance saved and visible to students.');
       setSheetLocked(shouldLock);
       fetchData();
     } catch (err) {
@@ -837,7 +807,8 @@ export default function AdminAttendance() {
 
     setKioskProcessing(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       const res = await fetch('/api/admin/academic/attendance', {
         method: 'POST',
         headers: {
@@ -880,7 +851,8 @@ export default function AdminAttendance() {
       return;
     }
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       const res = await fetch('/api/admin/academic/attendance', {
         method: 'POST',
         headers: {
@@ -906,7 +878,8 @@ export default function AdminAttendance() {
   // Send Low-Attendance Warning
   const handleSendWarning = async (defaulter) => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       const res = await fetch('/api/admin/academic/attendance', {
         method: 'POST',
         headers: {
@@ -946,7 +919,8 @@ export default function AdminAttendance() {
     }
     setSavingOverride(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
       const res = await fetch('/api/admin/academic/attendance', {
         method: 'POST',
         headers: {

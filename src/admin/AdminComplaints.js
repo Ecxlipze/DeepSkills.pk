@@ -15,6 +15,8 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { downloadCsv } from '../utils/csvExport';
 import { supabase } from '../supabaseClient';
+import { getAuthHeaders } from '../utils/adminAccessApi';
+import { requestComplaints } from '../utils/complaintsApi';
 
 // ──────────────────────────────────────────
 // Styled Components (DeepSkills Glassmorphic)
@@ -980,39 +982,11 @@ export function AdminComplaints() {
       if (filterPriority !== 'All') params.append('priority', filterPriority);
 
       const qs = params.toString() ? `?${params.toString()}` : '';
-      const endpoint = `/api/admin/academic/complaints${qs}`;
-
-      const res = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('portal_token') || ''}`,
-          'Accept': 'application/json'
-        }
+      const data = await requestComplaints({
+        headers: await getAuthHeaders(),
+        query: qs
       });
-
-      if (!res.ok) {
-        // Fallback to PHP endpoint if Next.js handler fails
-        const phpRes = await fetch(`/api/admin/academic/complaints.php${qs}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('portal_token') || ''}`,
-            'Accept': 'application/json'
-          }
-        });
-        if (phpRes.ok) {
-          const phpJson = await phpRes.json();
-          if (phpJson.status === 'success') {
-            applyData(phpJson.data);
-            return;
-          }
-        }
-        throw new Error('Failed to load complaints via primary API.');
-      }
-
-      const json = await res.json();
-      if (json.status === 'success') {
-        applyData(json.data);
-      } else {
-        throw new Error(json.message || 'Failed to load tickets.');
-      }
+      applyData(data);
     } catch (err) {
       console.warn('API fetch error, using Supabase client fallback:', err);
       await fetchViaSupabaseClient();
@@ -1147,48 +1121,17 @@ export function AdminComplaints() {
 
   const executeAction = async (payload, successMsg) => {
     try {
-      const res = await fetch('/api/admin/academic/complaints', {
+      const data = await requestComplaints({
+        headers: await getAuthHeaders(),
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('portal_token') || ''}`,
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        body: payload
       });
-
-      const json = await res.json();
-      if (!res.ok || json.status === 'error') {
-        throw new Error(json.message || 'Operation failed.');
-      }
-
       if (successMsg) toast.success(successMsg);
       await fetchData(true);
-      return json.data;
+      return data;
     } catch (err) {
-      // Fallback to PHP POST
-      try {
-        const phpRes = await fetch('/api/admin/academic/complaints.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('portal_token') || ''}`,
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-        const phpJson = await phpRes.json();
-        if (phpRes.ok && phpJson.status === 'success') {
-          if (successMsg) toast.success(successMsg);
-          await fetchData(true);
-          return phpJson.data;
-        }
-        throw new Error(phpJson.message || err.message);
-      } catch (phpErr) {
-        console.error('Action error:', phpErr);
-        toast.error(phpErr.message || 'Action failed.');
-        throw phpErr;
-      }
+      toast.error(err.message || 'Action failed.');
+      throw err;
     }
   };
 

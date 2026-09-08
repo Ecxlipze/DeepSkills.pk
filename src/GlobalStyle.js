@@ -61,12 +61,11 @@ const GlobalStyle = createGlobalStyle`
     outline-offset: 3px;
   }
 
-  @media (pointer: fine) and (prefers-reduced-motion: no-preference) {
-    *, *::before, *::after, html, body {
-      cursor: none !important;
-    }
-
-    a, button, input, textarea, select, [role="button"], [class*="Button"] {
+  @media (min-width: 769px) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    body.ds-custom-cursor-active:not(.ds-native-cursor),
+    body.ds-custom-cursor-active:not(.ds-native-cursor) *,
+    body.ds-custom-cursor-active:not(.ds-native-cursor) *::before,
+    body.ds-custom-cursor-active:not(.ds-native-cursor) *::after {
       cursor: none !important;
     }
 

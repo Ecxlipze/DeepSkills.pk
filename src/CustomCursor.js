@@ -95,30 +95,10 @@ const CustomCursor = () => {
     window.addEventListener('popstate', updatePathname);
     window.addEventListener('hashchange', updatePathname);
 
-    // Runtime CSS injection for extremely aggressive cursor hiding on Mac/Safari
-    const isMobile = window.matchMedia('(max-width: 768px)').matches;
-    const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
-    const allowsMotion = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
-    const shouldEnable = !isMobile && hasFinePointer && allowsMotion;
-    let styleEl = null;
-
-    setEnabled(shouldEnable);
-
-    if (!shouldEnable) {
-      return undefined;
-    }
-
-    if (shouldEnable) {
-      styleEl = document.createElement('style');
-      styleEl.innerHTML = `
-        *, *::before, *::after, html, body { cursor: none !important; -webkit-cursor: none !important; }
-        a, button, input, textarea, select, [role="button"], [class*="Button"] { cursor: none !important; -webkit-cursor: none !important; }
-        body.ds-native-cursor, body.ds-native-cursor *, body.ds-native-cursor *::before, body.ds-native-cursor *::after { cursor: auto !important; -webkit-cursor: auto !important; }
-        body.ds-native-cursor a, body.ds-native-cursor button, body.ds-native-cursor [role="button"] { cursor: pointer !important; -webkit-cursor: pointer !important; }
-        body.ds-native-cursor input, body.ds-native-cursor textarea, body.ds-native-cursor select { cursor: text !important; -webkit-cursor: text !important; }
-      `;
-      document.head.appendChild(styleEl);
-    }
+    const media = window.matchMedia('(min-width: 769px) and (pointer: fine) and (prefers-reduced-motion: no-preference)');
+    const updateEnabled = () => setEnabled(media.matches);
+    updateEnabled();
+    media.addEventListener('change', updateEnabled);
 
     let lastTarget = null;
 
@@ -131,13 +111,6 @@ const CustomCursor = () => {
       const target = e.target;
       if (target === lastTarget) return;
       lastTarget = target;
-
-      // Aggressive inline style override to ensure no bleeding
-      try {
-        if (target.style && !isMobile && !document.body.classList.contains('ds-native-cursor')) {
-          target.style.setProperty('cursor', 'none', 'important');
-        }
-      } catch (err) { }
 
       const isClickable =
         target.tagName === 'BUTTON' ||
@@ -157,11 +130,17 @@ const CustomCursor = () => {
       window.removeEventListener('hashchange', updatePathname);
       window.removeEventListener('mousemove', moveMouse);
       window.removeEventListener('mouseover', handleHover);
-      if (styleEl && document.head.contains(styleEl)) {
-        document.head.removeChild(styleEl);
-      }
+      media.removeEventListener('change', updateEnabled);
     };
   }, [mouseX, mouseY]);
+
+  // Hide the native pointer only after the replacement has mounted.
+  // Removing this component restores the pointer without leaving inline styles.
+  useEffect(() => {
+    if (!enabled) return undefined;
+    document.body.classList.add('ds-custom-cursor-active');
+    return () => document.body.classList.remove('ds-custom-cursor-active');
+  }, [enabled]);
 
   if (!enabled) {
     return null;

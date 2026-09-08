@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
-import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { 
   FaCalendarCheck, FaClock, FaTimesCircle, FaCheckCircle,
   FaExclamationTriangle, FaListUl
 } from 'react-icons/fa';
-import toast from 'react-hot-toast';
 import DashboardLayout from '../components/DashboardLayout';
 
 const Container = styled.div`
@@ -17,6 +15,9 @@ const Container = styled.div`
 const Header = styled.div`
   margin-bottom: 30px;
   h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 5px; }
+  button, select { background: #171c26; color: #fff; border: 1px solid #475569; border-radius: 8px; padding: 10px 12px; margin: 8px 12px 8px 0; max-width: 100%; }
+  button { cursor: pointer; }
+  label { display: block; color: #cbd5e1; }
   p { color: #888; font-size: 1rem; }
 `;
 
@@ -85,16 +86,19 @@ const CalendarDay = styled.div`
   background: ${props => 
     props.$status === 'present' ? 'rgba(46, 204, 113, 0.2)' : 
     props.$status === 'absent' ? 'rgba(231, 76, 60, 0.2)' : 
+    props.$status === 'excused' ? '#38bdf8' :
     props.$status === 'late' ? 'rgba(241, 196, 15, 0.2)' : 
     'rgba(255, 255, 255, 0.02)'};
   color: ${props => 
     props.$status === 'present' ? '#2ecc71' : 
     props.$status === 'absent' ? '#e74c3c' : 
+    props.$status === 'excused' ? '#38bdf8' :
     props.$status === 'late' ? '#f1c40f' : 
     '#333'};
   border: 1px solid ${props => 
     props.$status === 'present' ? 'rgba(46, 204, 113, 0.3)' : 
     props.$status === 'absent' ? 'rgba(231, 76, 60, 0.3)' : 
+    props.$status === 'excused' ? '#38bdf8' :
     props.$status === 'late' ? 'rgba(241, 196, 15, 0.3)' : 
     'rgba(255, 255, 255, 0.05)'};
 `;
@@ -122,11 +126,11 @@ const StatusBadge = styled.span`
   background: ${props => 
     props.$status === 'present' ? 'rgba(46, 204, 113, 0.1)' : 
     props.$status === 'absent' ? 'rgba(231, 76, 60, 0.1)' : 
-    'rgba(241, 196, 15, 0.1)'};
+    props.$status === 'excused' ? 'rgba(56, 189, 248, 0.1)' : 'rgba(241, 196, 15, 0.1)'};
   color: ${props => 
     props.$status === 'present' ? '#2ecc71' : 
     props.$status === 'absent' ? '#e74c3c' : 
-    '#f1c40f'};
+    props.$status === 'excused' ? '#38bdf8' : '#f1c40f'};
 `;
 
 const StudentAttendance = () => {
@@ -135,41 +139,64 @@ const StudentAttendance = () => {
   const [loading, setLoading] = useState(true);
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  const [error, setError] = useState('');
+  const [enrollments, setEnrollments] = useState([]);
+  const [enrollmentId, setEnrollmentId] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState(null);
+
   useEffect(() => {
+    let disposed = false;
+    let pending = false;
+    const controller = new AbortController();
+    setRecords([]);
+    setEnrollments([]);
+    setUpdatedAt(null);
+    setLoading(true);
     const fetchAttendance = async () => {
+      if (pending || document.visibilityState === 'hidden') return;
+      pending = true;
       try {
-        const { data: studentRows, error: studentError } = await supabase
-          .from('admissions')
-          .select('id')
-          .eq('cnic', user.cnic)
-          .in('status', ['Active', 'Graduated'])
-          .order('submitted_at', { ascending: false })
-          .limit(1);
-
-        if (studentError) throw studentError;
-        const student = studentRows?.[0];
-        if (!student) return;
-
-        const { data, error } = await supabase
-          .from('attendance')
-          .select('*')
-          .eq('student_id', student.id)
-          .order('date', { ascending: false });
-        
-        if (error) throw error;
-        setRecords(data || []);
+        const token = user?.sessionToken || localStorage.getItem('deepskill_session_token') || '';
+        const options = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ token }),
+          signal: controller.signal
+        };
+        let response = await fetch('/api/student/attendance', options);
+        if (response.status === 404) response = await fetch('/api/student/attendance.php', options);
+        const payload = await response.json();
+        if (!response.ok || payload.status !== 'success') throw new Error(payload.message || 'Failed to load attendance.');
+        if (disposed) return;
+        setRecords(payload.data.records);
+        setEnrollments(payload.data.enrollments);
+        setEnrollmentId(previous => payload.data.enrollments.some(item => item.id === previous) ? previous : payload.data.enrollments[0]?.id || '');
+        setError('');
+        setUpdatedAt(new Date());
       } catch (err) {
-        toast.error("Error loading attendance records");
+        if (!disposed) setError(err.message || 'Failed to load attendance.');
       } finally {
-        setLoading(false);
+        pending = false;
+        if (!disposed) setLoading(false);
       }
     };
-    if (user?.cnic) fetchAttendance();
-  }, [user]);
+    fetchAttendance();
+    const interval = setInterval(fetchAttendance, 30000);
+    window.addEventListener('focus', fetchAttendance);
+    document.addEventListener('visibilitychange', fetchAttendance);
+    return () => {
+      disposed = true;
+      controller.abort();
+      clearInterval(interval);
+      window.removeEventListener('focus', fetchAttendance);
+      document.removeEventListener('visibilitychange', fetchAttendance);
+    };
+  }, [user?.cnic, user?.sessionToken, refreshKey]);
 
   const filteredRecords = useMemo(
-    () => records.filter(r => r.date?.startsWith(filterMonth)),
-    [records, filterMonth]
+    () => records.filter(r => r.student_id === enrollmentId && r.date?.startsWith(filterMonth)),
+    [records, filterMonth, enrollmentId]
   );
 
   const stats = useMemo(() => {
@@ -177,9 +204,10 @@ const StudentAttendance = () => {
     const present = filteredRecords.filter(r => r.status === 'present').length;
     const absent = filteredRecords.filter(r => r.status === 'absent').length;
     const late = filteredRecords.filter(r => r.status === 'late').length;
+    const excused = filteredRecords.filter(r => r.status === 'excused').length;
     const pct = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
     
-    return { total, present, absent, late, pct };
+    return { total, present, absent, late, excused, pct };
   }, [filteredRecords]);
 
   // Group records by date for heatmap
@@ -199,29 +227,37 @@ const StudentAttendance = () => {
       <Container>
         <Header>
           <h1>My Attendance</h1>
-          <p>Track your presence and maintain your academic record</p>
+          <p>Attendance saved by your institute appears here. Updates refresh every 30 seconds while this page is visible.</p>
+          <button type="button" onClick={() => setRefreshKey(key => key + 1)} disabled={loading}>Refresh attendance</button>
+          {updatedAt && <p>Last updated: {updatedAt.toLocaleTimeString()}</p>}
+          {error && <p role="alert" style={{ color: '#f87171' }}>{error} {updatedAt ? 'Showing the last loaded records.' : ''}</p>}
+          <label>Course / batch{' '}
+            <select value={enrollmentId} onChange={event => setEnrollmentId(event.target.value)}>
+              {enrollments.map(item => <option key={item.id} value={item.id}>{item.course} — {item.batch}</option>)}
+            </select>
+          </label>
         </Header>
 
         <StatsRow>
           <StatCard $color="#378ADD">
             <FaListUl className="icon" />
             <div className="label">Total Classes</div>
-            <div className="value">{stats.total}</div>
+            <div className="value">{loading || (!updatedAt && error) ? '—' : stats.total}</div>
           </StatCard>
           <StatCard $color="#2ecc71">
             <FaCheckCircle className="icon" />
-            <div className="label">Days Present</div>
-            <div className="value">{stats.present}</div>
+            <div className="label">Classes Present</div>
+            <div className="value">{loading || (!updatedAt && error) ? '—' : stats.present}</div>
           </StatCard>
           <StatCard $color="#e74c3c">
             <FaTimesCircle className="icon" />
-            <div className="label">Days Absent</div>
-            <div className="value">{stats.absent}</div>
+            <div className="label">Classes Absent</div>
+            <div className="value">{loading || (!updatedAt && error) ? '—' : stats.absent}</div>
           </StatCard>
           <StatCard $color="#f1c40f">
             <FaClock className="icon" />
-            <div className="label">Days Late</div>
-            <div className="value">{stats.late}</div>
+            <div className="label">Classes Late</div>
+            <div className="value">{loading || (!updatedAt && error) ? '—' : stats.late}</div>
           </StatCard>
         </StatsRow>
 
@@ -233,14 +269,14 @@ const StudentAttendance = () => {
                 <circle className="progress" cx="100" cy="100" r="84" />
               </svg>
               <div className="text">
-                <span>{stats.pct}%</span>
+                <span>{loading || !stats.total || (!updatedAt && error) ? '—' : `${stats.pct}%`}</span>
               </div>
             </CircularProgress>
             <h3>Monthly Average</h3>
             <p style={{ color: '#666', marginTop: '10px' }}>
-              Your current attendance rate for this course.
+              Present and late classes count as attended. Excused classes remain in the total, matching the admin register.
             </p>
-            {stats.pct < 75 && (
+            {!loading && !error && stats.total > 0 && stats.pct < 75 && (
               <WarningBanner>
                 <FaExclamationTriangle size={20} />
                 <div>
@@ -257,25 +293,30 @@ const StudentAttendance = () => {
               <input 
                 type="month" 
                 value={filterMonth} 
-                onChange={e => setFilterMonth(e.target.value)}
+                aria-label="Attendance month"
+                onChange={e => { if (e.target.value) setFilterMonth(e.target.value); }}
                 style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '8px', borderRadius: '8px' }}
               />
             </div>
             <CalendarGrid>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} style={{ color: '#94a3b8', textAlign: 'center' }}>{day}</div>)}
+              {Array.from({ length: new Date(`${filterMonth}-01T12:00:00`).getDay() }, (_, index) => <div key={`blank-${index}`} />)}
               {/* Simple grid for the month */}
               {[...Array(daysInMonth)].map((_, i) => {
                 const date = `${filterMonth}-${(i+1).toString().padStart(2, '0')}`;
                 return (
-                  <CalendarDay key={i} $status={recordMap[date]}>
+                  <CalendarDay key={i} $status={recordMap[date]} title={`${date}: ${recordMap[date] || 'Not marked'}`}>
                     {i + 1}
                   </CalendarDay>
                 );
               })}
             </CalendarGrid>
-            <div style={{ display: 'flex', gap: '15px', marginTop: '20px', fontSize: '0.75rem', color: '#666' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginTop: '20px', fontSize: '0.75rem', color: '#666' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><div style={{ width: 10, height: 10, background: '#2ecc71', borderRadius: 2 }} /> Present</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><div style={{ width: 10, height: 10, background: '#e74c3c', borderRadius: 2 }} /> Absent</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><div style={{ width: 10, height: 10, background: '#f1c40f', borderRadius: 2 }} /> Late</div>
+              <div style={{ color: '#38bdf8' }}>Excused: {stats.excused}</div>
+              <div>Blank: not marked</div>
             </div>
           </HeatmapCard>
         </MainGrid>
@@ -285,7 +326,7 @@ const StudentAttendance = () => {
             <FaCalendarCheck color="#378ADD" />
             <h3>Detailed History</h3>
           </div>
-          <div style={{ background: '#111318', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+          <div style={{ background: '#111318', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', overflowX: 'auto' }}>
             <HistoryTable>
               <thead>
                 <tr>
@@ -300,18 +341,18 @@ const StudentAttendance = () => {
                 {loading ? (
                   <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#444' }}>Loading records...</td></tr>
                 ) : (
-                  records.map((r, idx) => (
+                  filteredRecords.map((r, idx) => (
                     <tr key={idx} style={{ background: r.status === 'absent' ? 'rgba(231, 76, 60, 0.02)' : 'none' }}>
                       <td><strong>{r.date}</strong></td>
                       <td style={{ color: '#888' }}>{r.day_of_week}</td>
                       <td>{r.batch_name}</td>
                       <td><StatusBadge $status={r.status}>{r.status.toUpperCase()}</StatusBadge></td>
-                      <td style={{ color: '#666', fontSize: '0.8rem' }}>{new Date(r.marked_at).toLocaleString()}</td>
+                      <td style={{ color: '#666', fontSize: '0.8rem' }}>{r.marked_at ? new Date(r.marked_at).toLocaleString() : '—'}</td>
                     </tr>
                   ))
                 )}
-                {records.length === 0 && !loading && (
-                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#444' }}>No attendance records found.</td></tr>
+                {filteredRecords.length === 0 && !loading && !error && (
+                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#444' }}>No attendance has been recorded for this course in the selected month.</td></tr>
                 )}
               </tbody>
             </HistoryTable>

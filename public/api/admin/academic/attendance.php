@@ -34,7 +34,7 @@ if ($method === 'GET') {
         $batches = is_array($batchesRes) ? $batchesRes : [];
 
         // 2. Active Admissions
-        $admRes = otp_supabase_request('GET', 'admissions?select=id,name,cnic,phone,email,course,batch,batch_timing,photo_url,status&status=in.(Active,Graduated)&order=name.asc');
+        $admRes = otp_supabase_request('GET', 'admissions?select=id,name,cnic,phone,email,course,batch,batch_timing,status&status=in.(Active,Graduated)&order=name.asc');
         $allAdmissions = is_array($admRes) ? $admRes : [];
 
         // Find current batch if batchId provided

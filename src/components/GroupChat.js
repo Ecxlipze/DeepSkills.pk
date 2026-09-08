@@ -505,15 +505,17 @@ const GroupChat = () => {
   const {
     messages, members, mutes, loading, isMuted,
     sendMessage, sendReaction, uploadChatFile, muteStudent, unmuteStudent,
-    activeBatch, setActiveBatch, availableBatches
+    activeBatch, setActiveBatch, availableBatches, hasAdminChatAccess
   } = useGroupChat();
+
+  const canModerate = user?.role === 'teacher' || hasAdminChatAccess;
 
   const [newMessage, setNewMessage] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [showLobby, setShowLobby] = useState(user?.role === 'teacher');
+  const [showLobby, setShowLobby] = useState(user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'custom');
 
   const chatEndRef = useRef(null);
   const emojiRef = useRef(null);
@@ -529,7 +531,7 @@ const GroupChat = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (user?.role === 'teacher' && availableBatches.length === 1 && !showLobby) {
+    if (canModerate && availableBatches.length === 1 && !showLobby) {
       setActiveBatch(availableBatches[0].batch);
     }
   }, [availableBatches, setActiveBatch, showLobby, user?.role]);
@@ -624,12 +626,12 @@ const GroupChat = () => {
   const normalizeCnic = (value) => (value || '').toString().trim();
   const isCurrentUser = (member) => normalizeCnic(member?.cnic) === normalizeCnic(user?.cnic);
 
-  if (showLobby && user?.role === 'teacher') {
+  if (showLobby && canModerate) {
     return (
       <ChatContainer style={{ gridTemplateColumns: '1fr' }}>
         <LobbyContainer>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <h2 style={{ fontSize: '2rem', marginBottom: '10px' }}>Welcome, Sir {user.name}</h2>
+            <h2 style={{ fontSize: '2rem', marginBottom: '10px' }}>Welcome{user?.role === 'teacher' ? `, Sir ${user.name}` : `, ${user?.name || 'Admin'}`}</h2>
             <p style={{ color: 'rgba(255,255,255,0.5)' }}>
               {loading ? 'Loading your batches...' : 'Select a batch to enter the group chat'}
             </p>
@@ -668,8 +670,8 @@ const GroupChat = () => {
       {/* Sidebar - Members */}
       <Sidebar show={showSidebar}>
         <SidebarHeader>
-          <h3>{user?.role === 'teacher' ? 'My Batches' : (activeBatch || "Batch Group")}</h3>
-          {user?.role === 'teacher' && availableBatches.length > 1 && (
+          <h3>{canModerate ? 'My Batches' : (activeBatch || "Batch Group")}</h3>
+          {canModerate && availableBatches.length > 1 && (
             <BatchSelect
               value={activeBatch}
               onChange={(e) => setActiveBatch(e.target.value)}
@@ -677,7 +679,7 @@ const GroupChat = () => {
               {availableBatches.map(b => <option key={b.batch} value={b.batch}>{b.course} ({b.batch})</option>)}
             </BatchSelect>
           )}
-          {!(user?.role === 'teacher' && availableBatches.length > 1) && <span>{activeBatch}</span>}
+          {!(canModerate && availableBatches.length > 1) && <span>{activeBatch}</span>}
           <div style={{ marginTop: '10px' }}>
             <span>{members.length} Members</span>
           </div>
@@ -712,7 +714,7 @@ const GroupChat = () => {
                   </div>
                 </MemberInfo>
 
-                {user?.role === 'teacher' && (
+                {canModerate && (
                   <MuteOverlay>
                     <IconButton
                       $active={muted}
@@ -747,7 +749,7 @@ const GroupChat = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            {user?.role === 'teacher' && (
+            {canModerate && (
               <IconButton onClick={() => setShowLobby(true)} title="Switch Batch">
                 <FaUsers size={18} />
                 <span style={{ fontSize: '0.7rem', marginLeft: '5px' }}>Switch Batch</span>
@@ -787,7 +789,7 @@ const GroupChat = () => {
             const isTeacher = item.sender_role === 'teacher';
 
             // Special handling for warning bubble - only visible to target student
-            if (item.type === 'warning' && item.target_cnic !== user?.cnic && user?.role !== 'teacher') {
+            if (item.type === 'warning' && item.target_cnic !== user?.cnic && !canModerate) {
               return null;
             }
 
