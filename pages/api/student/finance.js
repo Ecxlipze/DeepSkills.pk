@@ -97,6 +97,23 @@ export default async function handler(req, res) {
     plan.remainingAmount = Math.max(0, payableAmount - paidAmount);
     plan.installments = paymentList;
 
+    // Attach institutional payment gateway details & policy notes
+    try {
+      const { data: settingsRow } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'fee_settings')
+        .maybeSingle();
+
+      if (settingsRow?.value) {
+        const parsed = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+        plan.paymentGateways = parsed.paymentGateways || null;
+        plan.invoiceNotes = parsed.general?.invoiceNotes || null;
+      }
+    } catch (sErr) {
+      console.warn('[student/finance] Fee settings fetch warning:', sErr);
+    }
+
     return res.status(200).json({
       status: 'success',
       data: plan

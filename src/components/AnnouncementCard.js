@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   FaThumbtack, FaBullhorn, FaCrosshairs,
   FaPaperclip, FaDownload, FaChevronDown, FaChevronUp,
-  FaUserShield, FaChalkboardTeacher as FaTeacherIcon
+  FaUserShield, FaChalkboardTeacher as FaTeacherIcon,
+  FaBroadcastTower, FaBullseye
 } from 'react-icons/fa';
 
 const Card = styled(motion.div)`
@@ -226,17 +227,6 @@ function isNew(dateStr) {
   return (Date.now() - new Date(dateStr).getTime()) < 24 * 60 * 60 * 1000;
 }
 
-// Helper: file type icon
-function getFileIcon(type) {
-  switch (type) {
-    case 'pdf': return '📄';
-    case 'image': return '🖼️';
-    case 'doc': case 'docx': return '📝';
-    case 'zip': return '📁';
-    default: return '📎';
-  }
-}
-
 const AnnouncementCard = ({ announcement, isRead, onMarkRead }) => {
   const [expanded, setExpanded] = useState(false);
   const cardRef = useRef(null);
@@ -271,12 +261,12 @@ const AnnouncementCard = ({ announcement, isRead, onMarkRead }) => {
     return () => observer.disconnect();
   }, [isRead, a.id, onMarkRead]);
 
-  // Audience label
+  // Audience label with SVG icons
   const getAudienceLabel = () => {
-    if (a.audience_type === 'broadcast') return '📡 Everyone';
-    if (a.audience_batches?.length) return `🎯 ${a.audience_batches.join(', ')}`;
-    if (a.audience_courses?.length) return `🎯 ${a.audience_courses.join(', ')}`;
-    return '📡 All';
+    if (a.audience_type === 'broadcast') return <><FaBroadcastTower style={{ marginRight: '4px' }} /> Everyone</>;
+    if (a.audience_batches?.length) return <><FaBullseye style={{ marginRight: '4px' }} /> {a.audience_batches.join(', ')}</>;
+    if (a.audience_courses?.length) return <><FaBullseye style={{ marginRight: '4px' }} /> {a.audience_courses.join(', ')}</>;
+    return <><FaBroadcastTower style={{ marginRight: '4px' }} /> Campus</>;
   };
 
   return (
@@ -327,7 +317,7 @@ const AnnouncementCard = ({ announcement, isRead, onMarkRead }) => {
           {fileAttachments.filter((att) => att.file_url).map((att, i) => (
             <FileChip key={i} href={att.file_url} target="_blank" rel="noopener noreferrer">
               <span className="icon"><FaPaperclip /></span>
-              {getFileIcon(att.file_type)} {att.file_name}
+              {att.file_name}
               <span className="size">· {att.file_size}</span>
               <FaDownload size={10} />
             </FileChip>

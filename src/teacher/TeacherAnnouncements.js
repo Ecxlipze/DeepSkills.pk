@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { FaBullhorn } from 'react-icons/fa';
+import { FaBullhorn, FaBullseye, FaEnvelopeOpen } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import DashboardLayout from '../components/DashboardLayout';
 import AnnouncementCard from '../components/AnnouncementCard';
@@ -151,7 +151,7 @@ const TeacherAnnouncements = () => {
           <Input placeholder="Announcement title..." value={title} onChange={e => setTitle(e.target.value)} maxLength={100} />
           <TextArea placeholder="Write your announcement..." value={body} onChange={e => setBody(e.target.value)} />
           <FormFooter>
-            <AudienceLabel>🎯 {selectedBatch || 'No batch assigned'}</AudienceLabel>
+            <AudienceLabel><FaBullseye style={{ marginRight: '6px', color: '#38bdf8' }} /> {selectedBatch || 'No batch assigned'}</AudienceLabel>
             <PostBtn onClick={handlePost} disabled={posting || !title.trim() || !body.trim()}>
               <FaBullhorn /> {posting ? 'Posting...' : 'Post Announcement'}
             </PostBtn>
@@ -168,7 +168,7 @@ const TeacherAnnouncements = () => {
         </FeedHeader>
 
         {feed.length === 0 ? (
-          <EmptyState><div className="emoji">📭</div><h3>No announcements</h3><p>Check back later</p></EmptyState>
+          <EmptyState><div className="emoji"><FaEnvelopeOpen style={{ fontSize: '2.5rem', color: '#6b7280' }} /></div><h3>No announcements</h3><p>Check back later</p></EmptyState>
         ) : (
           <FeedList>
             {feed.map(a => (

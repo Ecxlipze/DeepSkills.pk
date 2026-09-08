@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import DashboardLayout from '../components/DashboardLayout';
 import AnnouncementCard from '../components/AnnouncementCard';
 import { useAnnouncements } from '../context/AnnouncementsContext';
+import { FaBullhorn, FaEnvelopeOpen } from 'react-icons/fa';
 
 const Container = styled.div`color: #fff;`;
 
@@ -57,7 +58,7 @@ const StudentAnnouncements = () => {
     <DashboardLayout>
       <Container>
         <PageHeader>
-          <h1>📢 Announcements</h1>
+          <h1><FaBullhorn style={{ marginRight: '10px', color: '#f59e0b' }} /> Announcements</h1>
           <p>Stay updated with the latest announcements from admin and your teachers</p>
         </PageHeader>
 
@@ -78,7 +79,7 @@ const StudentAnnouncements = () => {
 
         {feed.length === 0 ? (
           <EmptyState>
-            <div className="emoji">📭</div>
+            <div className="emoji"><FaEnvelopeOpen style={{ fontSize: '3rem', color: '#6b7280' }} /></div>
             <h3>No announcements yet</h3>
             <p>Check back later for updates from your admin and teachers</p>
           </EmptyState>

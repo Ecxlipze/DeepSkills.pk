@@ -291,7 +291,7 @@ export const GroupChatProvider = ({ children }) => {
   };
 
   const muteStudent = async (studentCnic, studentName) => {
-    if (user.role !== 'teacher' || !activeBatch) return;
+    if ((user.role !== 'teacher' && user.role !== 'admin' && user.role !== 'custom') || !activeBatch) return;
     try {
       const alreadyMuted = mutes.some((mute) => mute.user_cnic === studentCnic);
       if (alreadyMuted) return;
@@ -301,21 +301,23 @@ export const GroupChatProvider = ({ children }) => {
         .insert([{
           batch: activeBatch,
           user_cnic: studentCnic,
-          muted_by: user.name
+          muted_by: user.name || user.full_name || 'Staff'
         }]);
 
       if (muteError) throw muteError;
 
+      const actorTitle = user.role === 'teacher' ? `Sir ${user.name || user.full_name}` : (user.name || user.full_name || 'Administration');
+
       // 2. Send system message
       await sendMessage({
         type: 'system',
-        text: `⚠️ ${studentName} has been muted by the teacher.`
+        text: `[Moderation] ${studentName} has been muted by ${actorTitle}.`
       });
 
       // 3. Send warning bubble (visible to student via type='warning' and matching cnic logic in UI)
       await sendMessage({
         type: 'warning',
-        text: `You have been muted by Sir ${user.name}. You cannot send messages until unmuted.`,
+        text: `You have been muted by ${actorTitle}. You cannot send messages until unmuted.`,
         sender_cnic: 'SYSTEM', // Special marker
         target_cnic: studentCnic // Extra field for targeted warning
       });
@@ -326,7 +328,7 @@ export const GroupChatProvider = ({ children }) => {
   };
 
   const unmuteStudent = async (studentCnic, studentName) => {
-    if (user.role !== 'teacher' || !activeBatch) return;
+    if ((user.role !== 'teacher' && user.role !== 'admin' && user.role !== 'custom') || !activeBatch) return;
     try {
       const { error: muteError } = await supabase
         .from('group_chat_mutes')
@@ -339,7 +341,7 @@ export const GroupChatProvider = ({ children }) => {
       // Send system message
       await sendMessage({
         type: 'system',
-        text: `✅ ${studentName} has been unmuted.`
+        text: `[Moderation] ${studentName} has been unmuted.`
       });
     } catch (err) {
       console.error('Error unmuting student:', err);

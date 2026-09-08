@@ -39,6 +39,7 @@ const AdminFinance = dynamic(() => import('../../src/admin/FinanceManager'), { s
 const AdminFinanceTransactions = dynamic(() => import('../../src/admin/TransactionHistory'), { ssr: false });
 const AdminReferral = dynamic(() => import('../../src/admin/AdminReferral'), { ssr: false });
 const AdminRevenueReport = dynamic(() => import('../../src/admin/RevenueReport'), { ssr: false });
+const AdminFeeSettings = dynamic(() => import('../../src/admin/FeeSettings'), { ssr: false });
 const AdminResults = dynamic(() => import('../../src/admin/AdminResults'), { ssr: false });
 const BlogManager = dynamic(() => import('../../src/admin/BlogManager'), { ssr: false });
 const TestimonialManager = dynamic(() => import('../../src/admin/TestimonialManager'), { ssr: false });
@@ -50,6 +51,7 @@ const ReportsSystem = dynamic(() => import('../../src/admin/ReportsSystem'), { s
 const AdminTasksPage = dynamic(() => import('../../src/admin/AdminTasksPage'), { ssr: false });
 const AdminGroupChatsPage = dynamic(() => import('../../src/admin/AdminGroupChatsPage'), { ssr: false });
 const DepartmentPlaceholder = dynamic(() => import('../../src/admin/DepartmentPlaceholder'), { ssr: false });
+const AdminAcademicOverview = dynamic(() => import('../../src/admin/AcademicOverview'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -127,7 +129,7 @@ function getAdminPage(path = []) {
     if (child === 'transactions') return <AdminFinanceTransactions />;
     if (child === 'referrals') return <AdminReferral />;
     if (child === 'reports') return <AdminRevenueReport />;
-    if (child === 'settings') return <DepartmentHubRedirect departmentId="finance" currentPath="/admin/finance/settings" />;
+    if (child === 'settings') return <AdminFeeSettings />;
     return <AdminFinance initialTab={child || 'overview'} />;
   }
   if (section === 'referral') return <AdminReferral />;
@@ -136,7 +138,7 @@ function getAdminPage(path = []) {
   if (section === 'blog') return <BlogManager />;
 
   if (section === 'academic') {
-    if (!child) return <DepartmentHubRedirect departmentId="academic" currentPath="/admin/academic" />;
+    if (!child) return <AdminAcademicOverview />;
     if (child === 'attendance') return subpath === 'settings' ? <AdminAttendanceSettings /> : <AdminAttendancePage />;
     if (child === 'results') return <AdminResults />;
     if (child === 'announcements') return <AdminAnnouncements />;

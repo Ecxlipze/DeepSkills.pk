@@ -3,15 +3,57 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { 
   FaWallet, FaClock, FaCheckCircle, 
-  FaExclamationCircle, FaInfoCircle, FaCalendarAlt
+  FaExclamationCircle, FaInfoCircle, FaCalendarAlt,
+  FaUniversity, FaMobileAlt, FaCopy, FaCheck
 } from 'react-icons/fa';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+
+const DEFAULT_INSTITUTIONAL_BANKS = [
+  {
+    id: 'meezan_main',
+    bankName: 'Meezan Bank Limited',
+    accountTitle: 'DeepSkills Institute (Pvt) Ltd',
+    accountNumber: '01020304050607',
+    iban: 'PK36MEZN0001020304050607',
+    branch: 'DHA Phase 5 Branch, Lahore',
+    isActive: true
+  }
+];
+
+const DEFAULT_INSTITUTIONAL_WALLETS = [
+  {
+    id: 'jazzcash',
+    provider: 'JazzCash',
+    accountTitle: 'DeepSkills Central Accounts',
+    accountNumber: '0300-1234567',
+    tillNumber: '889900',
+    isActive: true
+  },
+  {
+    id: 'easypaisa',
+    provider: 'EasyPaisa',
+    accountTitle: 'DeepSkills Central Accounts',
+    accountNumber: '0345-7654321',
+    tillNumber: '112233',
+    isActive: true
+  }
+];
 
 const StudentFinance = () => {
   const { user } = useAuth();
   const [feePlan, setFeePlan] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  const handleCopy = (text, key) => {
+    if (!text) return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    }
+  };
 
   const fetchFeeData = useCallback(async () => {
     try {
@@ -66,6 +108,16 @@ const StudentFinance = () => {
 
   const payable = feePlan.final_fee != null ? Number(feePlan.final_fee) : Number(feePlan.total_fee || 0);
   const progress = payable > 0 ? Math.min(100, (feePlan.paidAmount / payable) * 100) : 100;
+
+  const configuredBanks = feePlan?.paymentGateways?.bankAccounts;
+  const activeBanks = (Array.isArray(configuredBanks) && configuredBanks.length > 0)
+    ? configuredBanks.filter(b => b.isActive !== false)
+    : DEFAULT_INSTITUTIONAL_BANKS;
+
+  const configuredWallets = feePlan?.paymentGateways?.mobileWallets;
+  const activeWallets = (Array.isArray(configuredWallets) && configuredWallets.length > 0)
+    ? configuredWallets.filter(w => w.isActive !== false)
+    : DEFAULT_INSTITUTIONAL_WALLETS;
 
   return (
     <DashboardLayout>
@@ -139,9 +191,114 @@ const StudentFinance = () => {
           </OverdueAlert>
         )}
 
+        {/* Official Institutional Payment Channels */}
+        <PaymentChannelsSection>
+          <SectionTitle>
+            <FaUniversity /> Institutional Payment Channels
+          </SectionTitle>
+          <ChannelsGrid>
+            {activeBanks.map((bank) => (
+              <ChannelCard key={bank.id || bank.accountNumber}>
+                <div className="card-header">
+                  <div className="icon-badge">
+                    <FaUniversity />
+                  </div>
+                  <div>
+                    <h4>{bank.bankName}</h4>
+                    <p className="subtitle">{bank.branch || 'Designated Branch'}</p>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="field-row">
+                    <span className="label">Account Title:</span>
+                    <span className="value">{bank.accountTitle}</span>
+                  </div>
+                  <div className="field-row">
+                    <span className="label">Account No:</span>
+                    <div className="copy-val">
+                      <code>{bank.accountNumber}</code>
+                      <button 
+                        type="button" 
+                        onClick={() => handleCopy(bank.accountNumber, `acc_${bank.accountNumber}`)}
+                        title="Copy Account Number"
+                      >
+                        {copiedKey === `acc_${bank.accountNumber}` ? <FaCheck style={{ color: '#10B981' }} /> : <FaCopy />}
+                      </button>
+                    </div>
+                  </div>
+                  {bank.iban && (
+                    <div className="field-row">
+                      <span className="label">IBAN:</span>
+                      <div className="copy-val">
+                        <code>{bank.iban}</code>
+                        <button 
+                          type="button" 
+                          onClick={() => handleCopy(bank.iban, `iban_${bank.iban}`)}
+                          title="Copy IBAN"
+                        >
+                          {copiedKey === `iban_${bank.iban}` ? <FaCheck style={{ color: '#10B981' }} /> : <FaCopy />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ChannelCard>
+            ))}
+
+            {activeWallets.map((wallet) => (
+              <ChannelCard key={wallet.id || wallet.accountNumber}>
+                <div className="card-header">
+                  <div className="icon-badge wallet">
+                    <FaMobileAlt />
+                  </div>
+                  <div>
+                    <h4>{wallet.provider}</h4>
+                    <p className="subtitle">{wallet.accountTitle}</p>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="field-row">
+                    <span className="label">Mobile Number:</span>
+                    <div className="copy-val">
+                      <code>{wallet.accountNumber}</code>
+                      <button 
+                        type="button" 
+                        onClick={() => handleCopy(wallet.accountNumber, `wal_${wallet.accountNumber}`)}
+                        title="Copy Mobile Number"
+                      >
+                        {copiedKey === `wal_${wallet.accountNumber}` ? <FaCheck style={{ color: '#10B981' }} /> : <FaCopy />}
+                      </button>
+                    </div>
+                  </div>
+                  {wallet.tillNumber && (
+                    <div className="field-row">
+                      <span className="label">Till / Merchant ID:</span>
+                      <div className="copy-val">
+                        <code>{wallet.tillNumber}</code>
+                        <button 
+                          type="button" 
+                          onClick={() => handleCopy(wallet.tillNumber, `till_${wallet.tillNumber}`)}
+                          title="Copy Till Number"
+                        >
+                          {copiedKey === `till_${wallet.tillNumber}` ? <FaCheck style={{ color: '#10B981' }} /> : <FaCopy />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ChannelCard>
+            ))}
+          </ChannelsGrid>
+        </PaymentChannelsSection>
+
         <InfoBanner>
           <FaInfoCircle />
-          <span>Note: To record a payment or update your fee plan, please visit the administration office. Students cannot update their own finance records.</span>
+          <div>
+            <strong>Payment Submission Instructions:</strong>
+            <p style={{ margin: '4px 0 0 0' }}>
+              {feePlan.invoiceNotes || 'Tuition fees must be paid on or before the designated due date. After initiating a bank transfer or mobile wallet deposit, please submit your transaction receipt or payment proof at the administration office or WhatsApp desk for verification.'}
+            </p>
+          </div>
         </InfoBanner>
       </Container>
     </DashboardLayout>
@@ -306,6 +463,131 @@ const InfoBanner = styled.div`
   font-size: 0.85rem;
   line-height: 1.6;
   border: 1px solid rgba(255,255,255,0.05);
+`;
+
+const PaymentChannelsSection = styled.div`
+  margin-bottom: 35px;
+`;
+
+const ChannelsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+`;
+
+const ChannelCard = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: rgba(212, 175, 55, 0.35);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+    .icon-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #d4af37;
+      font-size: 1.1rem;
+
+      &.wallet {
+        background: rgba(56, 189, 248, 0.12);
+        border-color: rgba(56, 189, 248, 0.25);
+        color: #38bdf8;
+      }
+    }
+
+    h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .subtitle {
+      margin: 2px 0 0 0;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+  }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .field-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.83rem;
+
+      .label {
+        color: #94a3b8;
+        white-space: nowrap;
+      }
+
+      .value {
+        color: #f1f5f9;
+        font-weight: 600;
+        text-align: right;
+        word-break: break-word;
+      }
+
+      .copy-val {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        code {
+          background: rgba(0, 0, 0, 0.35);
+          padding: 3px 7px;
+          border-radius: 6px;
+          color: #f8fafc;
+          font-family: monospace;
+          font-size: 0.82rem;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          word-break: break-all;
+        }
+
+        button {
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s;
+
+          &:hover {
+            color: #d4af37;
+            background: rgba(255, 255, 255, 0.06);
+          }
+        }
+      }
+    }
+  }
 `;
 
 export default StudentFinance;

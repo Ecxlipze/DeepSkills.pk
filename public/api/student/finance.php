@@ -138,5 +138,22 @@ $plan['paidAmount'] = $paidAmount;
 $plan['remainingAmount'] = max(0, $payableAmount - $paidAmount);
 $plan['installments'] = $payments;
 
+// Attach institutional payment gateway details & policy notes
+$settingsRow = student_finance_first(student_finance_supabase_request(
+    'GET',
+    'settings?select=value&key=eq.fee_settings&limit=1'
+));
+$paymentGateways = null;
+$invoiceNotes = null;
+if (!empty($settingsRow['value'])) {
+    $parsed = is_string($settingsRow['value']) ? json_decode($settingsRow['value'], true) : $settingsRow['value'];
+    if (is_array($parsed)) {
+        $paymentGateways = $parsed['paymentGateways'] ?? null;
+        $invoiceNotes = $parsed['general']['invoiceNotes'] ?? null;
+    }
+}
+$plan['paymentGateways'] = $paymentGateways;
+$plan['invoiceNotes'] = $invoiceNotes;
+
 student_finance_respond(200, ['status' => 'success', 'data' => $plan]);
 ?>

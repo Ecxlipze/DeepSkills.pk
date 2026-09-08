@@ -9,6 +9,9 @@ import {
   FaFileDownload, FaInfoCircle
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
+import { createTranscriptPdf } from '../utils/resultsPdf.js';
+
 
 const Container = styled.div`
   padding: 20px 0;
@@ -218,6 +221,32 @@ const StudentResults = ({ type: propType }) => {
     setExpanded(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const handleDownloadPdf = () => {
+    if (!result) return;
+    try {
+      const doc = createTranscriptPdf({
+        student: {
+          name: user?.name,
+          cnic: user?.cnic,
+          course: user?.assigned_course,
+          batch: result?.batch_id || user?.batch
+        },
+        result,
+        batchStats,
+        weights: examType === 'finalterm' 
+          ? { attendance: 15, assignment: 25, quiz: 25, taskCompletion: 15, project: 20 }
+          : { attendance: 20, assignment: 30, quiz: 30, taskCompletion: 20, project: 0 }
+      });
+      const filename = `DeepSkills-Transcript-${(user?.name || 'Student').replace(/\s+/g, '_')}-${examType}.pdf`;
+      doc.save(filename);
+      toast.success('Official academic transcript downloaded.');
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      window.print();
+    }
+  };
+
+
   const renderTabs = () => (
     <TabContainer>
       <TabButton
@@ -291,10 +320,11 @@ const StudentResults = ({ type: propType }) => {
             </div>
             
             <div style={{ marginTop: '30px' }}>
-              <button onClick={() => window.print()} style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', align_items: 'center', gap: '10px' }}>
+              <button onClick={handleDownloadPdf} style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FaFileDownload /> Download Result Card
               </button>
             </div>
+
           </ResultHeader>
 
           <ScoreCircle $passed={result.passed}>
