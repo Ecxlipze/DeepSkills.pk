@@ -49,3 +49,6 @@ lint_output.txt
 # backups & audit logs
 scratch/backup_*.json
 scratch/*audit*.json
+
+# Vercel project links and local build output
+/.vercel
