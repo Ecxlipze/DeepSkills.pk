@@ -1,6 +1,6 @@
 # GitHub Actions: Node deployment
 
-This replaces the archived static workflow at the same path, `.github/workflows/deploy.yml`. The existing `Ecxlipze/DeepSkill` repository and its four secret names are reused. No passwords belong in the workflow.
+This replaces the archived static workflow at the same path, `.github/workflows/deploy.yml`. The existing `Ecxlipze/DeepSkills.pk` repository and its four secret names are reused. No passwords belong in the workflow.
 
 ## What runs
 
@@ -15,7 +15,7 @@ CI builds as a check; the host builds again to use its own native dependencies a
 
 ## Existing setup verified on 2026-09-09
 
-- Repository: `Ecxlipze/DeepSkill`, default branch `main`.
+- Repository: `Ecxlipze/DeepSkills.pk`, default branch `main`.
 - GitHub has `DEPLOY_SSH_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` secret names. Secret values were not retrieved.
 - Read-only SSH works when the named existing deployment key is selected explicitly.
 - SSH sees a restricted filesystem rooted at `/`, a Plesk-style `/httpdocs` tree and `psaserv`/`psacln` groups. The current `.htaccess` routes APIs to PHP and portals to static HTML.
