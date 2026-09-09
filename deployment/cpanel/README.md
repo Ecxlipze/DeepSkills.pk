@@ -1,63 +1,79 @@
-# DeepSkills: cPanel Node + PHP deployment
+# Deploy DeepSkills to cPanel — Node only
 
-Target: https://deepskills.pk/ at the domain root. This is a source package, not a verified live deployment. Node.js 22 and PHP 8.3 are recommended for this checkout. Supabase remains the database, authentication, storage, and realtime service.
+This package runs the website and all APIs in one Node.js application. Supabase stays in use. PHP is no longer required. The target is `https://deepskills.pk/`.
 
-## Files and routing
+## 1. Back up and upload
 
-1. Back up the existing website and its server configuration before replacement. Use a clean document root or move old static-export files into that backup: an old `index.html`, `/api` directory, or static `.htaccess` can override Passenger routes. Keep cPanel-managed configuration and verify the actual document root before moving anything.
-2. Extract `deepskills-app` under your cPanel home, outside the public document root (for example `~/deepskills-app`). Do not upload the repository's root `.htaccess`: it belongs to static-export hosting.
-3. In **Setup Node.js App / Application Manager**, select production, Node.js 22, application root `deepskills-app`, application URL `https://deepskills.pk/`, and startup file `app.js`.
-4. Put `document-root/legacy-api` in the domain's actual document root. Merge `document-root/cpanel-routes.htaccess` BEFORE cPanel's generated Passenger settings in that document root's `.htaccess`. Preserve the generated Passenger and PHP-handler directives. Do not replace them with the example.
-5. Node handles extensionless API routes and their mapped `.php` aliases. Only PHP-only endpoints are internally rewritten to `/legacy-api/`. The PHP directory disables Passenger. The host must permit PHP execution and these rewrite directives. If its Application Manager binds a different document root, ask the host to map this directory there.
-6. The obsolete JSON-file application handlers and `public/data/users.json` are excluded. Current portal flows use Supabase. The old Plesk deploy script is also excluded.
-7. Do not copy `public/api` back into the Node app. Its PHP sources have deliberately been removed from this package; Next.js does not execute PHP.
+In cPanel File Manager, back up the existing website and its configuration. Keep the backup outside the public document root. Do not delete it.
 
-## Environment
+Upload `deepskills-cpanel-node.zip` into your account home folder (usually `/home/YOUR_USERNAME`), then click **Extract**. You should have `/home/YOUR_USERNAME/deepskills-app/app.js`. The app source and secrets belong outside `public_html`; do not upload the whole project there.
 
-Create a private `.env.local` in `~/deepskills-app` or enter equivalent cPanel application environment variables. Use `.env.example` as the key list, not as usable credentials. Set:
+Old `index.html`, `/api`, `/legacy-api`, static-export rewrite rules, or PHP-routing rules in the domain document root can override Node requests. Back them up and remove those obsolete website files/rules when switching the domain to Node. Preserve cPanel's generated Passenger configuration. Ask your host to help if you cannot identify the domain's actual document root or generated rules.
+
+## 2. Create the Node application
+
+Open **Setup Node.js App** or **Application Manager**. The exact labels depend on your host. Register:
+
+| Setting | Value |
+|---|---|
+| Node.js version | 22 |
+| Application mode | Production |
+| Application root | `deepskills-app` |
+| Application URL | `https://deepskills.pk/` (domain root) |
+| Application startup file | `app.js` |
+
+Save/create the application. Do not add PHP rewrite rules. All `/api` requests must reach this Node app; old supported `.php` URLs are aliases handled inside Next.js.
+
+## 3. Configure the private environment
+
+In File Manager, enable **Show Hidden Files**, open `deepskills-app`, and copy `.env.example` to `.env.local`. Enter your existing Supabase values and your mail provider's settings. Alternatively, enter equivalent variables in the Node application's environment settings. Set file permissions to `600` when using `.env.local`.
+
+Required settings:
 
 - `NODE_ENV=production`
 - `NEXT_PUBLIC_SITE_URL=https://deepskills.pk`
-- Existing `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- Existing revalidation configuration and `CRON_SECRET` if the cleanup job is used
-- `SMTP_HOST`, `SMTP_PORT` (465 for implicit TLS or 587 for STARTTLS), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (an address authorized by the provider)
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`: keep your existing Supabase project.
+- `REVALIDATE_SECRET`, `NEXT_PUBLIC_REVALIDATE_SECRET`: preserve the existing paired configuration. Use `CRON_SECRET` if the cleanup job is configured.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`: obtain these from the sending mailbox provider. Typically port 465 uses implicit TLS; 587 uses STARTTLS. The provider must authorize the sender in `SMTP_FROM`.
+- `CONTACT_EMAIL_TO`: where contact messages go, such as `info@deepskills.pk`.
+- `HR_EMAIL_TO`: where HR administrative notifications go, such as `info@deepskills.pk`.
 
-Public variables are embedded during the build; rebuild if they change. Never put the service-role key or SMTP password into a `NEXT_PUBLIC_*` variable.
+Uncomment the settings you use by removing their leading `#`. Placeholder values do not work. Do not paste passwords into chat or put private keys/passwords in variables beginning with `NEXT_PUBLIC_`. Those public variables are included in the browser build; rebuild after changing them.
 
-PHP-only endpoints load `.env.local` separately from their parent/document-root paths. Their current loaders are not connected to the Node process environment. Configure their Supabase values in the domain document root's `.env.local`, protected by the supplied dotfile-denial rule, and verify that an HTTPS request for it is denied. Prefer a host-configured private environment-file path if your host provides one. Do not assume the Node environment reaches PHP.
+All email paths now use the same Node SMTP transport: OTP, contact, admissions/notifications, and HR. There is no PHP mail configuration to maintain.
 
-## Install, build, activate
+## 4. Install and build
 
-Activate the Node environment using the exact command shown by cPanel, then run in `~/deepskills-app`:
+Open cPanel **Terminal**. If Setup Node.js App displays a command to enter the virtual environment, copy and run that exact command first. Then run these commands one at a time:
 
 ```sh
+cd ~/deepskills-app
 npm ci
+npm run check:node
+npm test
 npm run build
-node scripts/check-smtp.cjs
+npm run check:smtp
 ```
 
-Do not upload macOS `node_modules` to Linux. This ZIP intentionally excludes local builds and dependencies. If the shared host cannot finish the build within its memory/process limits, build in a matching Linux environment and prepare a separate release; do not switch silently to static export.
+Each command must finish successfully before continuing. The build generates `next-build/` and public sitemaps. `check:smtp` verifies connection, TLS and login without sending an email; it does not prove inbox delivery.
 
-Restart the registered app through cPanel after a successful build and configuration. Confirm HTTPS/AutoSSL covers both the selected canonical domain and any redirecting www hostname. Set Supabase Auth Site URL/redirect allowances to the production origin if needed for the existing admin authentication flow.
+If Terminal is unavailable, ask your host to run these commands in the registered app's Node environment. If the host kills the build for memory/process limits, ask for a higher build limit or a matching Linux build environment. Do not upload macOS `node_modules` or switch to static export.
 
-## Email verification
+## 5. Start and verify
 
-The Node admission-email handler now attempts real SMTP and only reports mail-server acceptance. OTP email also requires SMTP in production. `check-smtp.cjs` verifies connection/TLS/authentication only; it does not send a message or prove inbox delivery.
+Return to the Node application screen and click **Restart** after the successful build. If Application Manager has no restart button, Passenger supports creating/updating `tmp/restart.txt` inside the app root. Have your host confirm the app is bound to the domain root.
 
-The legacy PHP contact and HR endpoints still use PHP `mail()`. cPanel must provide a working local mail transport and authorize their sender addresses (`info@deepskills.pk` and/or `dev@deepskills.pk`). Node SMTP settings do not configure PHP mail. Some legacy HR endpoints ignore mail errors: their success response is not delivery proof. Until those endpoints are tested against the host's mail logs/inbox, email parity is PENDING.
+Enable HTTPS/AutoSSL for the domain and any www redirect. Preserve/configure Supabase Auth production URLs for existing admin login if used. Existing database tables and storage buckets are retained; this migration does not require changing database providers.
 
-Use cPanel Email Deliverability to check SPF/DKIM; confirm mail routing matches the selected mailbox provider. With an authorized recipient, test OTP, an enrollment message, contact delivery, and the HR messages actually used. Check the recipient inbox and Track Delivery. SMTP acceptance alone does not prove delivery.
+Use the acceptance list in `VERIFICATION.md` before considering the site live. Test with approved test accounts/records. Confirm email receipt, not just a success toast: cPanel Email Deliverability/Track Delivery or your external provider's logs can help verify SPF/DKIM, routing and rejected mail.
 
-## Acceptance before calling deployment complete
+## If something fails
 
-- Homepage, courses/blog detail pages, refresh/direct navigation, images and fonts.
-- Admin/student/teacher login and logout, production OTP (no dev OTP in responses).
-- Attendance, complaint resolution/replies, results, finance, and uploads using approved test records.
-- Contact/inquiry/registration and legacy HR endpoints return JSON, never PHP source or HTML error pages.
-- Confirm email receipt for each used mail path and record any rejected/queued delivery.
-- Unauthenticated privileged requests remain denied; `.env.local` and PHP helper source URLs are inaccessible.
-- Check ISR revalidation after an approved content change and configure the authenticated notifications-cleanup cron if used.
+- **HTML instead of JSON / Unexpected token `<`:** verify the request URL, the app's build/start logs, and that old static/PHP rewrite rules do not intercept `/api`. Do not repeatedly click a save/send action; it may already have succeeded.
+- **503 / app will not start:** check the Node version, application root, `app.js`, dependency install, successful build, and application logs.
+- **Saved but email not confirmed:** the data can be saved even when mail fails. Review the record and mail logs before retrying. Do not re-finalize hiring just to resend mail; use Share Files for the teacher's documents.
+- **Old site still appears:** inspect the domain document root for old static files and confirm Passenger is serving the correct app.
 
-No live migration, account change, email send, or deployment is performed by the packaging script. All live checks remain pending until host access and the sending mailbox/test recipient are supplied.
+This ZIP is prepared source, not an already deployed website. The host's Node support, available resources, SMTP account and live functionality still need verification.
 
-References: https://docs.cpanel.net/knowledge-base/web-services/how-to-install-a-node.js-application/ ; https://nextjs.org/docs/pages/guides/self-hosting ; https://www.phusionpassenger.com/docs/references/config_reference/apache/#passengerenabled ; https://nodemailer.com/smtp
+Official references: [cPanel Node application setup](https://docs.cpanel.net/knowledge-base/web-services/how-to-install-a-node.js-application/), [Next.js self-hosting](https://nextjs.org/docs/pages/guides/self-hosting), [Nodemailer SMTP](https://nodemailer.com/smtp).

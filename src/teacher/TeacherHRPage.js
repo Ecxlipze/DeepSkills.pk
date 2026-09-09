@@ -124,7 +124,8 @@ const TeacherHRPage = () => {
   const handleSubmitDocuments = async () => {
     setSaving(true);
     try {
-      await submitHRDocuments(bundle.profile.id, user.cnic);
+      const delivery = await submitHRDocuments(bundle.profile.id, user.cnic);
+      if (delivery?.warning) toast.error(delivery.warning);
       toast.success('Documents submitted successfully.');
       await load();
     } catch (error) {

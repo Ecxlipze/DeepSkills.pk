@@ -1,6 +1,6 @@
 // Asks the Next server to regenerate public pages after an admin content edit.
 // Fire-and-forget: on the static-export deploy /api/revalidate is answered by
-// public/api/revalidate.php (which triggers a CI rebuild instead), and any
+// public/api/revalidate (which triggers a CI rebuild instead), and any
 // failure must never break the admin save flow.
 export async function requestRevalidate(paths) {
   try {

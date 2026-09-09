@@ -95,9 +95,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       try {
         const headers = await getAuthHeaders();
         let overviewRes = await fetch('/api/admin/finance/overview', { headers });
-        if (overviewRes.status === 404) {
-          overviewRes = await fetch('/api/admin/finance/overview.php', { headers });
-        }
+
         if (overviewRes.ok) {
           const resData = await overviewRes.json().catch(() => null);
           if (resData?.status === 'success' && resData.data) {
@@ -331,13 +329,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
         body: JSON.stringify(payload)
       });
 
-      if (response.status === 404) {
-        response = await fetch('/api/admin/finance/pay-teacher.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify(payload)
-        });
-      }
+
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {

@@ -28,15 +28,10 @@ for (const status of [401, 403, 500]) {
   });
 }
 
-test('missing Node route falls back to PHP with the same request', async (t) => {
-  const calls = [];
-  t.mock.method(globalThis, 'fetch', async (...args) => {
-    calls.push(args);
-    return calls.length === 1 ? new Response('<!DOCTYPE html>', { status: 404 }) : json(200, { status: 'success', data: [] });
-  });
-  await requestComplaints({ query: '?status=Open', headers: { Authorization: 'Bearer test-session' } });
-  assert.equal(calls[1][0], '/api/admin/academic/complaints.php?status=Open');
-  assert.deepEqual(calls[1][1], calls[0][1]);
+test('missing Node route fails without trying another runtime', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response('<!DOCTYPE html>', { status: 404 }));
+  await assert.rejects(requestComplaints({ query: '?status=Open' }), /invalid response/);
+  assert.equal(fetchMock.mock.callCount(), 1);
 });
 
 test('HTML response produces a useful error without replaying a mutation', async (t) => {

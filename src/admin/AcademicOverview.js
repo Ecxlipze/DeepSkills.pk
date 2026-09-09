@@ -80,11 +80,7 @@ export default function AcademicOverview() {
     else setLoading(true);
 
     // 1. Try Server API Endpoints
-    const apiEndpoints = [
-      '/api/admin/academic/overview/',
-      '/api/admin/academic/overview',
-      '/api/admin/academic/overview.php'
-    ];
+    const apiEndpoints = ['/api/admin/academic/overview'];
 
     try {
       const authHeaders = await getAuthHeaders();

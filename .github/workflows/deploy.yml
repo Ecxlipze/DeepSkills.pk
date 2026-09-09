@@ -1,35 +1,40 @@
-name: Deploy static site
+name: Verify and deploy Node app
 
 on:
   push:
     branches: [main]
-  repository_dispatch:
-    types: [content-published]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-  schedule:
-    # Safety net: pick up content edits even if the dispatch hook is not
-    # configured. Every 6 hours.
-    - cron: '0 */6 * * *'
+    inputs:
+      deploy:
+        description: Deploy the verified Node release to production
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 concurrency:
-  group: deploy
-  cancel-in-progress: true
+  group: node-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build static export
+      - run: npm ci
+      - run: npm run check:node
+      - run: bash -n scripts/deploy-node.sh scripts/deploy-node-remote.sh
+      - run: npm test
+      - name: Build production app
+        if: github.event_name != 'pull_request'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -37,26 +42,44 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://deepskills.pk
           NEXT_PUBLIC_BUSINESS_PHONE: ${{ vars.NEXT_PUBLIC_BUSINESS_PHONE }}
         run: |
-          npm run build:static
-          cp .htaccess out/.htaccess
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          npm run build
+      - name: Package source without secrets or PHP
+        if: github.event_name != 'pull_request'
+        run: npm run package:cpanel
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: node-source-${{ github.sha }}
+          path: deepskills-cpanel-node.zip
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Upload and extract on server
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: deepskills-production
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: deepskills.pk
+      DEPLOY_USER: deepskills.pk_244uyeu33k9
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      DEPLOY_APP_ROOT: ${{ vars.DEPLOY_APP_ROOT }}
+      DEPLOY_NODE_BIN: ${{ vars.DEPLOY_NODE_BIN }}
+      DEPLOY_HEALTH_URL: https://deepskills.pk/api/health/
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-source-${{ github.sha }}
+      - name: Deploy over verified SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H deepskills.pk >> ~/.ssh/known_hosts 2>/dev/null
-          tar czf deploy.tar.gz -C out .
-          scp -i ~/.ssh/deploy_key deploy.tar.gz "deepskills.pk_244uyeu33k9@deepskills.pk:~/deploy.tar.gz"
-          # Server-only files (api/.env.local) survive: the tarball never contains them.
-          ssh -i ~/.ssh/deploy_key "deepskills.pk_244uyeu33k9@deepskills.pk" \
-            'tar xzf ~/deploy.tar.gz -C ~/httpdocs && rm -f ~/deploy.tar.gz'
-
-      - name: Verify live site
-        run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' https://deepskills.pk/)
-          echo "home status: $code"
-          test "$code" = "200"
-          curl -s https://deepskills.pk/sitemap-0.xml | grep -o '<lastmod>[0-9-]*' | head -1
+        run: bash scripts/deploy-node.sh

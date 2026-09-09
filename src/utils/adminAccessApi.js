@@ -1,3 +1,4 @@
+import { requestJson } from './requestJson';
 import { supabase } from '../supabaseClient';
 
 export async function getAuthHeaders() {
@@ -39,51 +40,13 @@ export async function getAuthHeaders() {
 }
 
 async function callAccessEndpoint(endpoint, payload) {
-  const headers = await getAuthHeaders();
-  const cleanEndpoint = endpoint.replace(/\.php$/i, '');
-  let response;
-
-  try {
-    response = await fetch(cleanEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      },
-      body: JSON.stringify(payload)
-    });
-    if (response.status !== 404) {
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'Access synchronization failed.');
-      }
-      return result;
-    }
-  } catch (err) {
-    if (!err.message?.includes('404')) {
-      throw err;
-    }
-  }
-
-  // Fallback to PHP endpoint if Next route returns 404
-  const phpResponse = await fetch(`${cleanEndpoint}.php`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers
-    },
-    body: JSON.stringify(payload)
+  return requestJson(endpoint, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() }, body: JSON.stringify(payload)
   });
-
-  const phpResult = await phpResponse.json().catch(() => ({}));
-  if (!phpResponse.ok || phpResult.status === 'error') {
-    throw new Error(phpResult.message || 'Access synchronization failed.');
-  }
-  return phpResult;
 }
 
 export async function syncStudentAccess({ cnic, name, course, batch }) {
-  return callAccessEndpoint('/api/admin/student-access.php', {
+  return callAccessEndpoint('/api/admin/student-access', {
     action: 'sync',
     cnic,
     name,
@@ -93,14 +56,14 @@ export async function syncStudentAccess({ cnic, name, course, batch }) {
 }
 
 export async function revokeStudentAccess(cnic) {
-  return callAccessEndpoint('/api/admin/student-access.php', {
+  return callAccessEndpoint('/api/admin/student-access', {
     action: 'revoke',
     cnic
   });
 }
 
 export async function syncTeacherAccess({ cnic, name, assignedCourse, batch }) {
-  return callAccessEndpoint('/api/admin/teacher-access.php', {
+  return callAccessEndpoint('/api/admin/teacher-access', {
     action: 'sync',
     cnic,
     name,
@@ -110,14 +73,14 @@ export async function syncTeacherAccess({ cnic, name, assignedCourse, batch }) {
 }
 
 export async function revokeTeacherAccess(cnic) {
-  return callAccessEndpoint('/api/admin/teacher-access.php', {
+  return callAccessEndpoint('/api/admin/teacher-access', {
     action: 'revoke',
     cnic
   });
 }
 
 export async function syncStaffAccess({ cnic, name, role, assignedCourse = '', batch = '' }) {
-  return callAccessEndpoint('/api/admin/staff-access.php', {
+  return callAccessEndpoint('/api/admin/staff-access', {
     action: 'sync',
     cnic,
     name,
@@ -128,7 +91,7 @@ export async function syncStaffAccess({ cnic, name, role, assignedCourse = '', b
 }
 
 export async function revokeStaffAccess(cnic) {
-  return callAccessEndpoint('/api/admin/staff-access.php', {
+  return callAccessEndpoint('/api/admin/staff-access', {
     action: 'revoke',
     cnic
   });

@@ -1,3 +1,4 @@
+import { requestJson } from '../utils/requestJson';
 import React, { createContext, useState, useContext, useEffect } from 'react';
 const AuthContext = createContext(null);
 
@@ -22,41 +23,9 @@ const postJson = async (url, payload) => {
   return result;
 };
 
-const postAuthJson = async (endpointBase, payload, headers = {}) => {
-  const cleanUrl = endpointBase.replace(/\.php$/i, '');
-  let response;
-  try {
-    response = await fetch(cleanUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify(payload)
-    });
-    if (response.status !== 404) {
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'Request failed.');
-      }
-      return result;
-    }
-  } catch (err) {
-    if (!err.message?.includes('404')) {
-      throw err;
-    }
-  }
-
-  // Fallback for Apache shared hosting export
-  const phpUrl = `${cleanUrl}.php`;
-  const phpResponse = await fetch(phpUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(payload)
-  });
-  const phpResult = await phpResponse.json().catch(() => ({}));
-  if (!phpResponse.ok || phpResult.status === 'error') {
-    throw new Error(phpResult.message || 'Request failed.');
-  }
-  return phpResult;
-};
+const postAuthJson = (endpoint, payload, headers = {}) => requestJson(endpoint, {
+  method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(payload)
+});
 
 const clearStoredSupabaseAuth = () => {
   if (typeof window === 'undefined') return;
@@ -88,15 +57,7 @@ export const AuthProvider = ({ children }) => {
               'Authorization': `Bearer ${sessionToken}`
             }
           });
-          if (response.status === 404) {
-            response = await fetch('/api/auth/validate-session.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionToken}`
-              }
-            });
-          }
+
           const result = await response.json().catch(() => ({}));
           if (response.ok && result.status === 'success' && result.user) {
             const freshUser = result.user;
@@ -160,7 +121,7 @@ export const AuthProvider = ({ children }) => {
           throw error;
         }
       }
-      
+
       if (session) {
         const adminUser = {
           id: session.user.id,
@@ -271,7 +232,7 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Registration error:', error);
-      const response = await fetch('/api/register.php', {
+      const response = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(applicationData)
@@ -310,15 +271,7 @@ export const AuthProvider = ({ children }) => {
             'Authorization': `Bearer ${sessionToken}`
           }
         });
-        if (res.status === 404) {
-          await fetch('/api/auth/logout.php', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${sessionToken}`
-            }
-          });
-        }
+
       } catch (err) {
         console.warn('Server logout error:', err);
       }

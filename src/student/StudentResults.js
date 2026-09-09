@@ -189,16 +189,7 @@ const StudentResults = ({ type: propType }) => {
           body: JSON.stringify({ cnic: user.cnic, examType, token: sessionToken })
         });
 
-        if (response.status === 404) {
-          response = await fetch('/api/student/results.php', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
-            },
-            body: JSON.stringify({ cnic: user.cnic, examType, token: sessionToken })
-          });
-        }
+
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload.status === 'error') {
@@ -318,7 +309,7 @@ const StudentResults = ({ type: propType }) => {
                 <FaTrophy /> Rank {result.batch_rank} of {batchStats.count}
               </Badge>
             </div>
-            
+
             <div style={{ marginTop: '30px' }}>
               <button onClick={handleDownloadPdf} style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FaFileDownload /> Download Result Card
@@ -343,7 +334,7 @@ const StudentResults = ({ type: propType }) => {
             </div>
             <div className="track"><div className="fill" style={{ width: `${(result.attendance_marks/weights.att)*100}%` }} /></div>
           </ProgressRow>
-          
+
           <ProgressRow $color="#2ecc71">
             <div className="label-row">
               <span>Assignments</span>
@@ -422,7 +413,7 @@ const StudentResults = ({ type: propType }) => {
             <h4 style={{ color: '#378ADD' }}>{result.total_marks}</h4>
           </MiniStat>
         </ComparisonGrid>
-        
+
         <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85rem', marginTop: '20px' }}>
           Rankings are based on all {batchStats.count} students in {result.batch_id}
         </p>

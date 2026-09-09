@@ -68,16 +68,7 @@ const StudentFinance = () => {
         body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
       });
 
-      if (response.status === 404) {
-        response = await fetch('/api/student/finance.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
-          },
-          body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
-        });
-      }
+
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
@@ -136,7 +127,7 @@ const StudentFinance = () => {
             )}
             <p className="plan-type">Plan: {feePlan.plan_type === 'full' ? 'Full Payment' : `Installment Plan (${feePlan.installment_count} Months)`}</p>
           </div>
-          
+
           <div className="progress-section">
             <div className="progress-text">
               <span>Rs. {feePlan.paidAmount.toLocaleString()} paid</span>

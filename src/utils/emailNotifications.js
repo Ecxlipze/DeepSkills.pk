@@ -1,7 +1,5 @@
 import { getAuthHeaders } from './adminAccessApi';
-
-const EMAIL_ENDPOINT = process.env.NEXT_PUBLIC_EMAIL_ENDPOINT || '/api/admission-email.php';
-const FALLBACK_EMAIL_ENDPOINT = '/api/admission-email.php';
+import { requestJson } from './requestJson';
 
 export const EMAIL_EVENTS = {
   REGISTRATION_RECEIVED: 'registration_received',
@@ -18,55 +16,12 @@ export const EMAIL_EVENTS = {
 };
 
 export async function sendAdmissionEmail(event, payload = {}) {
-  if (!payload.email) {
-    return { ok: false, message: 'Missing recipient email.' };
-  }
-
+  if (!payload.email) return { ok: false, message: 'Missing recipient email.' };
   try {
-    const requestBody = JSON.stringify({ event, ...payload });
-    const headers = { 'Content-Type': 'application/json', ...await getAuthHeaders() };
-    let response;
-    let result;
-
-    const isLocalhost = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-    // 1. Try Next.js API route first (native on localhost and Node.js environments)
-    try {
-      response = await fetch('/api/admission-email', {
-        method: 'POST',
-        headers,
-        body: requestBody
-      });
-      result = await response.json().catch(() => ({}));
-    } catch (e) {
-      // Fallback
-    }
-
-    // 2. Fall back to PHP endpoint ONLY if not on localhost and Next route is not present (404)
-    if (!isLocalhost && response?.status === 404) {
-      const targetEndpoint = EMAIL_ENDPOINT || FALLBACK_EMAIL_ENDPOINT;
-      try {
-        response = await fetch(targetEndpoint, {
-          method: 'POST',
-          headers,
-          body: requestBody
-        });
-        result = await response.json().catch(() => ({}));
-      } catch (e) {
-        // Fallback failed
-      }
-    }
-
-    if (!response?.ok || result?.status !== 'success') {
-      return {
-        ok: false,
-        message: result?.message || `Email could not be confirmed${response ? ` (HTTP ${response.status})` : ''}.`
-      };
-    }
-
-    return { ok: true, message: result.message || 'Email sent.' };
-  } catch (error) {
-    return { ok: false, message: error.message || 'Email request failed.' };
-  }
+    const result = await requestJson('/api/admission-email', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() },
+      body: JSON.stringify({ ...payload, event })
+    });
+    return { ok: true, message: result.message };
+  } catch (error) { return { ok: false, message: error.message || 'Email could not be confirmed.' }; }
 }

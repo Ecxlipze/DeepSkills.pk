@@ -52,7 +52,7 @@ const ProgressHero = styled.div`
 
 const CircularProgress = styled.div`
   position: relative; width: 180px; height: 180px; margin-bottom: 25px;
-  
+
   svg { transform: rotate(-90deg); width: 100%; height: 100%; }
   circle {
     fill: none; stroke-width: 12; stroke-linecap: round;
@@ -165,7 +165,7 @@ const StudentAttendance = () => {
           signal: controller.signal
         };
         let response = await fetch('/api/student/attendance', options);
-        if (response.status === 404) response = await fetch('/api/student/attendance.php', options);
+
         const payload = await response.json();
         if (!response.ok || payload.status !== 'success') throw new Error(payload.message || 'Failed to load attendance.');
         if (disposed) return;
@@ -206,7 +206,7 @@ const StudentAttendance = () => {
     const late = filteredRecords.filter(r => r.status === 'late').length;
     const excused = filteredRecords.filter(r => r.status === 'excused').length;
     const pct = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
-    
+
     return { total, present, absent, late, excused, pct };
   }, [filteredRecords]);
 

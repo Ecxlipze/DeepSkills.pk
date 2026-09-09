@@ -26,16 +26,7 @@ const TeacherFinance = () => {
         body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
       });
 
-      if (response.status === 404) {
-        response = await fetch('/api/teacher/finance.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
-          },
-          body: JSON.stringify({ cnic: user.cnic, token: sessionToken })
-        });
-      }
+
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
@@ -173,7 +164,7 @@ const SummaryRow = styled.div`
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   margin-bottom: 40px;
-  
+
   @media (max-width: 768px) { grid-template-columns: 1fr; }
 `;
 

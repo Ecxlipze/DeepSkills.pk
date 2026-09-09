@@ -496,9 +496,7 @@ const RevenueReport = () => {
       const headers = { 'Content-Type': 'application/json', ...authHeaders };
 
       let res = await fetch(`/api/admin/finance/revenue-report?${params.toString()}`, { headers });
-      if (res.status === 404) {
-        res = await fetch(`/api/admin/finance/revenue-report.php?${params.toString()}`, { headers });
-      }
+
 
       if (res.ok) {
         const json = await res.json().catch(() => null);

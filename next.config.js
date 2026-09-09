@@ -9,18 +9,13 @@ const supabaseHost = (() => {
   }
 })();
 
-// Dual deploy modes: default build targets a Node server (full ISR + API routes).
-// NEXT_OUTPUT=export produces a static export for PHP-only shared hosting, where
-// ISR/fallback/redirects are unsupported (see lib/rendering.js and scripts/build-static.js).
-const isExport = process.env.NEXT_OUTPUT === 'export';
+// API routes and ISR require the Node server. Reject the retired export mode.
+if (process.env.NEXT_OUTPUT === 'export') throw new Error('Static/PHP deployment is retired. Use npm run build and the Node application.');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  ...(isExport ? { output: 'export' } : {}),
   trailingSlash: true,
-  // Next writes the static export into distDir, so give it its own directory
-  // to keep deployable output separate from the Node build.
-  distDir: isExport ? 'out' : 'next-build',
+  distDir: 'next-build',
   transpilePackages: ['react-router-dom'],
   turbopack: {
     resolveAlias: {
@@ -35,7 +30,7 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
   },
   images: {
-    unoptimized: isExport,
+    unoptimized: false,
     disableStaticImages: true,
     remotePatterns: [
       {
@@ -70,9 +65,7 @@ const nextConfig = {
     });
     return config;
   },
-  // redirects() is unsupported in export mode; the same rules are mirrored in .htaccess
   async redirects() {
-    if (isExport) return [];
     return [
       {
         source: '/blogs/post',
@@ -117,7 +110,6 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    if (isExport) return [];
     return {
       beforeFiles: require('./deployment/cpanel/node-api-aliases.json'),
       afterFiles: [],

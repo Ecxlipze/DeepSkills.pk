@@ -75,7 +75,7 @@ const InquiryPage = () => {
         'bot-field': form['bot-field']
       };
 
-      const response = await fetch('/api/inquiry.php', {
+      const response = await fetch('/api/inquiry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -85,13 +85,13 @@ const InquiryPage = () => {
         throw new Error(result.message || 'Inquiry could not be submitted.');
       }
 
-      sendAdmissionEmail(EMAIL_EVENTS.INQUIRY_RECEIVED, {
+      const emailResult = result.data?.id ? await sendAdmissionEmail(EMAIL_EVENTS.INQUIRY_RECEIVED, {
         inquiry_id: result.data?.id,
         email: payload.email,
         name: payload.name,
         cnic: payload.cnic,
         course: payload.course_interest
-      }).catch((error) => console.warn('Inquiry confirmation email failed:', error));
+      }) : { ok: true };
 
       notifyAdmins({
         type: 'inquiry',
@@ -103,6 +103,7 @@ const InquiryPage = () => {
 
       setSubmitted(true);
       toast.success('Inquiry submitted.');
+      if (!emailResult.ok) toast.error('Your inquiry was saved, but the confirmation email could not be sent.');
     } catch (error) {
       toast.error(error.message || 'Inquiry could not be submitted.');
     } finally {

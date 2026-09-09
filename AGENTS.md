@@ -5,7 +5,7 @@
 - `pages/`: Next routes; `pages/api/`: Node API handlers.
 - `src/admin/`, `src/student/`, `src/teacher/`: portal UI; other `src/` files: public UI and shared code.
 - `components/next/`: Next wrappers; `lib/`: server/shared helpers, including `portalAuthServer.js` and `supabaseServer.js`.
-- `public/api/`: PHP API handlers; backend changes may require matching Node and PHP behavior. Trace the affected request before choosing files.
+- Node-only runtime. `legacy/` holds retired PHP/static files for reference; never deploy it. Old PHP URLs rewrite to Node via `deployment/cpanel/node-api-aliases.json`.
 - `supabase/`: schema and migrations; `data/siteContent.js`: site/course content; `tests/`: regression tests.
 
 ## Keep context focused
@@ -20,10 +20,9 @@
 ## Changes and validation
 - Make the smallest complete change; preserve unrelated edits and behavior. Check working-tree status before editing.
 - Run relevant existing checks first. Expand validation for shared code, security, cross-runtime behavior, or unresolved failures.
-- `package.json` has no `test` or `lint` script; inspect available tests rather than invoking nonexistent scripts.
+- Run `npm test` for isolated Node regression tests and `npm run check:node` for runtime/deployment guards.
 - Node regression tests use `node:test` in `tests/*-node.test.mjs`; inspect runtime requirements before running. The attendance test uses `mock.module`, which requires module-mocking support.
-- PHP regression suites are `tests/phase1a-security-php.php` and `tests/attendance-php.php`; invoke the relevant suite with `php`.
-- Syntax-check changed PHP with `php -l <file>`. Use `npm run build` when build validation is relevant; it also runs sitemap generation.
+- Use `npm run build` when build validation is relevant; it also runs sitemap generation. Prefer an isolated source copy if a dev server is running.
 - Do not run legacy `scratch/` scripts until their side effects are understood. Prefer isolated test fixtures.
 - Documentation-only changes need a diff/content review, not an application build. UI acceptance requires rendered checks when requested or needed to verify the change.
 - Preserve authorization and data-ownership checks; never skip necessary security validation to reduce tokens.

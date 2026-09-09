@@ -1,7 +1,6 @@
 // On-demand ISR revalidation, called from the admin panel after content edits
 // (see src/utils/revalidatePublic.js). Requires REVALIDATE_SECRET; only paths in
-// the whitelist below can be regenerated. On the static-export deploy this route
-// does not exist — public/api/revalidate.php answers instead.
+// the whitelist below can be regenerated.
 const EXACT_PATHS = new Set(['/', '/courses', '/media', '/trainers', '/blogs']);
 const PATH_PATTERNS = [/^\/blogs\/[a-z0-9-]+$/, /^\/courses\/[a-z0-9-]+$/];
 

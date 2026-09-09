@@ -50,7 +50,7 @@ const TransactionHistory = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState(router?.query?.search ? String(router.query.search) : '');
-  
+
   // Filter States
   const [filterFlow, setFilterFlow] = useState('all'); // 'all', 'inflow', 'outflow'
   const [filterMethod, setFilterMethod] = useState('all'); // 'all', 'cash', 'bank_transfer', 'online', 'cheque'
@@ -58,7 +58,7 @@ const TransactionHistory = () => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [sortBy, setSortBy] = useState('date_desc'); // 'date_desc', 'date_asc', 'amount_desc', 'amount_asc', 'name_asc'
-  
+
   // Summary & Modal States
   const [apiSummary, setApiSummary] = useState(null);
   const [selectedTxn, setSelectedTxn] = useState(null);
@@ -80,9 +80,7 @@ const TransactionHistory = () => {
       try {
         const headers = await getAuthHeaders();
         let response = await fetch('/api/admin/finance/transactions', { headers });
-        if (response.status === 404) {
-          response = await fetch('/api/admin/finance/transactions.php', { headers });
-        }
+
         if (response.ok) {
           const resData = await response.json().catch(() => null);
           if (resData?.status === 'success' && resData.data) {

@@ -970,9 +970,6 @@ const CounsellorPanel = ({ initialView }) => {
     let response;
     let data;
 
-    const isLocalhost = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
     // 1. Try Next.js API route first (native on localhost and Node.js environments)
     try {
       response = await fetch('/api/admin/enroll-counsellor-student', {
@@ -982,24 +979,10 @@ const CounsellorPanel = ({ initialView }) => {
       });
       data = await response.json().catch(() => null);
     } catch (err) {
-      // Ignore network fallback to PHP
+      // Report the failed attempt below; do not replay an enrollment.
     }
 
-    // 2. Only fallback to PHP if not on localhost AND the Next.js route wasn't found (404) or network failed
-    if (!isLocalhost && (!response || response.status === 404)) {
-      try {
-        const phpResponse = await fetch('/api/admin/enroll-counsellor-student.php', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ payload })
-        });
-        const phpData = await phpResponse.json().catch(() => null);
-        response = phpResponse;
-        data = phpData;
-      } catch (err) {
-        // Fallback finished
-      }
-    }
+
 
     if (!response || !response.ok) {
       toast.error(data?.message || `Enrollment failed (${response?.status || 'network error'})`);
@@ -2830,7 +2813,7 @@ function StudentList({ students = [], batches = [], courses = [], navigate, onAc
         if (filters.feeStatus === 'no_plan') return !fee.plan || fee.totalFee === 0;
         return true;
       })();
-      
+
       const admittedAt = student.submitted_at || student.created_at || student.admission_date;
       const date = admittedAt ? new Date(admittedAt) : null;
       const matchesFrom = !filters.from || (date && date >= new Date(filters.from));

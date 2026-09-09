@@ -30,7 +30,7 @@ if (isset($argv[1])) {
         }
         throw new Exception('Unexpected query');
     };
-    require __DIR__ . '/../public/api/student/attendance.php';
+    require __DIR__ . '/../php/student/attendance.php';
     exit;
 }
 foreach (['success' => 200, 'empty' => 200, 'failure' => 500, 'no_admission' => 403, 'missing' => 401, 'expired' => 401, 'role' => 403] as $scenario => $expected) {

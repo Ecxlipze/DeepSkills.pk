@@ -934,13 +934,13 @@ const AdminHRManagement = ({ initialView }) => {
       const empType = app.jd?.employment_type || '';
       const haystack = `${teacherName} ${spec} ${empType}`.toLowerCase();
       const matchesSearch = !jdSearch || haystack.includes(jdSearch.toLowerCase());
-      
+
       let matchesStatus = true;
       if (jdStatusFilter === 'approved') matchesStatus = app.jd?.teacher_status === 'approved';
       else if (jdStatusFilter === 'changes_requested') matchesStatus = app.jd?.teacher_status === 'changes_requested';
       else if (jdStatusFilter === 'sent') matchesStatus = Boolean(app.jd?.is_sent_to_teacher && app.jd?.teacher_status !== 'approved');
       else if (jdStatusFilter === 'draft') matchesStatus = !app.jd?.is_sent_to_teacher;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [applicationsWithJds, jdSearch, jdStatusFilter]);
@@ -1017,11 +1017,12 @@ const AdminHRManagement = ({ initialView }) => {
     }
     setSubmitting(true);
     try {
-      await sendJD(composerApplication.profile.id, {
+      const delivery = await sendJD(composerApplication.profile.id, {
         ...draft,
         templateId: composerTemplateId
       });
-      toast.success('JD sent to teacher.');
+      toast.success('JD is available in the teacher portal.');
+      if (delivery?.warning) toast.error(delivery.warning);
       setComposerOpen(false);
       await load();
     } catch (error) {
@@ -1065,7 +1066,7 @@ const AdminHRManagement = ({ initialView }) => {
         date
       });
 
-      await finalizeHiring({
+      const delivery = await finalizeHiring({
         application: selectedApplication,
         adminNote,
         acceptanceBlob,
@@ -1073,6 +1074,7 @@ const AdminHRManagement = ({ initialView }) => {
       });
 
       toast.success(`${selectedApplication.teacher?.name || selectedApplication.profile.full_name} has been officially hired and connected to Finance.`);
+      if (delivery?.warning) toast.error(delivery.warning);
       setFinalizeOpen(false);
       await load();
     } catch (error) {
@@ -1091,7 +1093,8 @@ const AdminHRManagement = ({ initialView }) => {
     if (!reason?.trim()) return;
     setSubmitting(true);
     try {
-      await rejectApplication(application.profile.id, reason.trim());
+      const delivery = await rejectApplication(application.profile.id, reason.trim());
+      if (delivery?.warning) toast.error(delivery.warning);
       toast.success('Application rejected.');
       await load();
     } catch (error) {

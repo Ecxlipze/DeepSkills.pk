@@ -1,0 +1,62 @@
+name: Deploy static site
+
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [content-published]
+  workflow_dispatch:
+  schedule:
+    # Safety net: pick up content edits even if the dispatch hook is not
+    # configured. Every 6 hours.
+    - cron: '0 */6 * * *'
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: https://deepskills.pk
+          NEXT_PUBLIC_BUSINESS_PHONE: ${{ vars.NEXT_PUBLIC_BUSINESS_PHONE }}
+        run: |
+          npm run build:static
+          cp .htaccess out/.htaccess
+
+      - name: Upload and extract on server
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H deepskills.pk >> ~/.ssh/known_hosts 2>/dev/null
+          tar czf deploy.tar.gz -C out .
+          scp -i ~/.ssh/deploy_key deploy.tar.gz "deepskills.pk_244uyeu33k9@deepskills.pk:~/deploy.tar.gz"
+          # Server-only files (api/.env.local) survive: the tarball never contains them.
+          ssh -i ~/.ssh/deploy_key "deepskills.pk_244uyeu33k9@deepskills.pk" \
+            'tar xzf ~/deploy.tar.gz -C ~/httpdocs && rm -f ~/deploy.tar.gz'
+
+      - name: Verify live site
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://deepskills.pk/)
+          echo "home status: $code"
+          test "$code" = "200"
+          curl -s https://deepskills.pk/sitemap-0.xml | grep -o '<lastmod>[0-9-]*' | head -1

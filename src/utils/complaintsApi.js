@@ -1,5 +1,4 @@
-// Only a missing route permits switching runtimes. Never replay a mutation
-// after an authorization, server, network, or response-parsing failure.
+// Node-only transport. Never replay an interrupted mutation.
 export async function requestComplaints({ headers, method = 'GET', body, query = '' } = {}) {
   const endpoint = '/api/admin/academic/complaints';
   const options = {
@@ -8,9 +7,7 @@ export async function requestComplaints({ headers, method = 'GET', body, query =
     ...(body ? { body: JSON.stringify(body) } : {})
   };
   let response = await fetch(`${endpoint}${query}`, options);
-  if (response.status === 404) {
-    response = await fetch(`${endpoint}.php${query}`, options);
-  }
+
 
   let result;
   try {

@@ -197,7 +197,7 @@ function execSendOtp($body, $headers = []) {
     }
     $GLOBALS['__OTP_INPUT__'] = $body;
     try {
-        include __DIR__ . '/../public/api/auth/send-otp.php';
+        include __DIR__ . '/../php/auth/send-otp.php';
         return ['status' => 200, 'payload' => null];
     } catch (TestResponseException $e) {
         return ['status' => $e->status, 'payload' => $e->payload];
@@ -213,7 +213,7 @@ function execBlogIndex($method, $token = null, $body = null) {
     }
     $GLOBALS['__BLOG_INPUT__'] = $body;
     try {
-        include __DIR__ . '/../public/api/blog/index.php';
+        include __DIR__ . '/../php/blog/index.php';
         return ['status' => 200, 'payload' => null];
     } catch (TestResponseException $e) {
         return ['status' => $e->status, 'payload' => $e->payload];
@@ -229,7 +229,7 @@ function execBlogDelete($id, $token = null) {
         unset($_SERVER['HTTP_AUTHORIZATION']);
     }
     try {
-        include __DIR__ . '/../public/api/blog/delete.php';
+        include __DIR__ . '/../php/blog/delete.php';
         return ['status' => 200, 'payload' => null];
     } catch (TestResponseException $e) {
         return ['status' => $e->status, 'payload' => $e->payload];

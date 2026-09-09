@@ -203,9 +203,7 @@ export default function FeeSettings() {
       const headers = { 'Content-Type': 'application/json', ...authHeaders };
 
       let res = await fetch('/api/admin/finance/settings/', { headers });
-      if (res.status === 404) {
-        res = await fetch('/api/admin/finance/settings.php', { headers });
-      }
+
 
       if (res.ok) {
         const json = await res.json().catch(() => null);
@@ -288,13 +286,7 @@ export default function FeeSettings() {
         body: JSON.stringify({ action: 'update_fee_settings', settings })
       });
 
-      if (res.status === 404) {
-        res = await fetch('/api/admin/finance/settings.php', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ action: 'update_fee_settings', settings })
-        });
-      }
+
 
       if (res.ok) {
         const json = await res.json().catch(() => null);
@@ -350,13 +342,7 @@ export default function FeeSettings() {
         body: JSON.stringify({ action: 'reset_defaults' })
       });
 
-      if (res.status === 404) {
-        res = await fetch('/api/admin/finance/settings.php', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ action: 'reset_defaults' })
-        });
-      }
+
 
       if (res.ok) {
         setSettings(DEFAULT_FEE_SETTINGS);
@@ -414,17 +400,7 @@ export default function FeeSettings() {
         })
       });
 
-      if (res.status === 404) {
-        res = await fetch('/api/admin/finance/settings.php', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            action: 'update_course_tuition',
-            courseId: editingCourse.id,
-            courseUpdates: updates
-          })
-        });
-      }
+
 
       if (res.ok) {
         const json = await res.json().catch(() => null);

@@ -56,6 +56,18 @@
     "destination": "/api/admin/finance/transactions"
   },
   {
+    "source": "/api/admin/hr/finalize.php",
+    "destination": "/api/admin/hr/finalize"
+  },
+  {
+    "source": "/api/admin/hr/reject.php",
+    "destination": "/api/admin/hr/reject"
+  },
+  {
+    "source": "/api/admin/hr/send-jd.php",
+    "destination": "/api/admin/hr/send-jd"
+  },
+  {
     "source": "/api/admin/staff-access.php",
     "destination": "/api/admin/staff-access"
   },
@@ -100,12 +112,32 @@
     "destination": "/api/blog-view"
   },
   {
+    "source": "/api/contact.php",
+    "destination": "/api/contact"
+  },
+  {
+    "source": "/api/hr/notify-admin.php",
+    "destination": "/api/hr/notify-admin"
+  },
+  {
+    "source": "/api/hr/share-files.php",
+    "destination": "/api/hr/share-files"
+  },
+  {
     "source": "/api/hr/teacher.php",
     "destination": "/api/hr/teacher"
   },
   {
+    "source": "/api/inquiry.php",
+    "destination": "/api/inquiry"
+  },
+  {
     "source": "/api/notifications/cleanup.php",
     "destination": "/api/notifications/cleanup"
+  },
+  {
+    "source": "/api/register.php",
+    "destination": "/api/register"
   },
   {
     "source": "/api/revalidate.php",
@@ -126,5 +158,9 @@
   {
     "source": "/api/teacher/finance.php",
     "destination": "/api/teacher/finance"
+  },
+  {
+    "source": "/api/blog/delete.php",
+    "destination": "/api/blog/delete-legacy"
   }
 ]

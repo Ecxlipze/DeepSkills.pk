@@ -1065,13 +1065,7 @@ const AdminResults = () => {
             }
           });
 
-          if (res.status === 404) {
-            res = await fetch(`/api/admin/academic/results.php?${queryParams}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-          }
+
 
           if (res.ok) {
             const json = await res.json();
@@ -1195,16 +1189,7 @@ const AdminResults = () => {
             body: JSON.stringify(payload)
           });
 
-          if (res.status === 404) {
-            res = await fetch('/api/admin/academic/results.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(payload)
-            });
-          }
+
 
           if (res.ok) {
             const json = await res.json();
@@ -1281,16 +1266,7 @@ const AdminResults = () => {
             body: JSON.stringify(payload)
           });
 
-          if (res.status === 404) {
-            res = await fetch('/api/admin/academic/results.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(payload)
-            });
-          }
+
 
           if (res.ok) {
             const json = await res.json();
@@ -1374,16 +1350,7 @@ const AdminResults = () => {
             body: JSON.stringify(payload)
           });
 
-          if (res.status === 404) {
-            res = await fetch('/api/admin/academic/results.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(payload)
-            });
-          }
+
 
           if (res.ok) {
             const json = await res.json();

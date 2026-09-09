@@ -2,7 +2,8 @@ import { supabase } from '../supabaseClient';
 import { buildJdDraft } from './hrJdBuilder';
 import { uploadHrAsset, uploadHrBlob } from './hrStorage';
 import { createNotification } from './notifications';
-import { syncTeacherAccess } from './adminAccessApi';
+import { getAuthHeaders } from './adminAccessApi';
+import { requestJson } from './requestJson';
 
 const nowIso = () => new Date().toISOString();
 
@@ -16,47 +17,22 @@ const getSessionToken = () => {
 };
 
 const teacherHrRequest = async (payload) => {
-  const sessionToken = getSessionToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
-  };
-  const body = JSON.stringify({
-    ...payload,
-    token: sessionToken
+  const token = getSessionToken();
+  const result = await requestJson('/api/hr/teacher', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ...payload, token })
   });
+  return result.data;
+};
 
-  let response;
-  try {
-    response = await fetch('/api/hr/teacher', {
-      method: 'POST',
-      headers,
-      body
-    });
-    if (response.status !== 404 && response.status !== 405) {
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.status === 'error') {
-        throw new Error(result.message || 'HR request failed.');
-      }
-      return result.data;
-    }
-  } catch (err) {
-    if (!err.message?.includes('404') && !err.message?.includes('405')) {
-      throw err;
-    }
-  }
+const hrAction = async (endpoint, payload) => requestJson(endpoint, {
+  method: 'POST', headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() },
+  body: JSON.stringify(payload)
+});
 
-  // Fallback for static PHP hosting
-  const phpResponse = await fetch('/api/hr/teacher.php', {
-    method: 'POST',
-    headers,
-    body
-  });
-  const phpResult = await phpResponse.json().catch(() => ({}));
-  if (!phpResponse.ok || phpResult.status === 'error') {
-    throw new Error(phpResult.message || 'HR request failed.');
-  }
-  return phpResult.data;
+const notifyAfterSave = async (endpoint, payload) => {
+  try { return await hrAction(endpoint, payload); }
+  catch { return { warning: 'Documents were saved, but the notification email could not be confirmed.' }; }
 };
 
 const safeSingle = async (query) => {
@@ -131,11 +107,7 @@ export const removeHRDocument = async (id, cnic) => {
 export const submitHRDocuments = async (profileId, cnic) => {
   await teacherHrRequest({ action: 'submit_documents', cnic, profileId });
 
-  await fetch('/api/hr/notify-admin.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profileId })
-  }).catch(() => null);
+  return notifyAfterSave('/api/hr/notify-admin', { profileId });
 };
 
 export const approveJD = async (jdId, profileId, cnic) => {
@@ -247,31 +219,7 @@ export const saveJD = async (profileId, jdPayload) => {
 
 export const sendJD = async (profileId, jdPayload) => {
   const saved = await saveJD(profileId, { ...jdPayload, adminEdited: true });
-  const { error } = await supabase
-    .from('hr_jds')
-    .update({
-      is_sent_to_teacher: true,
-      teacher_status: 'pending',
-      updated_at: nowIso()
-    })
-    .eq('id', saved.id);
-  if (error) {
-    throw error;
-  }
-
-  await supabase
-    .from('hr_profiles')
-    .update({
-      hr_status: 'jd_sent',
-      updated_at: nowIso()
-    })
-    .eq('id', profileId);
-
-  await fetch('/api/admin/hr/send-jd.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profileId, jd: jdPayload })
-  }).catch(() => null);
+  const delivery = await hrAction('/api/admin/hr/send-jd', { profileId });
 
   const { data: profile } = await supabase
     .from('hr_profiles')
@@ -287,7 +235,7 @@ export const sendJD = async (profileId, jdPayload) => {
       title: 'JD Ready',
       message: `Your job description is ready for review.`,
       link: '/teacher/hr',
-      sendEmail: true,
+      sendEmail: false,
       emailData: {
         email: profile.personal_email,
         name: profile.full_name,
@@ -297,26 +245,10 @@ export const sendJD = async (profileId, jdPayload) => {
     });
   }
 
-  return saved;
+  return { ...saved, warning: delivery.warning };
 };
 
-export const rejectApplication = async (profileId, reason) => {
-  const payload = {
-    hr_status: 'rejected',
-    rejection_reason: reason,
-    rejected_at: nowIso(),
-    updated_at: nowIso()
-  };
-  const { error } = await supabase.from('hr_profiles').update(payload).eq('id', profileId);
-  if (error) {
-    throw error;
-  }
-  await fetch('/api/admin/hr/reject.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profileId, reason })
-  }).catch(() => null);
-};
+export const rejectApplication = (profileId, reason) => hrAction('/api/admin/hr/reject', { profileId, reason });
 
 export const finalizeHiring = async ({
   application,
@@ -367,65 +299,14 @@ export const finalizeHiring = async ({
     }
   ];
 
-  await supabase.from('hr_files').delete().eq('hr_profile_id', profile.id);
+  const { error: deleteError } = await supabase.from('hr_files').delete().eq('hr_profile_id', profile.id);
+  if (deleteError) throw deleteError;
   const { error: fileError } = await supabase.from('hr_files').insert(rows);
   if (fileError) {
     throw fileError;
   }
 
-  const { error: profileError } = await supabase
-    .from('hr_profiles')
-    .update({
-      hr_status: 'hired',
-      hired_at: nowIso(),
-      current_step: 5,
-      updated_at: nowIso()
-    })
-    .eq('id', profile.id);
-  if (profileError) {
-    throw profileError;
-  }
-
-  const { error: teacherError } = await supabase
-    .from('teachers')
-    .update({
-      status: 'Active'
-    })
-    .eq('id', teacher.id);
-  if (teacherError) {
-    throw teacherError;
-  }
-
-  await syncTeacherAccess({
-    cnic: teacher.cnic,
-    name: teacher.name,
-    assignedCourse: teacher.specialization || jd?.position_title || 'Teacher'
-  });
-
-  // Auto-connect pre-agreed salary to Finance Department
-  const resolvedSalary = (jd?.salary && Number(jd.salary) > 0)
-    ? Number(jd.salary)
-    : (profile?.expected_salary && Number(profile.expected_salary) > 0 ? Number(profile.expected_salary) : 0);
-
-  if (resolvedSalary > 0) {
-    try {
-      await supabase.from('teacher_salaries').upsert({
-        teacher_id: teacher.id,
-        monthly_amount: resolvedSalary,
-        effective_from: new Date().toISOString().split('T')[0]
-      }, { onConflict: 'teacher_id' });
-    } catch (_) {}
-  }
-
-  await fetch('/api/admin/hr/finalize.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      profileId: profile.id,
-      adminNote,
-      files: rows
-    })
-  }).catch(() => null);
+  const delivery = await hrAction('/api/admin/hr/finalize', { profileId: profile.id, adminNote });
 
   await createNotification({
     userId: teacher.id,
@@ -434,7 +315,7 @@ export const finalizeHiring = async ({
     title: 'Hiring Finalized',
     message: `Your DeepSkills hiring process has been finalized.`,
     link: '/teacher/hr',
-    sendEmail: true,
+    sendEmail: false,
     emailData: {
       email: teacher.email || profile.personal_email,
       name: teacher.name || profile.full_name,
@@ -442,21 +323,10 @@ export const finalizeHiring = async ({
       message: 'Your DeepSkills hiring process has been finalized.'
     }
   });
+  return delivery;
 };
 
-export const shareHiringFiles = async (profileId) => {
-  const response = await fetch('/api/hr/share-files.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profileId })
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to email hiring documents.');
-  }
-
-  return response.json();
-};
+export const shareHiringFiles = (profileId) => hrAction('/api/hr/share-files', { profileId });
 
 export const fetchTeacherLeaves = async () => {
   try {

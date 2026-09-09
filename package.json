@@ -35,8 +35,11 @@
     "start": "NODE_ENV=production node server.js",
     "start:next": "next start",
     "build": "next build --webpack",
-    "build:static": "node scripts/build-static.js",
-    "postbuild": "next-sitemap"
+    "postbuild": "next-sitemap",
+    "test": "node --experimental-test-module-mocks --test tests/*.test.mjs",
+    "check:node": "node scripts/check-node-only.cjs",
+    "check:smtp": "node scripts/check-smtp.cjs",
+    "package:cpanel": "node scripts/package-cpanel.cjs"
   },
   "browserslist": {
     "production": [
