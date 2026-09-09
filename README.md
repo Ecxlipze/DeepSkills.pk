@@ -60,7 +60,7 @@ npm run check:smtp     # connection/authentication only, no email sent
 npm run package:cpanel # source ZIP without secrets or dependencies
 ```
 
-For beginner deployment steps, read [the cPanel guide](deployment/cpanel/README.md). All email paths use `lib/smtp.cjs`; set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`. `CONTACT_EMAIL_TO` and `HR_EMAIL_TO` choose the administrative recipients.
+For beginner deployment steps, read [the cPanel guide](deployment/cpanel/README.md). For the existing SSH/GitHub setup, see [GitHub Actions deployment](deployment/github-actions/README.md). All email paths use `lib/smtp.cjs`; set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`. `CONTACT_EMAIL_TO` and `HR_EMAIL_TO` choose the administrative recipients.
 
 Static/PHP deployment is retired. Old supported `.php` URLs rewrite internally to authenticated Node handlers; the UI calls extensionless routes directly. The former PHP files, static build and Plesk deployment workflow are archived in `legacy/` and excluded from the deployment ZIP. See [migration scope](deployment/cpanel/MIGRATION.md) and [verification](deployment/cpanel/VERIFICATION.md).
 
