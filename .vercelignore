@@ -1,0 +1,20 @@
+.git
+.vercel
+node_modules
+next-build
+.next
+build
+out
+coverage
+.env*
+legacy
+scratch
+supabase
+/deepskills-cpanel
+/deepskills-cpanel-node
+/deepskills-deploy
+/deepskills-deploy 2
+/deepskills-vps-source
+*.zip
+*.tar.gz
+*.log
