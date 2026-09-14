@@ -2,10 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import styled from 'styled-components';
 import { supabase } from '../supabaseClient';
 
+import { useRouter } from 'next/router';
 import {
   FaSearch, FaFilter,
   FaEye, FaChevronLeft,
-  FaChevronRight, FaFileCsv, FaUserGraduate, FaTimes
+  FaChevronRight, FaFileCsv, FaUserGraduate, FaTimes,
+  FaLayerGroup, FaBookOpen, FaChalkboardTeacher, FaAward,
+  FaShareAlt, FaUsers, FaCog
 } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +17,46 @@ import { Skeleton } from '../components/Skeleton';
 const Container = styled.div`
   padding: 20px 0;
   color: #fff;
+`;
+
+const SubNavRibbon = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 22px;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+  }
+`;
+
+const NavChip = styled.button`
+  background: ${props => props.$active ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.03)'};
+  color: ${props => props.$active ? '#c084fc' : '#94a3b8'};
+  border: 1px solid ${props => props.$active ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.08)'};
+  padding: 7px 15px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(168, 85, 247, 0.2);
+    color: #fff;
+    border-color: rgba(168, 85, 247, 0.5);
+  }
 `;
 
 const PageHeader = styled.div`
@@ -65,58 +108,73 @@ const ExportBtn = styled.button`
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 30px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 `;
 
 const StatCard = styled.div`
-  background: #111318;
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #0d0f14;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
 
   .label {
-    color: #888;
-    font-size: 0.85rem;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   .value {
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: 1.65rem;
+    font-weight: 800;
     color: ${props => props.color || '#fff'};
+    letter-spacing: -0.02em;
+  }
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
   }
 `;
 
 const StatusBadge = styled.span`
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
   background: ${props => {
     switch (props.$status?.toLowerCase()) {
-      case 'active': return 'rgba(46, 204, 113, 0.1)';
-      case 'graduated': return 'rgba(52, 152, 219, 0.1)';
-      case 'dropped': return 'rgba(231, 76, 60, 0.1)';
-      default: return 'rgba(255, 255, 255, 0.05)';
+      case 'active': return 'rgba(16, 185, 129, 0.15)';
+      case 'graduated': return 'rgba(56, 189, 248, 0.15)';
+      case 'dropped': return 'rgba(239, 68, 68, 0.15)';
+      case 'pending': return 'rgba(245, 158, 11, 0.15)';
+      default: return 'rgba(148, 163, 184, 0.15)';
     }
   }};
   color: ${props => {
     switch (props.$status?.toLowerCase()) {
-      case 'active': return '#2ecc71';
-      case 'graduated': return '#3498db';
-      case 'dropped': return '#e74c3c';
-      default: return '#888';
+      case 'active': return '#34d399';
+      case 'graduated': return '#38bdf8';
+      case 'dropped': return '#f87171';
+      case 'pending': return '#fbbf24';
+      default: return '#94a3b8';
+    }
+  }};
+  border: 1px solid ${props => {
+    switch (props.$status?.toLowerCase()) {
+      case 'active': return 'rgba(16, 185, 129, 0.3)';
+      case 'graduated': return 'rgba(56, 189, 248, 0.3)';
+      case 'dropped': return 'rgba(239, 68, 68, 0.3)';
+      case 'pending': return 'rgba(245, 158, 11, 0.3)';
+      default: return 'rgba(148, 163, 184, 0.3)';
     }
   }};
 `;
@@ -306,6 +364,7 @@ const StudentInfo = styled.div`
 `;
 
 const StudentManager = () => {
+  const router = useRouter();
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -325,11 +384,26 @@ const StudentManager = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
 
+  // Sync filters from URL query parameters (e.g. from Management Overview batch links)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { batch, course, status, search } = router.query;
+    if (batch || course || status || search) {
+      setFilters(prev => ({
+        ...prev,
+        ...(batch ? { batch: String(batch) } : {}),
+        ...(course ? { course: String(course) } : {}),
+        ...(status ? { status: String(status) } : {}),
+        ...(search ? { search: String(search) } : {})
+      }));
+    }
+  }, [router.isReady, router.query]);
+
   const fetchStudents = useCallback(async () => {
     const { data } = await supabase
       .from('admissions')
       .select('*')
-      .in('status', ['Active', 'Inactive', 'Graduated']);
+      .order('submitted_at', { ascending: false });
 
     if (data) setStudents(data);
   }, []);
@@ -403,8 +477,9 @@ const StudentManager = () => {
   const stats = useMemo(() => {
     return {
       total: students.length,
-      active: students.filter(s => s.status === 'Active').length,
-      inactive: students.filter(s => s.status === 'Inactive').length
+      active: students.filter(s => (s.status || '').toLowerCase() === 'active').length,
+      graduated: students.filter(s => (s.status || '').toLowerCase() === 'graduated').length,
+      inactive: students.filter(s => ['inactive', 'dropped'].includes((s.status || '').toLowerCase())).length
     };
   }, [students]);
 
@@ -438,10 +513,41 @@ const StudentManager = () => {
   return (
     <AdminLayout>
       <Container>
+        {/* Standardized Management Sub-Navigation Ribbon */}
+        <SubNavRibbon>
+          <NavChip onClick={() => router.push('/admin/management')}>
+            <FaLayerGroup /> Management Hub
+          </NavChip>
+          <NavChip $active onClick={() => router.push('/admin/management/students')}>
+            <FaUserGraduate /> Students
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/courses')}>
+            <FaBookOpen /> Courses & Batches
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/teachers')}>
+            <FaChalkboardTeacher /> Faculty
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/certificates')}>
+            <FaAward /> Certificates
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/referral')}>
+            <FaShareAlt /> Referral Program
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/users')}>
+            <FaUsers /> User Accounts
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/reports')}>
+            <FaLayerGroup /> Reports
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/settings')}>
+            <FaCog /> Settings
+          </NavChip>
+        </SubNavRibbon>
+
         <PageHeader>
           <div className="title-block">
-            <h1>Students</h1>
-            <p>All enrolled students across batches</p>
+            <h1>Students Directory</h1>
+            <p>Active, graduated, and enrolled students across all course cohorts</p>
           </div>
           <ExportBtn onClick={exportCSV}>
             <FaFileCsv /> Export CSV
@@ -453,12 +559,16 @@ const StudentManager = () => {
             <span className="label">Total Students</span>
             <span className="value">{stats.total}</span>
           </StatCard>
-          <StatCard color="#2ecc71">
+          <StatCard color="#34d399">
             <span className="label">Active</span>
             <span className="value">{stats.active}</span>
           </StatCard>
-          <StatCard color="#9ca3af">
-            <span className="label">Inactive</span>
+          <StatCard color="#38bdf8">
+            <span className="label">Graduated</span>
+            <span className="value">{stats.graduated}</span>
+          </StatCard>
+          <StatCard color="#94a3b8">
+            <span className="label">Inactive / Dropped</span>
             <span className="value">{stats.inactive}</span>
           </StatCard>
         </StatsGrid>
@@ -498,8 +608,10 @@ const StudentManager = () => {
               <select value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})}>
                 <option value="All">All Status</option>
                 <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
                 <option value="Graduated">Graduated</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Dropped">Dropped</option>
+                <option value="Pending">Pending</option>
               </select>
             </InputWrapper>
 
@@ -549,10 +661,12 @@ const StudentManager = () => {
                 ))
               ) : paginatedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '100px 20px' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🔍</div>
-                    <h3 style={{ color: '#fff', marginBottom: '10px' }}>No students found</h3>
-                    <p style={{ color: '#666' }}>Try adjusting your filters or search query.</p>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '80px 20px' }}>
+                    <div style={{ fontSize: '2.5rem', color: '#64748b', marginBottom: '16px' }}>
+                      <FaSearch />
+                    </div>
+                    <h3 style={{ color: '#fff', marginBottom: '8px' }}>No students found</h3>
+                    <p style={{ color: '#94a3b8', margin: 0 }}>Try adjusting your filters or search query.</p>
                   </td>
                 </tr>
               ) : (

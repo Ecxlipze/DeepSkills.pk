@@ -49,3 +49,10 @@ lint_output.txt
 # backups & audit logs
 scratch/backup_*.json
 scratch/*audit*.json
+
+# Vercel project links and local build output
+/.vercel
+/deepskills-cpanel-node
+/deepskills-cpanel-prebuilt-linux-x64/deepskills-app
+/deepskills-cpanel-node
+/deepskills-cpanel-node

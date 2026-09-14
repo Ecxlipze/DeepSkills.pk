@@ -8,7 +8,7 @@ export default function handler(req, res) {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ status: 'error', message: 'Method not allowed.' });
   }
-  let release = 'local';
+  let release = process.env.VERCEL_GIT_COMMIT_SHA || 'local';
   try { release = fs.readFileSync(path.join(process.cwd(), '.release-id'), 'utf8').trim(); }
   catch (error) {
     if (error.code !== 'ENOENT') return res.status(503).json({ status: 'error' });

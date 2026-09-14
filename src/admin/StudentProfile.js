@@ -637,6 +637,12 @@ const StudentProfile = ({ studentId }) => {
         });
       }
 
+      // 3. Keep fee plans aligned with the new batch assignment
+      await supabase
+        .from('fee_plans')
+        .update({ batch: nextBatchName })
+        .eq('student_id', id);
+
       setStudent(prev => ({ 
         ...prev, 
         batch: nextBatchName,

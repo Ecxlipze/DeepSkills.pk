@@ -52,6 +52,7 @@ const AdminTasksPage = dynamic(() => import('../../src/admin/AdminTasksPage'), {
 const AdminGroupChatsPage = dynamic(() => import('../../src/admin/AdminGroupChatsPage'), { ssr: false });
 const DepartmentPlaceholder = dynamic(() => import('../../src/admin/DepartmentPlaceholder'), { ssr: false });
 const AdminAcademicOverview = dynamic(() => import('../../src/admin/AcademicOverview'), { ssr: false });
+const ManagementOverview = dynamic(() => import('../../src/admin/ManagementOverview'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -149,7 +150,7 @@ function getAdminPage(path = []) {
   }
 
   if (section === 'management') {
-    if (!child) return <DepartmentHubRedirect departmentId="management" currentPath="/admin/management" />;
+    if (!child) return <ManagementOverview />;
     if (child === 'students') return subpath ? <StudentProfile studentId={subpath} /> : <StudentManager />;
     if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/management/teachers" />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;

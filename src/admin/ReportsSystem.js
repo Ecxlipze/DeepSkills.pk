@@ -6,9 +6,11 @@ import {
 } from 'recharts';
 import JSZip from 'jszip';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/router';
 import {
   FaCalendarAlt, FaChartBar, FaClock, FaDownload, FaFileCsv, FaPrint,
-  FaSave, FaTrash
+  FaSave, FaTrash, FaCalendarCheck, FaTasks, FaAward, FaBullhorn, FaComments, FaBookOpen,
+  FaUsers, FaUserCheck, FaLayerGroup
 } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
@@ -22,7 +24,7 @@ const DEPT_COLORS = {
   management: '#EF4444'
 };
 
-const CHART_COLORS = ['#4F8EF7', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#0D9488'];
+const CHART_COLORS = ['#c084fc', '#10B981', '#7B1F2E', '#F59E0B', '#38bdf8', '#fb7185'];
 
 const BUILTIN_TEMPLATES = [
   { name: 'Monthly Summary', description: 'Cross-department overview for end of month', is_builtin: true, departments: ['counsellor', 'finance', 'academic', 'management'], config: { sections: ['overview', 'counsellor', 'finance', 'academic', 'management'], timePeriod: 'this_month' } },
@@ -414,8 +416,38 @@ function TimePeriodSelector({ period, setPeriod, batches }) {
   );
 }
 
+const STAT_ICONS = {
+  'Avg Attendance': FaCalendarCheck,
+  'Tasks Submitted': FaTasks,
+  'Avg Result Score': FaAward,
+  'Open Complaints': FaComments,
+  'Total Students': FaUsers,
+  'Active Students': FaUserCheck,
+  'Active Batches': FaLayerGroup,
+  'Courses': FaBookOpen
+};
+
 function StatGrid({ stats }) {
-  return <StatsGrid>{stats.map((stat) => <StatCard className="report-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></StatCard>)}</StatsGrid>;
+  return (
+    <StatsGrid>
+      {stats.map((stat) => {
+        const Icon = STAT_ICONS[stat.label];
+        return (
+          <StatCard className="report-card" key={stat.label}>
+            <div className="stat-header">
+              <span>{stat.label}</span>
+              {Icon && (
+                <div className="icon-wrap">
+                  <Icon />
+                </div>
+              )}
+            </div>
+            <strong>{stat.value}</strong>
+          </StatCard>
+        );
+      })}
+    </StatsGrid>
+  );
 }
 
 function ChartPanel({ title, children }) {
@@ -524,8 +556,8 @@ function AcademicReport({ metrics }) {
       <StatGrid stats={metrics.stats} />
       <Grid2>
         <ChartPanel title="Attendance Trend"><LineChartBlock data={metrics.attendanceTrend.map((row) => ({ ...row, month: row.date }))} lines={['attendance']} /></ChartPanel>
-        <ChartPanel title="Task Completion by Batch"><BarChartBlock data={metrics.taskCompletion} color={DEPT_COLORS.academic} /></ChartPanel>
-        <ChartPanel title="Grade Distribution"><BarChartBlock data={metrics.grades} color="#8B5CF6" /></ChartPanel>
+        <ChartPanel title="Task Completion by Batch"><BarChartBlock data={metrics.taskCompletion} color="#c084fc" /></ChartPanel>
+        <ChartPanel title="Grade Distribution"><BarChartBlock data={metrics.grades} color="#7B1F2E" /></ChartPanel>
         <ChartPanel title="Complaints by Category"><PieChartBlock data={metrics.complaints} /></ChartPanel>
       </Grid2>
       <DataTable headers={['Batch', 'Students', 'Avg Attendance', 'Task Completion', 'Avg Score', 'Pass Rate']} rows={tableRows} />
@@ -730,6 +762,7 @@ function ScheduledTab({ schedules, templates, setupWarnings }) {
 }
 
 export default function ReportsSystem({ mode = 'master' }) {
+  const router = useRouter();
   const { loading, setupWarnings, data } = useReportData();
   const [period, setPeriod] = useState({ type: 'this_month', year: new Date().getFullYear(), from: '', to: '', batchId: '' });
   const [activeTab, setActiveTab] = useState(mode === 'master' ? 'overview' : mode);
@@ -742,6 +775,34 @@ export default function ReportsSystem({ mode = 'master' }) {
   const exportCurrentCsv = () => {
     const metricSet = metrics[currentTab];
     if (!metricSet?.stats) return toast.error('This tab uses template exports.');
+
+    if (currentTab === 'academic' && metricSet.batchTable?.length) {
+      const summaryRows = [
+        ['DEEPSKILLS ACADEMIC PERFORMANCE & ANALYTICS REPORT'],
+        ['Generated At', new Date().toLocaleString()],
+        ['Reporting Window', `${scoped.range.from} to ${scoped.range.to}`],
+        ...(scoped.selectedBatch ? [['Selected Batch Scope', scoped.selectedBatch.batch_name]] : [['Batch Scope', 'All Active Batches']]),
+        [],
+        ['--- EXECUTIVE ACADEMIC KPIS ---'],
+        ['Metric', 'Value'],
+        ...metricSet.stats.map((row) => [row.label, row.value]),
+        [],
+        ['--- BATCH PERFORMANCE MATRIX ---'],
+        ['Batch Name', 'Student Headcount', 'Avg Attendance', 'Task Completion Rate', 'Avg Exam Score', 'Pass Rate'],
+        ...metricSet.batchTable.map((row) => [
+          row.batch,
+          row.students,
+          row.attendance,
+          row.tasks,
+          row.score,
+          row.pass
+        ])
+      ];
+      downloadText(`academic-performance-report-${scoped.range.from}-to-${scoped.range.to}.csv`, toCsv(summaryRows[0], summaryRows.slice(1)));
+      toast.success('Academic Performance Matrix exported to CSV');
+      return;
+    }
+
     downloadText(`${currentTab}-report.csv`, toCsv(['Metric', 'Value'], metricSet.stats.map((row) => [row.label, row.value])));
   };
 
@@ -749,19 +810,48 @@ export default function ReportsSystem({ mode = 'master' }) {
     <AdminLayout>
       <PrintStyles />
       <Container className="report-print-root">
+        {mode === 'academic' && (
+          <SubNavRibbon className="no-print">
+            <NavChip onClick={() => router.push('/admin/academic')}>
+              <FaChartBar /> Academic Hub
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+              <FaCalendarCheck /> Attendance
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+              <FaTasks /> Tasks & Homework
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/results')}>
+              <FaAward /> Exams & Results
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+              <FaBullhorn /> Announcements
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+              <FaComments /> Grievances
+            </NavChip>
+            <NavChip onClick={() => router.push('/admin/academic/chats')}>
+              <FaComments /> Group Chats
+            </NavChip>
+            <NavChip $active onClick={() => router.push('/admin/academic/reports')}>
+              <FaBookOpen /> Academic Reports
+            </NavChip>
+          </SubNavRibbon>
+        )}
+
         <Header>
-          <div>
-            <h1>{isMaster ? 'Reports Hub' : `${currentTab[0].toUpperCase()}${currentTab.slice(1)} Report`}</h1>
-            <p>{isMaster ? 'Cross-department analytics and insights.' : 'Department quick report with period-aware analytics.'}</p>
+          <div className="title-area">
+            <h1>{isMaster ? 'Reports Hub' : (currentTab === 'academic' ? 'Academic Performance & Analytics' : `${currentTab[0].toUpperCase()}${currentTab.slice(1)} Report`)}</h1>
+            <p>{isMaster ? 'Cross-department analytics and insights.' : (currentTab === 'academic' ? 'Cohort telemetry, attendance trends, task completion, and examination performance.' : 'Department quick report with period-aware analytics.')}</p>
           </div>
           <Actions className="no-print">
-            <button type="button" onClick={exportCurrentCsv}><FaDownload /> CSV</button>
-            <button type="button" onClick={() => window.print()}><FaPrint /> Print / PDF</button>
+            <button type="button" onClick={exportCurrentCsv} title="Export full report with Batch Performance Matrix"><FaDownload /> Export CSV</button>
+            <button type="button" onClick={() => window.print()} title="Print or save as PDF"><FaPrint /> Print / PDF</button>
           </Actions>
         </Header>
 
         <TimePeriodSelector period={period} setPeriod={setPeriod} batches={safeArray(data.batches).filter((batch) => ['Active', 'Completed'].includes(batch.status || 'Active'))} />
-        {setupWarnings.map((warning) => <Notice key={warning}>{warning}</Notice>)}
+        {mode !== 'academic' && setupWarnings.map((warning) => <Notice key={warning}>{warning}</Notice>)}
 
         {isMaster && (
           <TabBar className="no-print">
@@ -785,24 +875,485 @@ export default function ReportsSystem({ mode = 'master' }) {
   );
 }
 
-const Container = styled.div`padding:20px 0;color:#fff;`;
-const Header = styled.div`display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px;h1{margin:0 0 6px;font-size:2rem;}p{margin:0;color:#9ca3af;}`;
-const Actions = styled.div`display:flex;gap:10px;flex-wrap:wrap;button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;border-radius:10px;padding:10px 14px;display:inline-flex;gap:8px;align-items:center;cursor:pointer;}button:hover{border-color:#378ADD;}`;
-const FilterBar = styled.div`position:sticky;top:0;z-index:5;background:#0b0d11;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:14px;margin-bottom:18px;.period-buttons,.period-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.period-buttons{margin-bottom:10px}button,select,input{background:#111318;border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:9px 12px}button.active{background:rgba(55,138,221,.18);border-color:#378ADD;color:#8ec5ff}`;
-const Badge = styled.span`display:inline-flex;gap:7px;align-items:center;color:#cbd5e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:8px 12px;font-size:.85rem;`;
-const Notice = styled.div`background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.28);color:#fbbf24;border-radius:12px;padding:12px 14px;margin-bottom:14px;`;
-const TabBar = styled.div`display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;button{text-transform:capitalize;background:#111318;color:#9ca3af;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;cursor:pointer}button.active{color:#fff;border-color:#378ADD;background:rgba(55,138,221,.14)}`;
-const StatsGrid = styled.div`display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px;`;
-const StatCard = styled.div`background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:15px;padding:18px;span{display:block;color:#7b8494;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}strong{font-size:1.55rem;color:#fff;}`;
-const Grid2 = styled.div`display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:18px;@media(max-width:900px){grid-template-columns:1fr;}`;
-const ChartCard = styled.div`background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px;h3{margin:0 0 14px;font-size:1rem}.chart{height:280px;}`;
-const Empty = styled.div`display:flex;align-items:center;justify-content:center;min-height:180px;color:#7b8494;background:rgba(255,255,255,.03);border-radius:12px;text-align:center;padding:18px;`;
-const TableWrap = styled.div`overflow:auto;background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:16px;margin-bottom:18px;table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.05);text-align:left;color:#d1d5db}th{color:#7b8494;text-transform:uppercase;font-size:.72rem;letter-spacing:.08em;background:rgba(255,255,255,.02)}button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:7px 10px;}`;
-const HealthGrid = styled.div`display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:18px;`;
-const HealthCard = styled.div`background:#111318;border:1px solid ${({ $color }) => `${$color}55`};border-radius:16px;padding:18px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);h3{margin:0 0 12px;color:${({ $color }) => $color}}p{margin:6px 0;color:#d1d5db;}`;
-const Highlights = styled.div`background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px;margin-bottom:18px;h3{margin-top:0}p{color:#d1d5db;}`;
-const Panel = styled.div`display:flex;flex-direction:column;gap:14px;`;
-const TemplateGrid = styled.div`display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;`;
-const TemplateCard = styled.div`background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px;h3{margin:0 0 8px}p{color:#9ca3af}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:8px 10px;display:inline-flex;gap:6px;align-items:center;}button:disabled{opacity:.45;cursor:not-allowed;}`;
-const DeptTag = styled.span`display:inline-flex;margin:4px 5px 4px 0;padding:4px 8px;border-radius:999px;background:${({ $color }) => `${$color}22`};color:${({ $color }) => $color};font-size:.75rem;text-transform:capitalize;`;
-const Builder = styled.div`background:#111318;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;display:grid;gap:10px;input,textarea,select{background:#090b0f;border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;padding:11px}textarea{min-height:80px}.checks{display:flex;gap:12px;flex-wrap:wrap;color:#d1d5db}button{background:#378ADD;border:none;color:#fff;border-radius:10px;padding:11px 14px;font-weight:700;}`;
+const Container = styled.div`
+  padding: 16px 0 32px;
+  color: #fff;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+
+  .title-area h1 {
+    margin: 0 0 6px;
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .title-area p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 0.92rem;
+  }
+`;
+
+const Actions = styled.div`
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  button {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f1f5f9;
+    border-radius: 10px;
+    padding: 10px 16px;
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    border-color: #7B1F2E;
+    background: linear-gradient(135deg, rgba(123, 31, 46, 0.35) 0%, rgba(74, 14, 23, 0.45) 100%);
+    box-shadow: 0 0 14px rgba(123, 31, 46, 0.35);
+    color: #fff;
+  }
+`;
+
+const FilterBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(13, 15, 20, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+
+  .period-buttons, .period-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .period-buttons {
+    margin-bottom: 12px;
+  }
+
+  button, select, input {
+    background: #11141d;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    border-radius: 9px;
+    padding: 9px 14px;
+    font-size: 0.86rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    border-color: rgba(123, 31, 46, 0.5);
+    background: rgba(123, 31, 46, 0.15);
+    color: #fff;
+  }
+
+  button.active {
+    background: linear-gradient(135deg, #7B1F2E 0%, #4A0E17 100%);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(123, 31, 46, 0.45);
+  }
+
+  select:focus, input:focus {
+    outline: none;
+    border-color: #7B1F2E;
+    box-shadow: 0 0 0 2px rgba(123, 31, 46, 0.3);
+  }
+`;
+
+const Badge = styled.span`
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  font-weight: 500;
+`;
+
+const Notice = styled.div`
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  font-size: 0.88rem;
+`;
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+
+  button {
+    text-transform: capitalize;
+    background: #11141d;
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    border-color: rgba(123, 31, 46, 0.4);
+    color: #fff;
+  }
+
+  button.active {
+    color: #fff;
+    border-color: #7B1F2E;
+    background: linear-gradient(135deg, rgba(123, 31, 46, 0.3) 0%, rgba(74, 14, 23, 0.4) 100%);
+    box-shadow: 0 4px 12px rgba(123, 31, 46, 0.25);
+  }
+`;
+
+const StatsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+`;
+
+const StatCard = styled.div`
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+
+  .stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  span {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  .icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(123, 31, 46, 0.2);
+    border: 1px solid rgba(123, 31, 46, 0.35);
+    color: #fb7185;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  strong {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+  }
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+`;
+
+const Grid2 = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ChartCard = styled.div`
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+
+  h3 {
+    margin: 0 0 16px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chart {
+    height: 280px;
+  }
+`;
+
+const Empty = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  color: #7b8494;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  text-align: center;
+  padding: 18px;
+`;
+
+const TableWrap = styled.div`
+  overflow: auto;
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+  }
+
+  th, td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: left;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+  }
+
+  th {
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  tbody tr:hover {
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.82rem;
+  }
+`;
+
+const HealthGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+`;
+
+const HealthCard = styled.div`
+  background: #0d0f14;
+  border: 1px solid ${({ $color }) => `${$color}55`};
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  h3 {
+    margin: 0 0 12px;
+    color: ${({ $color }) => $color};
+  }
+  p {
+    margin: 6px 0;
+    color: #d1d5db;
+  }
+`;
+
+const Highlights = styled.div`
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  h3 {
+    margin-top: 0;
+  }
+  p {
+    color: #d1d5db;
+  }
+`;
+
+const Panel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`;
+
+const TemplateGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+`;
+
+const TemplateCard = styled.div`
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 18px;
+  h3 {
+    margin: 0 0 8px;
+  }
+  p {
+    color: #9ca3af;
+  }
+  .buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+`;
+
+const DeptTag = styled.span`
+  display: inline-flex;
+  margin: 4px 5px 4px 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: ${({ $color }) => `${$color}22`};
+  color: ${({ $color }) => $color};
+  font-size: 0.75rem;
+  text-transform: capitalize;
+`;
+
+const Builder = styled.div`
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  input, textarea, select {
+    background: #11141d;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #fff;
+    padding: 11px;
+  }
+  textarea {
+    min-height: 80px;
+  }
+  .checks {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: #d1d5db;
+  }
+  button {
+    background: linear-gradient(135deg, #7B1F2E 0%, #4A0E17 100%);
+    border: none;
+    color: #fff;
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+`;
+
+const SubNavRibbon = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 18px;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+  }
+`;
+
+const NavChip = styled.button`
+  background: ${props => props.$active ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.03)'};
+  color: ${props => props.$active ? '#c084fc' : '#94a3b8'};
+  border: 1px solid ${props => props.$active ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.08)'};
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(168, 85, 247, 0.2);
+    color: #fff;
+    border-color: rgba(168, 85, 247, 0.5);
+  }
+`;

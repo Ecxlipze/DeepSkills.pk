@@ -1,8 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
   "crons": [
     {
-      "path": "/api/notifications/cleanup",
+      "path": "/api/notifications/cleanup/",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "outputDirectory": "next-build"
 }

@@ -44,7 +44,28 @@ All email paths now use the same Node SMTP transport: OTP, contact, admissions/n
 
 ## 4. Install and build
 
-Open cPanel **Terminal**. If Setup Node.js App displays a command to enter the virtual environment, copy and run that exact command first. Then run these commands one at a time:
+Open cPanel **Terminal**. The setup depends on which screen your host provides:
+
+- **Setup Node.js App (CloudLinux):** copy and run the exact virtual-environment activation command displayed for your application.
+- **Application Manager:** there is no CloudLinux activation command. First check which Node executable is installed:
+
+  ```sh
+  ls /opt/cpanel/ea-nodejs*/bin/node
+  ```
+
+  If the output includes `/opt/cpanel/ea-nodejs22/bin/node`, run:
+
+  ```sh
+  export PATH="/opt/cpanel/ea-nodejs22/bin:$PATH"
+  node -v
+  npm -v
+  ```
+
+  Node must show `v22.x` and npm must show a version. If the path is missing, another Node version appears, or either command fails, stop and ask your hosting provider to enable Node.js 22 and npm for both your SSH account and Passenger application. Do not install system packages yourself. The export applies to this terminal session; repeat it after opening a new session. It does not change Passenger's runtime version.
+
+Your `.env.local` belongs inside `~/deepskills-app`, beside `package.json`; you do not need to duplicate its values in the panel.
+
+Once Node and npm work, run these commands one at a time:
 
 ```sh
 cd ~/deepskills-app
