@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
 import Slider from 'react-slick';
 import MediaCard from './components/MediaCard';
 import AwardsCard from './components/AwardsCard';
 import RegisterButton from './components/RegisterButton';
+import TheaterVideoModal from './components/TheaterVideoModal';
 
 // Import assets
 import featureBg from './assets/feature-bg.png';
@@ -12,20 +13,6 @@ import featureCard from './assets/feature-card.svg';
 import dsTree from './assets/ds-tree.svg';
 import awardsBg from './assets/awards-bg.png';
 import awardsAsset from './assets/awards.svg';
-
-const dummyData = [
-  { id: 'dummy-1', type: 'project', title: 'Food Delivery Platform Redesign', media_url: featureCard },
-  { id: 'dummy-2', type: 'project', title: 'Real Estate App UI/UX', media_url: featureCard },
-  { id: 'dummy-3', type: 'project', title: 'E-Commerce Dashboard Frontend', media_url: featureCard },
-  { id: 'dummy-4', type: 'project', title: 'Fitness Tracking Application', media_url: featureCard },
-  { id: 'dummy-5', type: 'stay_updated', title: 'Web Development Bootcamp 2024', media_url: featureCard },
-  { id: 'dummy-6', type: 'stay_updated', title: 'Mastering React & Framer Motion', media_url: featureCard },
-  { id: 'dummy-7', type: 'award', title: 'Best UI/UX Design', description: 'Awarded for exceptional user interface design in the Spring Hackathon.', media_url: awardsAsset },
-  { id: 'dummy-8', type: 'award', title: 'Top Developer 2023', description: 'Recognizing outstanding coding skills and project contributions.', media_url: awardsAsset },
-  { id: 'dummy-9', type: 'award', title: 'Innovation Award', description: 'For creating the most innovative tech solution during the final project.', media_url: awardsAsset },
-  { id: 'dummy-10', type: 'learn', title: 'Introduction to JavaScript Basics', media_url: featureCard },
-  { id: 'dummy-11', type: 'learn', title: 'Advanced CSS Animations Guide', media_url: featureCard },
-];
 
 const PageContainer = styled.div`
   width: 100%;
@@ -262,13 +249,111 @@ const StayUpdatedSection = styled.section`
   overflow: hidden;
 `;
 
+const VideoModalOverlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(10px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+`;
+
+const VideoModalContent = styled(motion.div)`
+  background: #151515;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 860px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(123, 31, 46, 0.3);
+  position: relative;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  z-index: 10;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #e63946;
+    border-color: #e63946;
+    transform: scale(1.1);
+  }
+`;
+
+const VideoPlayerContainer = styled.div`
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+
+  iframe, video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+`;
+
+const VideoModalDetails = styled.div`
+  padding: 20px 24px;
+  background: #181818;
+
+  h3 {
+    margin: 0 0 6px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.5;
+  }
+`;
+
+const getYouTubeId = (url) => {
+  if (typeof url !== 'string') return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+  return match ? match[1] : null;
+};
+
 const MediaPage = ({ initialItems = [] }) => {
+  const [activeVideo, setActiveVideo] = useState(null);
   const { scrollYProgress } = useScroll();
   // Items arrive via getStaticProps (pages/media.js) so the gallery is present
   // in the prerendered HTML; CMS edits reach the page through revalidation.
-  const items = initialItems.length > 0 ? [...initialItems, ...dummyData] : dummyData;
+  const items = Array.isArray(initialItems) ? initialItems : [];
   
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, 200]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setActiveVideo(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -401,8 +486,7 @@ const MediaPage = ({ initialItems = [] }) => {
           >
             <h2>Featured Projects & Moments</h2>
             <p className="description">
-              Browse through our curated gallery showcasing student projects, 
-              coding workshops, and DeepSkill events.
+              Explore hands-on student projects, creative portfolios, and modern web applications built at DeepSkills.
             </p>
           </SectionHeader>
 
@@ -413,24 +497,20 @@ const MediaPage = ({ initialItems = [] }) => {
             animate="visible"
             viewport={{ once: true, margin: "0px" }}
           >
-            {groupByType('project').length > 0
-              ? groupByType('project').map((item, idx) => (
-                  <MediaCard
-                    key={item.id}
-                    variants={itemVariants}
-                    image={item.media_url || featureCard}
-                    title={item.title}
-                  />
-                ))
-              : dummyData.filter(d => d.type === 'project').map((item) => (
-                  <MediaCard
-                    key={item.id}
-                    variants={itemVariants}
-                    image={item.media_url || featureCard}
-                    title={item.title}
-                  />
-                ))
-            }
+            {groupByType('project').length > 0 ? (
+              groupByType('project').map((item) => (
+                <MediaCard
+                  key={item.id}
+                  variants={itemVariants}
+                  image={item.media_url || featureCard}
+                  title={item.title}
+                />
+              ))
+            ) : (
+              <div style={{ color: 'rgba(255, 255, 255, 0.7)', gridColumn: 'span 2', padding: '20px' }}>
+                Featured student projects will appear here soon.
+              </div>
+            )}
           </CardGrid>
         </ContentWrapper>
       </FeaturedSection>
@@ -450,7 +530,7 @@ const MediaPage = ({ initialItems = [] }) => {
           viewport={{ once: true }}
           transition={{ delay: 0.2, duration: 0.8 }}
         >
-          Browse through our curated gallery showcasing student projects,
+          Practical curriculum, industry mentorship, and real portfolio-driven skill development.
         </motion.p>
         <div className="tree-container">
           <motion.img 
@@ -475,8 +555,7 @@ const MediaPage = ({ initialItems = [] }) => {
           >
             <h2>Stay Updated</h2>
             <p className="description">
-              Browse through our curated gallery showcasing student projects, 
-              coding workshops, and DeepSkill events.
+              Catch the latest workshops, community sessions, and announcements from our learning institute.
             </p>
           </SectionHeader>
 
@@ -486,14 +565,20 @@ const MediaPage = ({ initialItems = [] }) => {
             whileInView="visible"
             viewport={{ once: true }}
           >
-            {groupByType('stay_updated').map((item) => (
-              <MediaCard 
-                key={item.id}
-                variants={itemVariants}
-                image={item.media_url || featureCard} 
-                title={item.title} 
-              />
-            ))}
+            {groupByType('stay_updated').length > 0 ? (
+              groupByType('stay_updated').map((item) => (
+                <MediaCard 
+                  key={item.id}
+                  variants={itemVariants}
+                  image={item.media_url || featureCard} 
+                  title={item.title} 
+                />
+              ))
+            ) : (
+              <div style={{ color: 'rgba(255, 255, 255, 0.7)', gridColumn: 'span 2', padding: '20px' }}>
+                Latest updates will appear here soon.
+              </div>
+            )}
           </CardGrid>
         </ContentWrapper>
       </StayUpdatedSection>
@@ -508,28 +593,33 @@ const MediaPage = ({ initialItems = [] }) => {
           >
             <h2>AWARDS</h2>
             <p className="description">
-              Browse through our curated gallery showcasing student projects, 
-              coding workshops, and DeepSkill events.
+              Celebrating outstanding excellence, dedication, and creative achievements of our learners and mentors.
             </p>
           </SectionHeader>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, delay: 0.2 }}
-          >
-            <Slider {...sliderSettings}>
-              {groupByType('award').map(item => (
-                <AwardsCard 
-                  key={item.id}
-                  image={item.media_url || awardsAsset}
-                  title={item.title}
-                  description={item.description}
-                />
-              ))}
-            </Slider>
-          </motion.div>
+          {groupByType('award').length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1, delay: 0.2 }}
+            >
+              <Slider {...sliderSettings}>
+                {groupByType('award').map(item => (
+                  <AwardsCard 
+                    key={item.id}
+                    image={item.media_url || awardsAsset}
+                    title={item.title}
+                    description={item.description}
+                  />
+                ))}
+              </Slider>
+            </motion.div>
+          ) : (
+            <div style={{ color: 'rgba(255, 255, 255, 0.7)', padding: '20px' }}>
+              Award highlights will appear here soon.
+            </div>
+          )}
         </ContentWrapper>
       </AwardsSection>
 
@@ -544,8 +634,7 @@ const MediaPage = ({ initialItems = [] }) => {
           >
             <h2>Learn Through Videos</h2>
             <p className="description">
-              Browse through our curated gallery showcasing student projects, 
-              coding workshops, and DeepSkill events.
+              Watch practical classroom sessions, coding walkthroughs, and skill tutorials.
             </p>
           </SectionHeader>
 
@@ -555,16 +644,27 @@ const MediaPage = ({ initialItems = [] }) => {
             whileInView="visible"
             viewport={{ once: true }}
           >
-            {groupByType('learn').map(item => (
-              <MediaCard 
-                key={item.id}
-                variants={itemVariants}
-                image={item.media_url || featureCard} 
-                title={item.title} 
-                onClick={() => window.open(item.media_url, "_blank")}
-                style={{ cursor: 'pointer' }}
-              />
-            ))}
+            {groupByType('learn').length > 0 ? (
+              groupByType('learn').map(item => (
+                <MediaCard 
+                  key={item.id}
+                  variants={itemVariants}
+                  image={item.media_url || featureCard} 
+                  title={item.title} 
+                  isVideo={true}
+                  onClick={() => {
+                    if (item.media_url) {
+                      setActiveVideo(item);
+                    }
+                  }}
+                  style={{ cursor: item.media_url ? 'pointer' : 'default' }}
+                />
+              ))
+            ) : (
+              <div style={{ color: 'rgba(255, 255, 255, 0.7)', gridColumn: 'span 2', padding: '20px' }}>
+                Video tutorials and sessions will appear here soon.
+              </div>
+            )}
           </CardGrid>
 
           <motion.div 
@@ -578,6 +678,46 @@ const MediaPage = ({ initialItems = [] }) => {
           </motion.div>
         </ContentWrapper>
       </VideoSection>
+
+      {activeVideo && (
+        <VideoModalOverlay
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={() => setActiveVideo(null)}
+        >
+          <VideoModalContent
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CloseButton onClick={() => setActiveVideo(null)} aria-label="Close video player">
+              ✕
+            </CloseButton>
+            <VideoPlayerContainer>
+              {getYouTubeId(activeVideo.media_url) ? (
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${getYouTubeId(activeVideo.media_url)}?autoplay=1&rel=0`}
+                  title={activeVideo.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <video
+                  src={activeVideo.media_url}
+                  controls
+                  autoPlay
+                  playsInline
+                />
+              )}
+            </VideoPlayerContainer>
+            <VideoModalDetails>
+              <h3>{activeVideo.title}</h3>
+              {activeVideo.description && <p>{activeVideo.description}</p>}
+            </VideoModalDetails>
+          </VideoModalContent>
+        </VideoModalOverlay>
+      )}
       </PageContainer>
     </>
   );

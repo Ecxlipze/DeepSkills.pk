@@ -53,6 +53,7 @@ const AdminGroupChatsPage = dynamic(() => import('../../src/admin/AdminGroupChat
 const DepartmentPlaceholder = dynamic(() => import('../../src/admin/DepartmentPlaceholder'), { ssr: false });
 const AdminAcademicOverview = dynamic(() => import('../../src/admin/AcademicOverview'), { ssr: false });
 const ManagementOverview = dynamic(() => import('../../src/admin/ManagementOverview'), { ssr: false });
+const TrainerManager = dynamic(() => import('../../src/admin/TrainerManager'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -61,6 +62,8 @@ const ADMIN_ROUTE_ACCESS = {
   students: { allowedRoles: ['admin', 'custom'], permissionKey: 'students' },
   users: { allowedRoles: ['admin', 'custom'], permissionKey: 'users' },
   teachers: { allowedRoles: ['admin', 'custom'], permissionKey: 'teachers' },
+  trainers: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  'media-page': { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   courses: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   batches: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   attendance: { allowedRoles: ['admin', 'custom'], permissionKey: 'attendance' },
@@ -133,6 +136,8 @@ function getAdminPage(path = []) {
     if (child === 'settings') return <AdminFeeSettings />;
     return <AdminFinance initialTab={child || 'overview'} />;
   }
+  if (section === 'trainers') return <TrainerManager />;
+  if (section === 'media-page') return <MediaPageManager />;
   if (section === 'referral') return <AdminReferral />;
   if (section === 'reports') return <ReportsSystem mode="master" />;
   if (section === 'results') return <AdminResults />;
@@ -153,6 +158,8 @@ function getAdminPage(path = []) {
     if (!child) return <ManagementOverview />;
     if (child === 'students') return subpath ? <StudentProfile studentId={subpath} /> : <StudentManager />;
     if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/management/teachers" />;
+    if (child === 'trainers') return <TrainerManager />;
+    if (child === 'media-page') return <MediaPageManager />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;
     if (child === 'referral') return <AdminReferral />;
     if (child === 'certificates') return <CertificateManager />;
@@ -165,6 +172,7 @@ function getAdminPage(path = []) {
 
   if (section === 'settings') {
     if (child === 'testimonials') return <TestimonialManager />;
+    if (child === 'trainers') return <TrainerManager />;
     if (child === 'media') return <MediaLibrary />;
     if (child === 'content') return <ContentManager />;
     if (child === 'media-page') return <MediaPageManager />;

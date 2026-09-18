@@ -13,12 +13,6 @@ import traineeImg from "./assets/trainee.svg";
 import whatdsBg from "./assets/whatds-bg.png";
 import founderImg from "./assets/founder.svg";
 
-const dummyInstructors = [
-  { id: 'dummy-1', name: 'John Doe', role: 'Senior React Developer', bio: 'With 10+ years of experience in frontend engineering, John specializes in creating interactive and high-performance user interfaces using React and modern JavaScript.', image_url: null },
-  { id: 'dummy-2', name: 'Jane Smith', role: 'Lead Backend Engineer', bio: 'Jane is an expert in robust server-side architecture. She has built scalable APIs for leading tech startups using Laravel and Node.js.', image_url: null },
-  { id: 'dummy-3', name: 'Mike Johnson', role: 'Creative UI/UX Director', bio: 'Mike believes in design that solves problems. He brings 8 years of agency experience teaching Adobe Creative Suite and modern design principles.', image_url: null },
-  { id: 'dummy-4', name: 'Sarah Lee', role: 'WordPress Specialist', bio: 'Sarah empowers students to build stunning, functional websites quickly. She has built hundreds of sites for diverse business clients worldwide.', image_url: null }
-];
 
 const PageContainer = styled(motion.div)`
  min-height: 100vh;
@@ -419,9 +413,9 @@ const TraineePage = ({ initialInstructors = null }) => {
   // Instructors arrive via getStaticProps (pages/trainers.js) so they are present
   // in the prerendered HTML; CMS edits reach the page through revalidation.
   const instructors =
-    initialInstructors && initialInstructors.length > 0
-      ? [...initialInstructors, ...dummyInstructors]
-      : dummyInstructors;
+    Array.isArray(initialInstructors) && initialInstructors.length > 0
+      ? initialInstructors
+      : [];
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -457,31 +451,37 @@ const TraineePage = ({ initialInstructors = null }) => {
               </p>
             </SectionHeader>
 
-            <InstructorGrid>
-              {instructors.map((inst, idx) => (
-                <GlowCard
-                  key={inst.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.1 }}
-                  borderRadius="20px"
-                  bg="rgba(123, 31, 46, 0.4)"
-                  hoverBg="rgba(123, 31, 46, 0.6)"
-                  style={{ border: '4px solid #7B1F2E' }}
-                >
-                  <InstructorCard style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
-                    <ImageBox>
-                      <SmartCoverImage
-                        src={inst.image_url || traineeImg}
-                        alt={inst.name}
-                        sizes="(max-width: 768px) 100vw, 300px"
-                      />
-                    </ImageBox>
-                  </InstructorCard>
-                </GlowCard>
-              ))}
-            </InstructorGrid>
+            {instructors.length > 0 ? (
+              <InstructorGrid>
+                {instructors.map((inst, idx) => (
+                  <GlowCard
+                    key={inst.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    borderRadius="20px"
+                    bg="rgba(123, 31, 46, 0.4)"
+                    hoverBg="rgba(123, 31, 46, 0.6)"
+                    style={{ border: '4px solid #7B1F2E' }}
+                  >
+                    <InstructorCard style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
+                      <ImageBox>
+                        <SmartCoverImage
+                          src={inst.image_url || traineeImg}
+                          alt={inst.name}
+                          sizes="(max-width: 768px) 100vw, 300px"
+                        />
+                      </ImageBox>
+                    </InstructorCard>
+                  </GlowCard>
+                ))}
+              </InstructorGrid>
+            ) : (
+              <div style={{ color: 'rgba(255, 255, 255, 0.75)', textAlign: 'center', padding: '40px 20px', fontSize: '1.1rem' }}>
+                <p>Instructor profiles are currently being updated. Please check back soon!</p>
+              </div>
+            )}
 
             <CtaBox
               initial={{ opacity: 0, y: 30 }}
@@ -530,7 +530,7 @@ const TraineePage = ({ initialInstructors = null }) => {
           </FeatureGrid>
         </WhySection>
 
-        {instructors.slice(0, 4).map((inst, idx) => (
+        {instructors.map((inst, idx) => (
           <DetailSection key={inst.id}>
             <DetailWrapper $reverse={idx % 2 !== 0}>
               <DetailImageArea
