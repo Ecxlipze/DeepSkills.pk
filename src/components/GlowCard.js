@@ -10,6 +10,8 @@ const CardWrapper = styled(motion.div)`
   cursor: pointer;
   z-index: 1;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  height: ${props => props.$height || '100%'};
+  width: 100%;
 
   // Gradient border glow (all sides)
   &::before {

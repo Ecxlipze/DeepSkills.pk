@@ -54,7 +54,7 @@ const GraphicPage = () => {
       <GraphicOutcomes />
       
       {/* Reused sections with graphics theme */}
-      <VideoReviews accentColor={graphicsAccent} />
+      <VideoReviews accentColor={graphicsAccent} courseName="Graphic Design Mastery" />
       <WhyChooseUs accentColor={graphicsAccent} />
       <InstantDoubt accentColor={graphicsAccent} bannerImage={instantBanner} />
       <CertifySection accentColor={graphicsAccent} />

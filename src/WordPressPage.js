@@ -53,8 +53,7 @@ const WordPressPage = () => {
       <WordPressProjects />
       <WordPressCareer />
       
-      {/* Reusable sections for consistency */}
-      <VideoReviews accentColor="#275D8F" accentRGB="140, 199, 255" />
+      <VideoReviews accentColor="#275D8F" accentRGB="140, 199, 255" courseName="WordPress Mastery" />
       <WhyChooseUs accentColor="#275D8F" accentRGB="140, 199, 255" />
       <InstantDoubt accentColor="#275D8F" accentRGB="140, 199, 255" bannerImage={wpInstantBanner} />
       <CertifySection accentColor="#275D8F" accentRGB="140, 199, 255" />

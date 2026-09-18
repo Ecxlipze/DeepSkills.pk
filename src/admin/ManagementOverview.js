@@ -195,6 +195,15 @@ export default function ManagementOverview() {
           <NavChip onClick={() => router.push('/admin/management/certificates')}>
             <FaAward /> Certificates
           </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/trainers')}>
+            <FaChalkboardTeacher /> Trainers
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/testimonials')}>
+            <FaAward /> Testimonials
+          </NavChip>
+          <NavChip onClick={() => router.push('/admin/management/media-page')}>
+            <FaLayerGroup /> Media Showcase
+          </NavChip>
           <NavChip onClick={() => router.push('/admin/management/referral')}>
             <FaShareAlt /> Referral Program
           </NavChip>

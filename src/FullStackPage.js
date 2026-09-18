@@ -798,7 +798,7 @@ const FullStackPage = () => {
         </OutcomesDescription>
       </SectionContainer>
 
-      <VideoReviews />
+      <VideoReviews accentColor="#97C049" accentRGB="151, 192, 73" courseName="Full Stack React JS" />
 
       <WhyChooseUs />
 

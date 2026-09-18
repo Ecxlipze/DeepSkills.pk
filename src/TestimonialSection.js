@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import { motion, AnimatePresence } from "framer-motion";
-import { FaPlay, FaTimes } from "react-icons/fa";
+import { motion } from "framer-motion";
+import { FaPlay } from "react-icons/fa";
+import TheaterVideoModal, { getYouTubeId, getYouTubeThumbnail } from "./components/TheaterVideoModal";
 import leftBtnIcon from "./assets/left-btn.svg";
 import rightBtnIcon from "./assets/right-btn.svg";
 import graphicThumb from "./assets/graphic-card1.png";
@@ -11,10 +12,34 @@ import wordpressThumb from "./assets/wp-card.png";
 import generalThumb from "./assets/slider-bg.png";
 
 const dummyTestimonials = [
-  { id: 'dummy-1', student_name: 'Ali Khan', course_name: 'Graphic Design Mastery', video_url: 'https://www.w3schools.com/html/mov_bbb.mp4', thumbnail_url: null },
-  { id: 'dummy-2', student_name: 'Ayesha Rahman', course_name: 'Full Stack (Laravel)', video_url: 'https://www.w3schools.com/html/mov_bbb.mp4', thumbnail_url: null },
-  { id: 'dummy-3', student_name: 'Usman Tariq', course_name: 'Full Stack React JS', video_url: 'https://www.w3schools.com/html/mov_bbb.mp4', thumbnail_url: null },
-  { id: 'dummy-4', student_name: 'Fatima Noor', course_name: 'WordPress Mastery', video_url: 'https://www.w3schools.com/html/mov_bbb.mp4', thumbnail_url: null }
+  {
+    id: 'dummy-1',
+    student_name: 'Ali Khan',
+    course_name: 'Graphic Design Mastery',
+    video_url: 'https://www.youtube.com/watch?v=Qad0KROvoWM',
+    thumbnail_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 'dummy-2',
+    student_name: 'Ayesha Rahman',
+    course_name: 'Laravel PHP Development',
+    video_url: 'https://www.youtube.com/watch?v=2TEZUc8Eyo0',
+    thumbnail_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 'dummy-3',
+    student_name: 'Usman Tariq',
+    course_name: 'Full Stack React JS',
+    video_url: 'https://www.youtube.com/watch?v=7oXg2mMbWNI',
+    thumbnail_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 'dummy-4',
+    student_name: 'Fatima Noor',
+    course_name: 'WordPress Mastery',
+    video_url: 'https://www.youtube.com/watch?v=kwZFbuIqVz0',
+    thumbnail_url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=600&q=80'
+  }
 ];
 
 const thumbnailByCourse = [
@@ -269,76 +294,17 @@ const ThumbnailImage = styled.img`
   transform: scale(1.01);
 `;
 
-const ModalOverlay = styled(motion.div)`
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-  cursor: auto;
-`;
-
-const ModalContent = styled(motion.div)`
-  width: 100%;
-  max-width: 900px;
-  aspect-ratio: 16/9;
-  background: #000;
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-
-  video, iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-  }
-`;
-
-const CloseButton = styled.button`
-  position: absolute;
-  top: -40px;
-  right: 0;
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 2rem;
-  cursor: pointer;
-  transition: color 0.3s;
-
-  &:hover {
-    color: #e62e4d;
-  }
-
-  @media (max-width: 768px) {
-    top: 10px;
-    right: 10px;
-    z-index: 10;
-    background: rgba(0,0,0,0.5);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-  }
-`;
-
 const FunctionalVideoCard = ({ studentName, videoUrl, thumbnail, course, onPlayClick }) => {
-  const resolvedThumbnail = thumbnail || getFallbackThumbnail(course);
+  const ytThumb = getYouTubeThumbnail(videoUrl);
+  const resolvedThumbnail = thumbnail || ytThumb || getFallbackThumbnail(course);
 
   return (
-    <VideoCard type="button" aria-label={`Play testimonial video${studentName ? ` from ${studentName}` : ''}`} whileHover={{ scale: 1.02 }} onClick={() => onPlayClick(videoUrl)}>
+    <VideoCard
+      type="button"
+      aria-label={`Play testimonial video${studentName ? ` from ${studentName}` : ''}`}
+      whileHover={{ scale: 1.02 }}
+      onClick={() => onPlayClick({ video_url: videoUrl, student_name: studentName, course_name: course })}
+    >
       {resolvedThumbnail ? (
         <ThumbnailImage src={resolvedThumbnail} alt="" aria-hidden="true" loading="lazy" />
       ) : (
@@ -366,10 +332,14 @@ const TestimonialSection = ({ initialTestimonials = null }) => {
   const [modalVideo, setModalVideo] = useState(null);
   // Testimonials arrive via getStaticProps (pages/index.js) so they are present
   // in the prerendered HTML; CMS edits reach the page through revalidation.
-  const testimonials =
-    initialTestimonials && initialTestimonials.length > 0
-      ? [...initialTestimonials, ...dummyTestimonials]
-      : dummyTestimonials;
+  const testimonials = React.useMemo(() => {
+    if (initialTestimonials && initialTestimonials.length > 0) {
+      const dbNames = new Set(initialTestimonials.map(t => (t.student_name || '').toLowerCase()));
+      const extra = dummyTestimonials.filter(d => !dbNames.has((d.student_name || '').toLowerCase()));
+      return [...initialTestimonials, ...extra];
+    }
+    return dummyTestimonials;
+  }, [initialTestimonials]);
   const [activeSlide, setActiveSlide] = useState(0);
   const [slidesPerView, setSlidesPerView] = useState(2);
 
@@ -496,39 +466,11 @@ const TestimonialSection = ({ initialTestimonials = null }) => {
         </MainBox>
       </GlowContainer>
 
-      <AnimatePresence>
-        {modalVideo && (
-          <ModalOverlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setModalVideo(null)}
-          >
-            <div style={{ position: 'relative', width: '100%', maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
-              <CloseButton type="button" aria-label="Close testimonial video" onClick={() => setModalVideo(null)}>
-                <FaTimes aria-hidden="true" />
-              </CloseButton>
-              <ModalContent
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-              >
-                {modalVideo.match(/\.(mp4|webm|ogg)$/i) ? (
-                  <video src={modalVideo} controls autoPlay playsInline preload="metadata" />
-                ) : (
-                  <iframe
-                    title="Student Testimonial Video"
-                    src={`${modalVideo}${modalVideo.includes('?') ? '&' : '?'}autoplay=1`}
-                    loading="lazy"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  ></iframe>
-                )}
-              </ModalContent>
-            </div>
-          </ModalOverlay>
-        )}
-      </AnimatePresence>
+      <TheaterVideoModal
+        video={modalVideo}
+        isOpen={Boolean(modalVideo)}
+        onClose={() => setModalVideo(null)}
+      />
     </Section>
   );
 };

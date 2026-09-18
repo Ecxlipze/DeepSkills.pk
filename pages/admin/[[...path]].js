@@ -63,6 +63,7 @@ const ADMIN_ROUTE_ACCESS = {
   users: { allowedRoles: ['admin', 'custom'], permissionKey: 'users' },
   teachers: { allowedRoles: ['admin', 'custom'], permissionKey: 'teachers' },
   trainers: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  testimonials: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   'media-page': { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   courses: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   batches: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
@@ -137,6 +138,7 @@ function getAdminPage(path = []) {
     return <AdminFinance initialTab={child || 'overview'} />;
   }
   if (section === 'trainers') return <TrainerManager />;
+  if (section === 'testimonials') return <TestimonialManager />;
   if (section === 'media-page') return <MediaPageManager />;
   if (section === 'referral') return <AdminReferral />;
   if (section === 'reports') return <ReportsSystem mode="master" />;
@@ -159,6 +161,7 @@ function getAdminPage(path = []) {
     if (child === 'students') return subpath ? <StudentProfile studentId={subpath} /> : <StudentManager />;
     if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/management/teachers" />;
     if (child === 'trainers') return <TrainerManager />;
+    if (child === 'testimonials') return <TestimonialManager />;
     if (child === 'media-page') return <MediaPageManager />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;
     if (child === 'referral') return <AdminReferral />;

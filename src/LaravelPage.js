@@ -54,8 +54,7 @@ const LaravelPage = () => {
       <LaravelProjects />
       <LaravelOutcomes />
       
-      {/* Reusable sections with Laravel theme */}
-      <VideoReviews accentColor={accentColor} accentRGB={accentRGB} />
+      <VideoReviews accentColor={accentColor} accentRGB={accentRGB} courseName="Laravel PHP Development" />
       <WhyChooseUs accentColor={accentColor} accentRGB={accentRGB} />
       <InstantDoubt accentColor={accentColor} accentRGB={accentRGB} bannerImage={laraInstant} />
       <CertifySection accentColor={accentColor} accentRGB={accentRGB} />

@@ -221,9 +221,22 @@ const AwardsSection = styled.section`
     overflow: hidden;
   }
   
+  .slick-track {
+    display: flex !important;
+    align-items: stretch;
+  }
+
   .slick-slide {
     padding: 0 15px;
     box-sizing: border-box;
+    height: inherit !important;
+    display: flex !important;
+  }
+
+  .slick-slide > div {
+    height: 100%;
+    width: 100%;
+    display: flex;
   }
 `;
 
@@ -249,95 +262,6 @@ const StayUpdatedSection = styled.section`
   overflow: hidden;
 `;
 
-const VideoModalOverlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(10px);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-`;
-
-const VideoModalContent = styled(motion.div)`
-  background: #151515;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 16px;
-  width: 100%;
-  max-width: 860px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(123, 31, 46, 0.3);
-  position: relative;
-`;
-
-const CloseButton = styled.button`
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  z-index: 10;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #e63946;
-    border-color: #e63946;
-    transform: scale(1.1);
-  }
-`;
-
-const VideoPlayerContainer = styled.div`
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-
-  iframe, video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-  }
-`;
-
-const VideoModalDetails = styled.div`
-  padding: 20px 24px;
-  background: #181818;
-
-  h3 {
-    margin: 0 0 6px;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.7);
-    line-height: 1.5;
-  }
-`;
-
-const getYouTubeId = (url) => {
-  if (typeof url !== 'string') return null;
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
-  return match ? match[1] : null;
-};
-
 const MediaPage = ({ initialItems = [] }) => {
   const [activeVideo, setActiveVideo] = useState(null);
   const { scrollYProgress } = useScroll();
@@ -346,14 +270,6 @@ const MediaPage = ({ initialItems = [] }) => {
   const items = Array.isArray(initialItems) ? initialItems : [];
   
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, 200]);
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') setActiveVideo(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -679,45 +595,7 @@ const MediaPage = ({ initialItems = [] }) => {
         </ContentWrapper>
       </VideoSection>
 
-      {activeVideo && (
-        <VideoModalOverlay
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={() => setActiveVideo(null)}
-        >
-          <VideoModalContent
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <CloseButton onClick={() => setActiveVideo(null)} aria-label="Close video player">
-              ✕
-            </CloseButton>
-            <VideoPlayerContainer>
-              {getYouTubeId(activeVideo.media_url) ? (
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${getYouTubeId(activeVideo.media_url)}?autoplay=1&rel=0`}
-                  title={activeVideo.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : (
-                <video
-                  src={activeVideo.media_url}
-                  controls
-                  autoPlay
-                  playsInline
-                />
-              )}
-            </VideoPlayerContainer>
-            <VideoModalDetails>
-              <h3>{activeVideo.title}</h3>
-              {activeVideo.description && <p>{activeVideo.description}</p>}
-            </VideoModalDetails>
-          </VideoModalContent>
-        </VideoModalOverlay>
-      )}
+      <TheaterVideoModal video={activeVideo} onClose={() => setActiveVideo(null)} />
       </PageContainer>
     </>
   );
