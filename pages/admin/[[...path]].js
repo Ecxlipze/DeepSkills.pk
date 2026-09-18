@@ -54,6 +54,7 @@ const DepartmentPlaceholder = dynamic(() => import('../../src/admin/DepartmentPl
 const AdminAcademicOverview = dynamic(() => import('../../src/admin/AcademicOverview'), { ssr: false });
 const ManagementOverview = dynamic(() => import('../../src/admin/ManagementOverview'), { ssr: false });
 const TrainerManager = dynamic(() => import('../../src/admin/TrainerManager'), { ssr: false });
+const ProgramManager = dynamic(() => import('../../src/admin/ProgramManager'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -79,6 +80,8 @@ const ADMIN_ROUTE_ACCESS = {
   blog: { allowedRoles: ['admin', 'custom'], permissionKey: 'blog' },
   tasks: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
   chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
+  programs: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  'announcement-bar': { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   settings: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' }
 };
 
@@ -140,6 +143,7 @@ function getAdminPage(path = []) {
   if (section === 'trainers') return <TrainerManager />;
   if (section === 'testimonials') return <TestimonialManager />;
   if (section === 'media-page') return <MediaPageManager />;
+  if (section === 'programs' || section === 'announcement-bar') return <ProgramManager />;
   if (section === 'referral') return <AdminReferral />;
   if (section === 'reports') return <ReportsSystem mode="master" />;
   if (section === 'results') return <AdminResults />;
@@ -163,6 +167,7 @@ function getAdminPage(path = []) {
     if (child === 'trainers') return <TrainerManager />;
     if (child === 'testimonials') return <TestimonialManager />;
     if (child === 'media-page') return <MediaPageManager />;
+    if (child === 'programs' || child === 'announcement-bar' || child === 'announcements-banner') return <ProgramManager />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;
     if (child === 'referral') return <AdminReferral />;
     if (child === 'certificates') return <CertificateManager />;
@@ -179,8 +184,11 @@ function getAdminPage(path = []) {
     if (child === 'media') return <MediaLibrary />;
     if (child === 'content') return <ContentManager />;
     if (child === 'media-page') return <MediaPageManager />;
+    if (child === 'programs' || child === 'announcement-bar') return <ProgramManager />;
     if (child === 'attendance') return <AdminAttendanceSettings />;
   }
+
+  if (section === 'programs' || section === 'announcement-bar') return <ProgramManager />;
 
   return <PrivatePortalNotice area="Admin" />;
 }

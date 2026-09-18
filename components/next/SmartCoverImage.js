@@ -29,12 +29,15 @@ function canOptimize(src) {
 export default function SmartCoverImage({ src, alt = '', sizes = '100vw', priority = false }) {
   if (!src) return null;
 
-  if (!canOptimize(src)) {
+  // Unsplash images are already optimized at edge via query params and should bypass
+  // the Next.js server image proxy to prevent timeout errors on simultaneous grid requests.
+  if (src.includes('images.unsplash.com') || !canOptimize(src)) {
     return (
       <img
         src={src}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
+        decoding="async"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
       />
     );

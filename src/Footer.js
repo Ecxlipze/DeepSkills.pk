@@ -258,6 +258,7 @@ const Footer = () => {
 
         <Column>
           <Title>Programs</Title>
+          <FooterLink to="/internship" whileHover={{ x: 5 }} style={{ color: '#ffccd3', fontWeight: 600 }}>Internships (Hiring)</FooterLink>
           <FooterLink to="/courses/graphic-design" whileHover={{ x: 5 }}>Graphic Design</FooterLink>
           <FooterLink to="/courses/laravel-mastery" whileHover={{ x: 5 }}>Full Stack (Laravel)</FooterLink>
           <FooterLink to="/courses/full-stack-react" whileHover={{ x: 5 }}>Full Stack (MERN)</FooterLink>

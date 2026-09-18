@@ -11,6 +11,18 @@ export async function getAuthHeaders() {
     } catch (_) {}
 
     try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          const item = JSON.parse(localStorage.getItem(k) || '{}');
+          if (item?.access_token) {
+            return { 'Authorization': `Bearer ${item.access_token}` };
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
       const stored = localStorage.getItem('deepskill_user');
       const parsed = stored ? JSON.parse(stored) : null;
       if (parsed?.sessionToken) {

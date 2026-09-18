@@ -8,10 +8,20 @@ import { FiChevronRight, FiChevronDown } from "react-icons/fi";
 import logoImg from "./logo.svg";
 import RegisterButton from "./components/RegisterButton";
 import { useAuth } from "./context/AuthContext";
+import AnnouncementBar from "./components/AnnouncementBar";
 
-const Nav = styled(motion.nav)`
+const HeaderWrapper = styled.header`
   position: fixed;
   top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+`;
+
+const Nav = styled(motion.nav)`
+  position: relative;
   width: 100%;
   height: 90px;
   display: flex;
@@ -19,8 +29,8 @@ const Nav = styled(motion.nav)`
   align-items: center;
   padding: 0 40px;
   z-index: 1000;
-  background: ${props => props.$scrolled ? "rgba(0, 0, 0, 0.8)" : "rgba(0, 0, 0, 0.4)"};
-  backdrop-filter: ${props => props.$scrolled ? "blur(12px)" : "blur(8px)"};
+  background: ${props => props.$scrolled ? "rgba(0, 0, 0, 0.85)" : "rgba(0, 0, 0, 0.45)"};
+  backdrop-filter: ${props => props.$scrolled ? "blur(14px)" : "blur(8px)"};
   border-bottom: 1px solid ${props => props.$scrolled ? "rgba(255, 255, 255, 0.1)" : "rgba(255, 255, 255, 0.05)"};
   transition: all 0.3s ease;
 
@@ -57,9 +67,9 @@ const LogoWrapper = styled(Link)`
 const NavPill = styled(motion.div)`
   display: flex;
   align-items: center;
-  gap: 30px;
+  gap: clamp(14px, 1.6vw, 24px);
   background: rgba(255, 255, 255, 0.05);
-  padding: 10px 40px;
+  padding: 9px clamp(18px, 2.2vw, 34px);
   border-radius: 50px;
   backdrop-filter: blur(15px);
   position: relative;
@@ -542,7 +552,8 @@ const Header = () => {
         { name: "Graphic Designing", href: "/courses/graphic-design", isRoute: true },
         { name: "Full Stack (Laravel)", href: "/courses/laravel-mastery", isRoute: true },
         { name: "Full Stack (React)", href: "/courses/full-stack-react", isRoute: true },
-        { name: "View All Courses", href: "/courses", isRoute: true }
+        { name: "View All Courses", href: "/courses", isRoute: true },
+        { name: "Internship Program", href: "/internship", isRoute: true }
       ]
     },
     { name: "Media", href: "/media", isRoute: true, icon: <FaPlayCircle /> },
@@ -617,40 +628,42 @@ const Header = () => {
 
   return (
     <>
-      <Nav
-        $scrolled={scrolled}
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <LogoWrapper to="/" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-          {/* SVG logo: the optimizer rejects SVG, so serve it as-is but load it
-              eagerly with high priority (it is above the fold on every page). */}
-          <Image src={logoImg} alt="Deep Skills Logo" width={160} height={45} priority unoptimized />
-        </LogoWrapper>
-
-        <NavPill
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3 }}
+      <HeaderWrapper>
+        <AnnouncementBar />
+        <Nav
+          $scrolled={scrolled}
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.6 }}
         >
-          {links.slice(0, 7).map((link) => (
-            <NavPillContainer
-              key={link.name}
-              onMouseEnter={() => link.hasDropdown && setOpenDropdown(link.name)}
-              onMouseLeave={() => link.hasDropdown && setOpenDropdown(null)}
-            >
-              <NavLink
-                as={link.isRoute ? Link : "a"}
-                to={link.isRoute ? link.href : undefined}
-                href={link.isRoute ? undefined : link.href}
-                $active={activeLink === link.name.toUpperCase()}
-                onClick={(e) => handleLinkClick(e, link)}
-                style={{ display: "flex", alignItems: "center", gap: "2px" }}
+          <LogoWrapper to="/" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            {/* SVG logo: the optimizer rejects SVG, so serve it as-is but load it
+                eagerly with high priority (it is above the fold on every page). */}
+            <Image src={logoImg} alt="Deep Skills Logo" width={160} height={45} priority unoptimized />
+          </LogoWrapper>
+
+          <NavPill
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            {links.map((link) => (
+              <NavPillContainer
+                key={link.name}
+                onMouseEnter={() => link.hasDropdown && setOpenDropdown(link.name)}
+                onMouseLeave={() => link.hasDropdown && setOpenDropdown(null)}
               >
-                {link.name}
-                {link.hasDropdown && <FiChevronDown style={{ fontSize: "0.8rem", marginTop: "2px" }} />}
-              </NavLink>
+                <NavLink
+                  as={link.isRoute ? Link : "a"}
+                  to={link.isRoute ? link.href : undefined}
+                  href={link.isRoute ? undefined : link.href}
+                  $active={activeLink === link.name.toUpperCase()}
+                  onClick={(e) => handleLinkClick(e, link)}
+                  style={{ display: "flex", alignItems: "center", gap: "2px" }}
+                >
+                  {link.name}
+                  {link.hasDropdown && <FiChevronDown style={{ fontSize: "0.8rem", marginTop: "2px" }} />}
+                </NavLink>
 
               {link.hasDropdown && (
                 <AnimatePresence>
@@ -731,6 +744,7 @@ const Header = () => {
           </MobileMenuBtn>
         </RightSection>
       </Nav>
+      </HeaderWrapper>
 
       <AnimatePresence>
         {mobileMenuOpen && (

@@ -2,6 +2,7 @@ import React from 'react';
 import HeroSection from './HeroSection';
 import AboutSection from './AboutSection';
 import CoursesSection from './CoursesSection';
+import InternshipSpotlight from './components/InternshipSpotlight';
 import WhyChooseSection from './WhyChooseSection';
 import TestimonialSection from './TestimonialSection';
 import JoinSection from './JoinSection';
@@ -27,6 +28,11 @@ const HomePage = ({ content = {} }) => {
           <CoursesSection initialCourses={content.courses} />
         </div>
       </ScrollReveal>
+
+      <ScrollReveal>
+        <InternshipSpotlight />
+      </ScrollReveal>
+
       <ScrollReveal>
         <div id="why-choose">
           <WhyChooseSection />
