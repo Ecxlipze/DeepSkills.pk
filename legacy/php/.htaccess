@@ -1,8 +1,0 @@
-RewriteEngine On
-RewriteRule ^revalidate/?$ revalidate.php [L,QSA]
-RewriteRule ^blog-view/?$ blog-view.php [L,QSA]
-RewriteRule ^admission-email/?$ admission-email.php [L,QSA]
-RewriteRule ^inquiry/?$ inquiry.php [L,QSA]
-RewriteRule ^auth/send-otp/?$ auth/send-otp.php [L,QSA]
-RewriteRule ^auth/verify-otp/?$ auth/verify-otp.php [L,QSA]
-RewriteRule ^auth/validate-token/?$ auth/validate-token.php [L,QSA]
