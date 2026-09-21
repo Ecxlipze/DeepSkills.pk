@@ -22,6 +22,7 @@ import {
   FaPaperPlane,
 } from 'react-icons/fa';
 import { supabase } from './supabaseClient';
+import RegisterButton from './components/RegisterButton';
 
 const PageWrapper = styled.div`
   background-color: #050507;
@@ -280,47 +281,81 @@ const FlyerInfo = styled.div`
   }
 `;
 
-const PrimaryBtn = styled.button`
-  background: linear-gradient(135deg, #7B1F2E 0%, #a8273b 100%);
+const SecondaryBtn = styled.a`
+  background-color: rgba(30, 30, 30, 0.8);
   color: #fff;
   border: none;
-  padding: 12px 24px;
-  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+  padding: 12px 24px;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(123, 31, 46, 0.4);
-
-  &:hover {
-    background: linear-gradient(135deg, #962537 0%, #c42d44 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(123, 31, 46, 0.6);
-  }
-`;
-
-const SecondaryBtn = styled.a`
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 12px 22px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 0.95rem;
+  clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+  position: relative;
+  outline: none;
   text-decoration: none;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  text-align: center;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
   transition: all 0.3s ease;
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.16);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px);
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      transparent,
+      rgba(255, 255, 255, 0.7),
+      rgba(255, 255, 255, 0.7),
+      transparent 80%
+    );
+    animation: rotateGlow 2s linear infinite;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    z-index: 0;
+  }
+
+  &:hover::before {
+    opacity: 1;
+  }
+
+  @keyframes rotateGlow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    background-color: rgba(20, 20, 20, 0.9);
+    z-index: 1;
+    clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+    transition: background-color 0.3s ease;
+  }
+
+  &:hover::after {
+    background-color: rgba(40, 40, 40, 0.9);
+  }
+
+  span {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
 `;
 
@@ -457,28 +492,7 @@ const SkillTag = styled.span`
   border-radius: 6px;
 `;
 
-const ApplyForRoleBtn = styled.button`
-  background: rgba(123, 31, 46, 0.3);
-  border: 1px solid rgba(217, 74, 94, 0.4);
-  color: #ffffff;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  transition: all 0.25s ease;
 
-  &:hover {
-    background: #7B1F2E;
-    color: #fff;
-    border-color: #7B1F2E;
-  }
-`;
 
 /* Perks Section */
 const PerksGrid = styled.div`
@@ -660,33 +674,7 @@ const FormRow = styled.div`
   }
 `;
 
-const SubmitButton = styled.button`
-  background: linear-gradient(135deg, #7B1F2E 0%, #c42d44 100%);
-  color: #fff;
-  border: none;
-  padding: 14px 24px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 10px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 20px rgba(123, 31, 46, 0.5);
 
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 25px rgba(123, 31, 46, 0.7);
-  }
-
-  &:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-  }
-`;
 
 const StatusNotice = styled.div`
   padding: 14px 18px;
@@ -1116,24 +1104,24 @@ export default function InternshipPage() {
               {program.subtitle}
             </p>
             <div className="button-group">
-              <PrimaryBtn
-                type="button"
+              <RegisterButton
+                size="medium"
                 onClick={() => {
                   const el = document.getElementById('apply-form');
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                Apply Online Now <FaPaperPlane />
-              </PrimaryBtn>
+                APPLY ONLINE NOW <FaPaperPlane style={{ marginLeft: 6 }} />
+              </RegisterButton>
               <SecondaryBtn href={program.flyer_url || '/images/internship-flyer.jpg'} download="DeepSkills-Program-Flyer.jpg">
-                <FaDownload /> Download Flyer
+                <span><FaDownload /> Download Flyer</span>
               </SecondaryBtn>
               <SecondaryBtn
                 as="button"
                 type="button"
                 onClick={() => setModalOpen(true)}
               >
-                <FaExternalLinkAlt /> View Full Poster
+                <span><FaExternalLinkAlt /> View Full Poster</span>
               </SecondaryBtn>
             </div>
           </FlyerInfo>
@@ -1185,12 +1173,13 @@ export default function InternshipPage() {
                 </>
               )}
 
-              <ApplyForRoleBtn
-                type="button"
+              <RegisterButton
+                size="small"
+                fullWidth
                 onClick={() => handleRoleSelect(role.title)}
               >
-                Select & Apply for {role.title} →
-              </ApplyForRoleBtn>
+                APPLY FOR {role.title.toUpperCase()} →
+              </RegisterButton>
             </RoleCard>
           ))}
         </RolesGrid>
@@ -1331,15 +1320,15 @@ export default function InternshipPage() {
                   />
                 </FormGroup>
 
-                <SubmitButton type="submit" disabled={formSubmitting}>
-                  {formSubmitting ? (
-                    'Submitting Application...'
-                  ) : (
-                    <>
-                      Submit Application <FaPaperPlane />
-                    </>
-                  )}
-                </SubmitButton>
+                <RegisterButton
+                  size="medium"
+                  type="submit"
+                  fullWidth
+                  disabled={formSubmitting}
+                  style={{ marginTop: 12 }}
+                >
+                  {formSubmitting ? 'SUBMITTING APPLICATION...' : 'SUBMIT APPLICATION'} <FaPaperPlane style={{ marginLeft: 6 }} />
+                </RegisterButton>
               </StyledForm>
             </div>
           </FormLayout>
@@ -1370,7 +1359,7 @@ export default function InternshipPage() {
               rel="noopener noreferrer"
               style={{ width: 'fit-content' }}
             >
-              Open in Google Maps <FaExternalLinkAlt />
+              <span>Open in Google Maps <FaExternalLinkAlt /></span>
             </SecondaryBtn>
           </LocationDetails>
 
@@ -1424,7 +1413,7 @@ export default function InternshipPage() {
                   download="DeepSkills-Internship-Flyer.jpg"
                   style={{ padding: '6px 14px', fontSize: '0.85rem' }}
                 >
-                  <FaDownload /> Download
+                  <span><FaDownload /> Download</span>
                 </SecondaryBtn>
               </div>
             </ModalContent>

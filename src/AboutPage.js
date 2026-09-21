@@ -9,6 +9,7 @@ import WhoIsItFor from './WhoIsItFor';
 import WhatMakesUsDifferent from './WhatMakesUsDifferent';
 import OurVision from './OurVision';
 import OurMission from './OurMission';
+import CareersSpotlight from './components/CareersSpotlight';
 import ScrollReveal from './ScrollReveal';
 
 const PageContainer = styled.div`
@@ -98,6 +99,9 @@ const AboutPage = () => {
       </ScrollReveal>
       <ScrollReveal>
         <OurMission />
+      </ScrollReveal>
+      <ScrollReveal>
+        <CareersSpotlight />
       </ScrollReveal>
     </PageContainer>
   );

@@ -42,6 +42,7 @@ const AdminRevenueReport = dynamic(() => import('../../src/admin/RevenueReport')
 const AdminFeeSettings = dynamic(() => import('../../src/admin/FeeSettings'), { ssr: false });
 const AdminResults = dynamic(() => import('../../src/admin/AdminResults'), { ssr: false });
 const BlogManager = dynamic(() => import('../../src/admin/BlogManager'), { ssr: false });
+const CareerManager = dynamic(() => import('../../src/admin/CareerManager'), { ssr: false });
 const TestimonialManager = dynamic(() => import('../../src/admin/TestimonialManager'), { ssr: false });
 const MediaLibrary = dynamic(() => import('../../src/admin/MediaLibrary'), { ssr: false });
 const ContentManager = dynamic(() => import('../../src/admin/ContentManager'), { ssr: false });
@@ -78,6 +79,8 @@ const ADMIN_ROUTE_ACCESS = {
   reports: { allowedRoles: ['admin', 'custom'], permissionKey: 'reports' },
   results: { allowedRoles: ['admin', 'custom'], permissionKey: 'results' },
   blog: { allowedRoles: ['admin', 'custom'], permissionKey: 'blog' },
+  careers: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  jobs: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   tasks: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
   chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
   programs: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
@@ -148,6 +151,7 @@ function getAdminPage(path = []) {
   if (section === 'reports') return <ReportsSystem mode="master" />;
   if (section === 'results') return <AdminResults />;
   if (section === 'blog') return <BlogManager />;
+  if (section === 'careers' || section === 'jobs') return <CareerManager />;
 
   if (section === 'academic') {
     if (!child) return <AdminAcademicOverview />;
@@ -172,6 +176,7 @@ function getAdminPage(path = []) {
     if (child === 'referral') return <AdminReferral />;
     if (child === 'certificates') return <CertificateManager />;
     if (child === 'blog') return <BlogManager />;
+    if (child === 'careers' || child === 'jobs') return <CareerManager />;
     if (child === 'media') return <MediaLibrary />;
     if (child === 'users') return subpath === 'activity' ? <AdminActivityLogsPage /> : <AdminUserManagement />;
     if (child === 'reports') return <ReportsSystem mode="master" />;

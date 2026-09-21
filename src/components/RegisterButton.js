@@ -10,17 +10,21 @@ const StyledButton = styled(motion.button)`
   border: none;
   font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 1.2rem;
-  padding: 15px 40px;
-  cursor: pointer;
+  font-size: ${props => props.$size === 'small' ? '0.88rem' : props.$size === 'medium' ? '1rem' : '1.2rem'};
+  padding: ${props => props.$size === 'small' ? '9px 20px' : props.$size === 'medium' ? '12px 28px' : '15px 40px'};
+  width: ${props => props.$fullWidth ? '100%' : 'auto'};
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
   clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
   position: relative;
   outline: none;
   text-decoration: none;
-  display: inline-block;
+  display: ${props => props.$fullWidth ? 'flex' : 'inline-flex'};
+  align-items: center;
+  justify-content: center;
   text-align: center;
   overflow: hidden;
   backdrop-filter: ${props => props.$variant === 'secondary' ? 'blur(10px)' : 'none'};
+  opacity: ${props => props.disabled ? 0.6 : 1};
 
   // Running glow border effect
   &::before {
@@ -42,7 +46,7 @@ const StyledButton = styled(motion.button)`
     z-index: 0;
   }
 
-  &:hover::before {
+  &:hover:not(:disabled)::before {
     opacity: 1;
   }
 
@@ -66,7 +70,7 @@ const StyledButton = styled(motion.button)`
     transition: background-color 0.3s ease;
   }
 
-  &:hover::after {
+  &:hover:not(:disabled)::after {
     background-color: ${props => props.$variant === 'secondary' ? 'rgba(40, 40, 40, 0.9)' : '#922537'};
   }
 
@@ -81,40 +85,58 @@ const StyledButton = styled(motion.button)`
   }
 
   @media (max-width: 768px) {
-    font-size: 1rem;
-    padding: 12px 30px;
+    font-size: ${props => props.$size === 'small' ? '0.82rem' : props.$size === 'medium' ? '0.92rem' : '1rem'};
+    padding: ${props => props.$size === 'small' ? '8px 16px' : props.$size === 'medium' ? '10px 22px' : '12px 30px'};
   }
 `;
 
-const RegisterButton = ({ children = "INQUIRE NOW", to = "/inquiry", onClick, type = "button", variant = "primary", ...props }) => {
+const RegisterButton = ({
+  children = "INQUIRE NOW",
+  to,
+  onClick,
+  type = "button",
+  variant = "primary",
+  size = "large",
+  fullWidth = false,
+  disabled = false,
+  ...props
+}) => {
   const navigate = useNavigate();
 
+  // If `to` is not explicitly provided:
+  // Only default to '/inquiry' if neither `onClick` nor `type === 'submit'` is provided!
+  const targetTo = to !== undefined ? to : (onClick || type === 'submit' ? null : '/inquiry');
+
   const handleAction = (e) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
     if (onClick) {
       onClick(e);
     }
-    if (to) {
+    if (targetTo) {
       trackEvent('select_content', {
         content_type: 'cta',
-        item_id: to,
-        link_text: typeof children === 'string' ? children : 'Inquiry CTA'
+        item_id: targetTo,
+        link_text: typeof children === 'string' ? children : 'CTA Button'
       });
-      navigate(to);
+      navigate(targetTo);
     }
   };
 
   const buttonProps = {
-    whileHover: { scale: 1.05, y: -5 },
-    whileTap: { scale: 0.95 },
-    animate: { 
+    whileHover: disabled ? {} : { scale: size === 'small' ? 1.03 : 1.05, y: size === 'small' ? -2 : -4 },
+    whileTap: disabled ? {} : { scale: 0.96 },
+    animate: disabled ? {} : { 
       boxShadow: variant === 'secondary' ? [
         "0 0 10px rgba(255, 255, 255, 0.1)", 
         "0 0 15px rgba(255, 255, 255, 0.2)", 
         "0 0 10px rgba(255, 255, 255, 0.1)"
       ] : [
-        "0 0 15px rgba(123, 31, 46, 0.4)", 
-        "0 0 25px rgba(123, 31, 46, 0.6)", 
-        "0 0 15px rgba(123, 31, 46, 0.4)"
+        "0 0 12px rgba(123, 31, 46, 0.4)", 
+        "0 0 22px rgba(123, 31, 46, 0.6)", 
+        "0 0 12px rgba(123, 31, 46, 0.4)"
       ]
     },
     transition: { 
@@ -128,7 +150,10 @@ const RegisterButton = ({ children = "INQUIRE NOW", to = "/inquiry", onClick, ty
   return (
     <StyledButton
       $variant={variant}
+      $size={size}
+      $fullWidth={fullWidth}
       type={type}
+      disabled={disabled}
       onClick={handleAction}
       {...buttonProps}
     >

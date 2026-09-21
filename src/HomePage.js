@@ -3,6 +3,7 @@ import HeroSection from './HeroSection';
 import AboutSection from './AboutSection';
 import CoursesSection from './CoursesSection';
 import InternshipSpotlight from './components/InternshipSpotlight';
+import CareersSpotlight from './components/CareersSpotlight';
 import WhyChooseSection from './WhyChooseSection';
 import TestimonialSection from './TestimonialSection';
 import JoinSection from './JoinSection';
@@ -31,6 +32,10 @@ const HomePage = ({ content = {} }) => {
 
       <ScrollReveal>
         <InternshipSpotlight />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <CareersSpotlight />
       </ScrollReveal>
 
       <ScrollReveal>

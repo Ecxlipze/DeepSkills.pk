@@ -69,6 +69,7 @@ export const DEPARTMENT_NAV = {
     { label: 'Referral Program', icon: '', path: '/admin/management/referral', permissionKey: 'referral' },
     { label: 'Certificates', icon: '', path: '/admin/management/certificates', permissionKey: 'results' },
     { label: 'Blog', icon: '', path: '/admin/management/blog', permissionKey: 'blog' },
+    { label: 'Careers & Jobs', icon: '', path: '/admin/management/careers', permissionKey: 'settings' },
     { label: 'Media Library', icon: '', path: '/admin/management/media', permissionKey: 'settings' },
     { label: 'Media Showcase', icon: '', path: '/admin/management/media-page', permissionKey: 'settings' },
     { section: 'SYSTEM' },
@@ -96,6 +97,7 @@ export const ADMIN_ROUTE_ALIASES = {
   '/admin/referral': '/admin/management/referral',
   '/admin/certificates': '/admin/management/certificates',
   '/admin/blog': '/admin/management/blog',
+  '/admin/careers': '/admin/management/careers',
   '/admin/users': '/admin/management/users',
   '/admin/reports': '/admin/management/reports',
   '/admin/settings': '/admin/management/settings',
@@ -120,6 +122,7 @@ export const normalizeAdminPath = (pathname = '') => {
   if (cleanPath.startsWith('/admin/teachers/')) return cleanPath.replace('/admin/teachers/', '/admin/management/teachers/');
   if (cleanPath.startsWith('/admin/courses/')) return cleanPath.replace('/admin/courses/', '/admin/management/courses/');
   if (cleanPath.startsWith('/admin/blog/')) return cleanPath.replace('/admin/blog/', '/admin/management/blog/');
+  if (cleanPath.startsWith('/admin/careers')) return '/admin/management/careers';
   if (cleanPath.startsWith('/admin/users/activity')) return '/admin/management/users/activity';
   return cleanPath;
 };

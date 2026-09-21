@@ -177,7 +177,7 @@ const InquiryPage = () => {
           <textarea value={form.message} onChange={(e) => updateField('message', e.target.value)} placeholder="Ask anything about timings, fees, or course content." />
         </Field>
         <Submit type="submit" disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit Inquiry'} <FaArrowRight />
+          <span>{loading ? 'Submitting...' : 'Submit Inquiry'} <FaArrowRight /></span>
         </Submit>
       </FormCard>
     </Page>
@@ -348,38 +348,82 @@ const Field = styled(motion.div).attrs({
   option { color: #111; background: #fff; }
 `;
 
-const Submit = styled.button`
+const Submit = styled(motion.button)`
   grid-column: 1 / -1;
-  display: inline-flex;
+  background-color: #7B1F2E;
+  color: #fff;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 15px 40px;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+  position: relative;
+  outline: none;
+  text-decoration: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin: 12px auto 0;
-  min-width: 240px;
-  min-height: 58px;
-  padding: 18px 38px;
-  background: #7B1F2E;
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50px;
-  font-family: 'Inter', sans-serif;
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 10px 30px rgba(123, 31, 46, 0.35);
-  transition: all 0.3s ease;
+  text-align: center;
+  overflow: hidden;
+  margin: 14px auto 0;
+  min-width: 260px;
+  opacity: ${props => props.disabled ? 0.6 : 1};
 
-  &:hover:not(:disabled) {
-    background: #8B2635;
-    transform: translateY(-3px);
-    box-shadow: 0 15px 40px rgba(123, 31, 46, 0.5);
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      transparent,
+      rgba(255, 255, 255, 0.9),
+      rgba(255, 255, 255, 0.9),
+      transparent 80%
+    );
+    animation: rotateGlow 2s linear infinite;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    z-index: 0;
   }
 
-  &:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
+  &:hover:not(:disabled)::before {
+    opacity: 1;
+  }
+
+  @keyframes rotateGlow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    background-color: #7B1F2E;
+    z-index: 1;
+    clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+    transition: background-color 0.3s ease;
+  }
+
+  &:hover:not(:disabled)::after {
+    background-color: #922537;
+  }
+
+  span {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
 `;
 

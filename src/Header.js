@@ -539,7 +539,8 @@ const Header = () => {
       sublinks: [
         { name: "About DeepSkills", href: "/about", isRoute: true },
         { name: "Our Trainers", href: "/trainers", isRoute: true },
-        { name: "Founder Message", href: "/founder-message", isRoute: true }
+        { name: "Founder Message", href: "/founder-message", isRoute: true },
+        { name: "Careers (We're Hiring)", href: "/careers", isRoute: true }
       ]
     },
     {

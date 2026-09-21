@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
 import styled from "styled-components";
 import { motion } from "framer-motion";
-import { FaBrain, FaRegHandPointer, FaWalking, FaLeaf } from "react-icons/fa";
+import { FaBrain, FaRegHandPointer, FaWalking, FaLeaf, FaArrowRight, FaCheckCircle } from "react-icons/fa";
+import { Link } from "../lib/nextRouterDomCompat";
 
 import RegisterButton from "./components/RegisterButton";
 import GlowCard from "./components/GlowCard";
@@ -340,13 +341,115 @@ const DetailTextArea = styled(motion.div)`
   }
 `;
 
-const FinalCTASection = styled.section`
-  background: #000;
-  padding: 40px 20px;
+const JoinFacultySection = styled.section`
+  padding: 80px 20px;
+  background: linear-gradient(180deg, #000 0%, #15090d 50%, #000 100%);
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: center;
-  align-items: center;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 800px;
+    height: 350px;
+    background: radial-gradient(ellipse, rgba(123, 31, 46, 0.22) 0%, transparent 70%);
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
 `;
+
+const FacultyCard = styled(motion.div)`
+  max-width: 1100px;
+  width: 100%;
+  background: rgba(25, 25, 25, 0.85);
+  border: 1px solid rgba(217, 74, 94, 0.4);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 48px 40px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 15px 40px rgba(122, 30, 45, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+
+  @media (max-width: 768px) {
+    padding: 36px 20px;
+  }
+
+  .faculty-badge {
+    background: rgba(123, 31, 46, 0.35);
+    border: 1px solid rgba(217, 74, 94, 0.5);
+    color: #ff8597;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 16px;
+    border-radius: 20px;
+  }
+
+  h2 {
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    font-family: 'Asimovian', sans-serif;
+    color: #fff;
+    font-weight: normal;
+    letter-spacing: 1.5px;
+    margin: 0;
+    line-height: 1.2;
+
+    span {
+      background: linear-gradient(135deg, #ffffff 30%, #ff8597 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  }
+
+  p.desc {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.05rem;
+    color: #ccc;
+    max-width: 720px;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .perks-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 10px 0;
+
+    .perk {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.88rem;
+      color: #e0e0e0;
+      font-family: 'Inter', sans-serif;
+
+      svg {
+        color: #2ed573;
+      }
+    }
+  }
+`;
+
+
 
 
 
@@ -570,11 +673,30 @@ const TraineePage = ({ initialInstructors = null }) => {
           </DetailSection>
         ))}
 
-        <FinalCTASection>
-          <RegisterButton>
-            INQUIRE NOW
-          </RegisterButton>
-        </FinalCTASection>
+        <JoinFacultySection>
+          <FacultyCard
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <span className="faculty-badge">Join Our Faculty &bull; We Are Hiring</span>
+            <h2>Are You an Industry Expert? <span>Teach at DeepSkills</span></h2>
+            <p className="desc">
+              Share your real-world experience, mentor passionate tech learners, and shape future developers and designers.
+              We offer market-competitive compensation with flexible evening, weekend, or full-time tracks.
+            </p>
+            <div className="perks-row">
+              <span className="perk"><FaCheckCircle /> Flexible Evening & Weekend Tracks</span>
+              <span className="perk"><FaCheckCircle /> Competitive Hourly / Monthly Packages</span>
+              <span className="perk"><FaCheckCircle /> Modern Gulberg Campus & iMac Labs</span>
+            </div>
+            <RegisterButton to="/careers">
+              APPLY AS A TRAINER <FaArrowRight style={{ marginLeft: 8 }} />
+            </RegisterButton>
+          </FacultyCard>
+        </JoinFacultySection>
+
       </PageContainer>
     </>
   );

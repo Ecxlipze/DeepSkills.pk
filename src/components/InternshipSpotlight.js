@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { Link } from '../../lib/nextRouterDomCompat';
+import RegisterButton from './RegisterButton';
 import {
   FaVideo,
   FaHashtag,
@@ -221,35 +222,7 @@ const PerksHighlights = styled.div`
   }
 `;
 
-const CtaButton = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: linear-gradient(135deg, #7B1F2E 0%, #c42d44 100%);
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 12px 28px;
-  border-radius: 30px;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 20px rgba(123, 31, 46, 0.5);
-  white-space: nowrap;
 
-  svg {
-    transition: transform 0.2s ease;
-  }
-
-  &:hover {
-    background: linear-gradient(135deg, #962537 0%, #db344c 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 25px rgba(123, 31, 46, 0.7);
-
-    svg {
-      transform: translateX(4px);
-    }
-  }
-`;
 
 const DEFAULT_PROGRAM = {
   is_active: true,
@@ -375,9 +348,9 @@ export default function InternshipSpotlight() {
             </div>
           </PerksHighlights>
 
-          <CtaButton to="/internship">
-            Explore Roles & Apply Now <FaArrowRight />
-          </CtaButton>
+          <RegisterButton to="/internship">
+            EXPLORE ROLES & APPLY NOW <FaArrowRight style={{ marginLeft: 6 }} />
+          </RegisterButton>
         </PerksBar>
       </Container>
     </SectionWrapper>

@@ -5,6 +5,7 @@ import { Link } from "../lib/nextRouterDomCompat";
 import { FaLaptop, FaCode, FaPaintBrush, FaWordpress, FaSearchDollar, FaPenNib } from "react-icons/fa";
 import { getCourseDetailPath, getCourseSlugFromCategory } from './utils/enrollmentNavigation';
 import SmartCoverImage from '../components/next/SmartCoverImage';
+import RegisterButton from './components/RegisterButton';
 
 const PageContainer = styled.div`
   background-color: #000;
@@ -162,22 +163,81 @@ const Description = styled.p`
   flex-grow: 1;
 `;
 
-const CTAButton = styled.button`
-  background: #7A1E2D;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 20px;
-  font-family: 'Inter', sans-serif;
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin-top: 10px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
 
-  &:hover {
-    background: #CD7C7C;
+
+const CTAButton = styled.div`
+  background-color: #7B1F2E;
+  color: #fff;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 12px 28px;
+  cursor: pointer;
+  clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+  position: relative;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  width: 100%;
+  margin-top: 10px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      transparent,
+      rgba(255, 255, 255, 0.9),
+      rgba(255, 255, 255, 0.9),
+      transparent 80%
+    );
+    animation: rotateGlow 2s linear infinite;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    z-index: 0;
+  }
+
+  ${CourseCard}:hover &::before {
+    opacity: 1;
+  }
+
+  @keyframes rotateGlow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    background-color: #7B1F2E;
+    z-index: 1;
+    clip-path: polygon(0 0, 90% 0, 100% 30%, 100% 100%, 10% 100%, 0 70%);
+    transition: background-color 0.3s ease;
+  }
+
+  ${CourseCard}:hover &::after {
+    background-color: #922537;
+  }
+
+  span {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
   }
 `;
 
@@ -275,7 +335,9 @@ const CoursesPage = ({ initialCourses = null }) => {
             <CourseTitle>{course.title}</CourseTitle>
             <Description>{course.description}</Description>
             <Separator />
-            <CTAButton>View Course Details</CTAButton>
+            <CTAButton>
+              <span>VIEW COURSE DETAILS</span>
+            </CTAButton>
           </CourseCard>
         ))}
       </GridContainer>
