@@ -16,6 +16,17 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { createAttendanceRegisterPdf } from '../utils/attendancePdf';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton
+} from '../components/portal';
+import { validateRequired } from '../utils/formValidation';
 
 // ─── Styled Components ───
 
@@ -635,6 +646,7 @@ export default function AdminAttendance() {
   const [overrideRecord, setOverrideRecord] = useState(null);
   const [overrideStatus, setOverrideStatus] = useState('present');
   const [overrideReason, setOverrideReason] = useState('');
+  const [overrideError, setOverrideError] = useState('');
   const [savingOverride, setSavingOverride] = useState(false);
 
   // Clock Ticker
@@ -913,10 +925,14 @@ export default function AdminAttendance() {
 
   // Single Override Save
   const handleSaveOverride = async () => {
-    if (!overrideRecord || !overrideReason.trim()) {
-      toast.error('Please enter an override reason.');
+    if (!overrideRecord) return;
+    const reasonErr = validateRequired(overrideReason, 'Reason for correction');
+    if (reasonErr) {
+      setOverrideError(reasonErr);
+      toast.error(reasonErr);
       return;
     }
+    setOverrideError('');
     setSavingOverride(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1005,30 +1021,44 @@ export default function AdminAttendance() {
       <Container>
         {/* Academic Sub-Module Ribbon */}
         <SubNavRibbon>
-          <NavChip onClick={() => router.push('/admin/academic')}>
-            <FaChartLine /> Academic Hub
-          </NavChip>
+          {user?.role === 'admin' && (
+            <NavChip onClick={() => router.push('/admin/academic')}>
+              <FaChartLine /> Academic Hub
+            </NavChip>
+          )}
           <NavChip $active onClick={() => router.push('/admin/academic/attendance')}>
             <FaCalendarCheck /> Attendance
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/tasks')}>
-            Tasks & Homework
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/results')}>
-            Exams & Results
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/announcements')}>
-            Announcements
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/complaints')}>
-            Grievances
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/chats')}>
-            Group Chats
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/reports')}>
-            Academic Reports
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+              Tasks & Homework
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/results')}>
+              Exams & Results
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+              Announcements
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+              Grievances
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/chats')}>
+              Group Chats
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/reports')}>
+              Academic Reports
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         {/* Header Bar */}
@@ -1732,40 +1762,74 @@ export default function AdminAttendance() {
 
         {/* ─── OVERRIDE MODAL ─── */}
         {overrideRecord && (
-          <ModalOverlay onClick={() => setOverrideRecord(null)}>
-            <Modal onClick={e => e.stopPropagation()}>
-              <h3>Admin Attendance Override</h3>
-              <p>Correcting attendance record for {overrideRecord.student_name} on {overrideRecord.date}</p>
+          <AdminModal
+            isOpen={Boolean(overrideRecord)}
+            onClose={() => {
+              setOverrideRecord(null);
+              setOverrideError('');
+            }}
+            maxWidth="500px"
+          >
+            <AdminModalHeader
+              title="Admin Attendance Override"
+              subtitle={`Correcting attendance record for ${overrideRecord.student_name} on ${overrideRecord.date}`}
+              onClose={() => {
+                setOverrideRecord(null);
+                setOverrideError('');
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormField label="New Status" required>
+                  <AdminSelect value={overrideStatus} onChange={e => setOverrideStatus(e.target.value)}>
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="absent">Absent</option>
+                    <option value="excused">Excused</option>
+                  </AdminSelect>
+                </FormField>
 
-              <label style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: 6 }}>
-                New Status:
-              </label>
-              <select value={overrideStatus} onChange={e => setOverrideStatus(e.target.value)}>
-                <option value="present">Present</option>
-                <option value="late">Late</option>
-                <option value="absent">Absent</option>
-                <option value="excused">Excused</option>
-              </select>
-
-              <label style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: 6 }}>
-                Reason for Correction (Required for audit log):
-              </label>
-              <textarea
-                value={overrideReason}
-                onChange={e => setOverrideReason(e.target.value)}
-                placeholder="Explain why this record is being modified..."
-              />
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <HeaderBtn className="secondary" onClick={() => setOverrideRecord(null)} disabled={savingOverride}>
-                  Cancel
-                </HeaderBtn>
-                <HeaderBtn className="primary" onClick={handleSaveOverride} disabled={savingOverride}>
-                  {savingOverride ? 'Saving...' : 'Save Correction'}
-                </HeaderBtn>
+                <FormField
+                  label="Reason for Correction"
+                  required
+                  error={overrideError}
+                  hint="Required for administrative audit log."
+                >
+                  <AdminTextarea
+                    rows={3}
+                    value={overrideReason}
+                    onChange={e => {
+                      setOverrideReason(e.target.value);
+                      if (overrideError) setOverrideError('');
+                    }}
+                    placeholder="Explain why this record is being modified..."
+                    hasError={Boolean(overrideError)}
+                  />
+                </FormField>
               </div>
-            </Modal>
-          </ModalOverlay>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setOverrideRecord(null);
+                  setOverrideError('');
+                }}
+                disabled={savingOverride}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="button"
+                variant="primary"
+                onClick={handleSaveOverride}
+                disabled={savingOverride}
+              >
+                {savingOverride ? 'Saving...' : 'Save Correction'}
+              </AdminButton>
+            </AdminModalFooter>
+          </AdminModal>
         )}
       </Container>
     </AdminLayout>

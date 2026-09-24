@@ -294,9 +294,10 @@ const CoursesPage = ({ initialCourses = null }) => {
     return <FaCode />;
   };
 
-  const getPath = (category) => {
-    const slug = getCourseSlugFromCategory(category);
+  const getPath = (category, title, slug) => {
     if (slug) return getCourseDetailPath(slug);
+    const catSlug = getCourseSlugFromCategory(category || title || '');
+    if (catSlug) return getCourseDetailPath(catSlug);
     return '/inquiry';
   };
 
@@ -322,7 +323,7 @@ const CoursesPage = ({ initialCourses = null }) => {
           <CourseCard
             key={course.id || index}
             variants={cardVariants}
-            to={course.path || getPath(course.category)}
+            to={course.path || getPath(course.category, course.title, course.slug)}
           >
             <CourseImage>
               <SmartCoverImage

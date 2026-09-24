@@ -16,12 +16,18 @@ try {
     if (fs.existsSync(source)) fs.cpSync(source, path.join(app, name), { recursive: true, filter });
   }
   fs.copyFileSync(path.join(root, '.env.example'), path.join(app, '.env.example'));
+  if (fs.existsSync(path.join(root, '.env.local'))) {
+    fs.copyFileSync(path.join(root, '.env.local'), path.join(app, '.env.local'));
+  }
+  if (fs.existsSync(path.join(root, '.env'))) {
+    fs.copyFileSync(path.join(root, '.env'), path.join(app, '.env'));
+  }
   fs.copyFileSync(path.join(root, 'deployment/cpanel/README.md'), path.join(staging, 'START-HERE.md'));
   const artifact = path.join(root, 'deepskills-cpanel-node.zip');
   const temporary = path.join(staging, 'release.zip');
   execFileSync('zip', ['-q', '-r', temporary, 'deepskills-app', 'START-HERE.md'], { cwd: staging });
   fs.copyFileSync(temporary, artifact);
-  console.log(`Created ${artifact}. No PHP, secrets, local dependencies, or builds. Build on the host.`);
+  console.log(`Created ${artifact} including environment configuration. No PHP, local dependencies, or builds. Build on the host.`);
 } finally {
   fs.rmSync(staging, { recursive: true, force: true });
 }

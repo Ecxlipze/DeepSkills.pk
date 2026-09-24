@@ -12,6 +12,8 @@ import AdminLayout from '../components/AdminLayout';
 import { SkeletonCard } from '../components/Skeleton';
 import { supabase } from '../supabaseClient';
 import { getAuthHeaders } from '../utils/adminAccessApi';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const spinAnimation = keyframes`
   from { transform: rotate(0deg); }
@@ -20,6 +22,7 @@ const spinAnimation = keyframes`
 
 export default function ManagementOverview() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -183,39 +186,61 @@ export default function ManagementOverview() {
           <NavChip $active onClick={() => router.push('/admin/management')}>
             <FaLayerGroup /> Management Hub
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/students')}>
-            <FaUserGraduate /> Students
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/courses')}>
-            <FaBookOpen /> Courses & Batches
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/teachers')}>
-            <FaChalkboardTeacher /> Faculty
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/certificates')}>
-            <FaAward /> Certificates
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/trainers')}>
-            <FaChalkboardTeacher /> Trainers
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/testimonials')}>
-            <FaAward /> Testimonials
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/media-page')}>
-            <FaLayerGroup /> Media Showcase
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/referral')}>
-            <FaShareAlt /> Referral Program
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/users')}>
-            <FaUsers /> User Accounts
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/reports')}>
-            <FaLayerGroup /> Reports
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/settings')}>
-            <FaCog /> Settings
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/students')}>
+              <FaUserGraduate /> Students
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'courses', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/courses')}>
+              <FaBookOpen /> Courses & Batches
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'teachers', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/teachers')}>
+              <FaChalkboardTeacher /> Faculty
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'certificates', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/certificates')}>
+              <FaAward /> Certificates
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'trainers', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/trainers')}>
+              <FaChalkboardTeacher /> Trainers
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'testimonials', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/testimonials')}>
+              <FaAward /> Testimonials
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'media', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/media-page')}>
+              <FaLayerGroup /> Media Showcase
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'referral', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/referral')}>
+              <FaShareAlt /> Referral Program
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'users', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/users')}>
+              <FaUsers /> User Accounts
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/reports')}>
+              <FaLayerGroup /> Reports
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'settings', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/settings')}>
+              <FaCog /> Settings
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         {/* Executive Header */}

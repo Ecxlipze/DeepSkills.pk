@@ -10,6 +10,18 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
 import TheaterVideoModal, { getYouTubeId, getYouTubeThumbnail, isDirectVideo } from '../components/TheaterVideoModal';
+import {
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  validateRequired,
+  validateUrl,
+  validateForm
+} from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -225,6 +237,7 @@ const TestimonialManager = () => {
   const [courses, setCourses] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(emptyFormData);
+  const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [activeVideo, setActiveVideo] = useState(null);
 
@@ -269,14 +282,18 @@ const TestimonialManager = () => {
       return;
     }
 
-    if (!formData.student_name.trim()) {
-      toast.error('Student name is required.');
+    const { isValid, errors: valErrors } = validateForm(formData, {
+      student_name: [(v) => validateRequired(v, 'Student Name')],
+      video_url: [(v) => validateRequired(v, 'Video URL'), (v) => validateUrl(v, 'Video URL')],
+      thumbnail_url: [(v) => v ? validateUrl(v, 'Thumbnail URL') : null]
+    });
+
+    if (!isValid) {
+      setFormErrors(valErrors);
+      toast.error('Please resolve the highlighted errors in the form.');
       return;
     }
-    if (!formData.video_url.trim()) {
-      toast.error('Video URL is required.');
-      return;
-    }
+    setFormErrors({});
 
     setSubmitting(true);
     try {
@@ -303,6 +320,7 @@ const TestimonialManager = () => {
 
       toast.success(body.message || (editingId ? 'Testimonial updated.' : 'Testimonial added.'));
       setFormData(emptyFormData);
+      setFormErrors({});
       setEditingId(null);
       requestRevalidate(['/']);
       fetchTestimonials();
@@ -319,6 +337,7 @@ const TestimonialManager = () => {
       return;
     }
     setEditingId(testi.id);
+    setFormErrors({});
     setFormData({
       student_name: testi.student_name || '',
       video_url: testi.video_url || '',
@@ -403,42 +422,50 @@ const TestimonialManager = () => {
       </Header>
 
       {canMutate && (
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit} noValidate>
           <h3 style={{ margin: 0, fontSize: '1.2rem' }}>
             {editingId ? 'Edit Student Testimonial' : 'Add New Student Testimonial'}
           </h3>
-          <InputGroup>
-            <Label>Student Name *</Label>
-            <Input 
+          <FormField label="Student Name" required error={formErrors.student_name}>
+            <AdminInput 
               value={formData.student_name} 
-              onChange={e => setFormData({...formData, student_name: e.target.value})} 
+              onChange={e => {
+                setFormData({...formData, student_name: e.target.value});
+                if (formErrors.student_name) setFormErrors(prev => ({ ...prev, student_name: null }));
+              }} 
               placeholder="e.g. Ali Khan" 
+              hasError={Boolean(formErrors.student_name)}
               required 
             />
-          </InputGroup>
+          </FormField>
 
-          <InputGroup>
-            <Label>Video URL * (YouTube or direct MP4/WebM)</Label>
-            <Input 
+          <FormField label="Video URL" required error={formErrors.video_url} hint="YouTube link or direct MP4/WebM">
+            <AdminInput 
               value={formData.video_url} 
-              onChange={e => setFormData({...formData, video_url: e.target.value})} 
+              onChange={e => {
+                setFormData({...formData, video_url: e.target.value});
+                if (formErrors.video_url) setFormErrors(prev => ({ ...prev, video_url: null }));
+              }} 
               placeholder="e.g. https://www.youtube.com/watch?v=... or https://...video.mp4" 
+              hasError={Boolean(formErrors.video_url)}
               required 
             />
-          </InputGroup>
+          </FormField>
 
-          <InputGroup>
-            <Label>Custom Thumbnail URL (Optional - YouTube thumbnails are automatic)</Label>
-            <Input 
+          <FormField label="Custom Thumbnail URL (Optional)" error={formErrors.thumbnail_url} hint="YouTube thumbnails are fetched automatically">
+            <AdminInput 
               value={formData.thumbnail_url} 
-              onChange={e => setFormData({...formData, thumbnail_url: e.target.value})} 
+              onChange={e => {
+                setFormData({...formData, thumbnail_url: e.target.value});
+                if (formErrors.thumbnail_url) setFormErrors(prev => ({ ...prev, thumbnail_url: null }));
+              }} 
               placeholder="https://images.unsplash.com/..." 
+              hasError={Boolean(formErrors.thumbnail_url)}
             />
-          </InputGroup>
+          </FormField>
 
-          <InputGroup>
-            <Label>Course Name</Label>
-            <Select 
+          <FormField label="Course Name">
+            <AdminSelect 
               value={formData.course_name} 
               onChange={e => setFormData({...formData, course_name: e.target.value})}
             >
@@ -450,24 +477,25 @@ const TestimonialManager = () => {
               <option value="Full Stack React JS">Full Stack React JS</option>
               <option value="Laravel PHP Development">Laravel PHP Development</option>
               <option value="WordPress Mastery">WordPress Mastery</option>
-            </Select>
-          </InputGroup>
+            </AdminSelect>
+          </FormField>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <Button type="submit" disabled={submitting}>
+            <AdminButton variant="primary" type="submit" disabled={submitting}>
               {submitting ? 'Saving...' : editingId ? 'Update Testimonial' : 'Add Testimonial'}
-            </Button>
+            </AdminButton>
             {editingId && (
-              <Button 
+              <AdminButton 
+                variant="secondary"
                 type="button" 
                 onClick={() => {
                   setEditingId(null);
                   setFormData(emptyFormData);
+                  setFormErrors({});
                 }}
-                style={{ background: '#444' }}
               >
                 Cancel Edit
-              </Button>
+              </AdminButton>
             )}
           </div>
         </Form>

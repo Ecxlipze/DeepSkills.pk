@@ -12,6 +12,27 @@ import toast from 'react-hot-toast';
 import { syncTeacherAccess } from '../utils/adminAccessApi';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import { 
+  AdminModal, 
+  AdminModalHeader, 
+  AdminModalBody, 
+  AdminModalFooter, 
+  FormField, 
+  AdminInput, 
+  AdminSelect, 
+  AdminTextarea, 
+  AdminButton, 
+  FormGrid 
+} from '../components/portal';
+import { 
+  formatCnic, 
+  formatPhone, 
+  validateRequired, 
+  validateEmail, 
+  validateCnic, 
+  validatePhone, 
+  validateNumber 
+} from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -549,11 +570,14 @@ const TeacherManager = ({ basePath }) => {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  const [formErrors, setFormErrors] = useState({});
+
   const handleCnicChange = (e) => {
     let val = e.target.value.replace(/\D/g, '');
     if (val.length > 5) val = val.slice(0, 5) + '-' + val.slice(5);
     if (val.length > 13) val = val.slice(0, 13) + '-' + val.slice(13, 14);
     setFormData({ ...formData, cnic: val });
+    if (formErrors.cnic) setFormErrors(prev => ({ ...prev, cnic: undefined }));
   };
 
   const handleAddTeacher = async (e) => {
@@ -562,6 +586,32 @@ const TeacherManager = ({ basePath }) => {
       toast.error("You do not have permission to add teachers.");
       return;
     }
+
+    const errors = {};
+    const nameErr = validateRequired(formData.name, 'Full name');
+    if (nameErr) errors.name = nameErr;
+    else if (formData.name.trim().length < 2) errors.name = 'Full name must be at least 2 characters.';
+
+    const cnicErr = validateCnic(formData.cnic, 'CNIC number', true);
+    if (cnicErr) errors.cnic = cnicErr;
+
+    const phoneErr = validatePhone(formData.phone, 'Phone number', true);
+    if (phoneErr) errors.phone = phoneErr;
+
+    const emailErr = validateEmail(formData.email, 'Email address', true);
+    if (emailErr) errors.email = emailErr;
+
+    if (formData.salary) {
+      const salaryErr = validateNumber(formData.salary, { fieldName: 'Salary', required: false, positive: true });
+      if (salaryErr) errors.salary = salaryErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+
     setProcessing(true);
     try {
       if (addMode === 'invite') {
@@ -879,218 +929,290 @@ const TeacherManager = ({ basePath }) => {
           </Table>
         </TableContainer>
 
-        <AnimatePresence>
-          {isAddModalOpen && (
-            <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ModalContent initial={{ y: 20 }} animate={{ y: 0 }}>
-                <ModalHeader>
-                  <h3>{inviteSuccessData ? "Faculty Invitation Ready" : "Add Faculty Instructor"}</h3>
-                  <button onClick={() => { setIsAddModalOpen(false); setInviteSuccessData(null); }}><FaTimes /></button>
-                </ModalHeader>
+        <AdminModal
+          isOpen={isAddModalOpen}
+          onClose={() => {
+            setIsAddModalOpen(false);
+            setInviteSuccessData(null);
+            setFormErrors({});
+          }}
+          maxWidth="680px"
+        >
+          <AdminModalHeader
+            title={inviteSuccessData ? "Faculty Invitation Ready" : "Add Faculty Instructor"}
+            subtitle={inviteSuccessData ? "Onboarding credentials and access links generated." : "Register or directly activate faculty members."}
+            icon={FaUserPlus}
+            onClose={() => {
+              setIsAddModalOpen(false);
+              setInviteSuccessData(null);
+              setFormErrors({});
+            }}
+          />
 
-                {inviteSuccessData ? (
-                  <SuccessCard>
-                    <div style={{ color: '#25D366', fontSize: '2.5rem' }}>
-                      <FaCheckCircle />
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff' }}>
-                      Faculty Onboarding Link Generated
-                    </div>
-                    <p style={{ margin: '0', fontSize: '0.85rem', color: '#94a3b8', lineHeight: '1.5' }}>
-                      Account registered for <strong>{inviteSuccessData.name}</strong>. Instructor can log in using CNIC with OTP sent to their email, and complete their onboarding.
-                    </p>
-                    <div className="details-box">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b' }}>
-                        <span>Login Portal:</span>
-                        <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.loginUrl}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b' }}>
-                        <span>Login CNIC:</span>
-                        <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.cnic}</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b' }}>
-                        <span>OTP Email:</span>
-                        <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.email}</strong>
-                      </div>
-                    </div>
-                    <div className="actions">
-                      {inviteSuccessData.waUrl && (
-                        <a 
-                          className="whatsapp-btn" 
-                          href={inviteSuccessData.waUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                        >
-                          <FaWhatsapp style={{ fontSize: '1.1rem' }} /> Send Invite via WhatsApp
-                        </a>
-                      )}
-                      <button 
-                        type="button" 
-                        className="copy-btn" 
-                        onClick={() => {
-                          navigator.clipboard.writeText(inviteSuccessData.onboardingUrl);
-                          toast.success("Onboarding link copied!");
-                        }}
-                      >
-                        <FaCopy /> Copy Onboarding Link
-                      </button>
-                      <button 
-                        type="button" 
-                        className="done-btn" 
-                        onClick={() => {
-                          setInviteSuccessData(null);
-                          setIsAddModalOpen(false);
-                          setFormData({ name: '', cnic: '', phone: '', email: '', specialization: '', salary: '', course_id: '', selectedBatches: [], notes: '' });
-                        }}
-                      >
-                        Done & Close
-                      </button>
-                    </div>
-                  </SuccessCard>
+          <AdminModalBody>
+            {inviteSuccessData ? (
+              <SuccessCard>
+                <div style={{ color: '#25D366', fontSize: '2.5rem' }}>
+                  <FaCheckCircle />
+                </div>
+                <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff' }}>
+                  Faculty Onboarding Link Generated
+                </div>
+                <p style={{ margin: '0', fontSize: '0.85rem', color: '#94a3b8', lineHeight: '1.5' }}>
+                  Account registered for <strong>{inviteSuccessData.name}</strong>. Instructor can log in using CNIC with OTP sent to their email, and complete their onboarding.
+                </p>
+
+                <div className="action-buttons">
+                  {inviteSuccessData.waUrl && (
+                    <a 
+                      href={inviteSuccessData.waUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="wa-btn"
+                    >
+                      <FaWhatsapp /> Send via WhatsApp
+                    </a>
+                  )}
+                  <button 
+                    type="button" 
+                    className="copy-btn" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteSuccessData.onboardingUrl);
+                      toast.success("Onboarding link copied!");
+                    }}
+                  >
+                    <FaCopy /> Copy Onboarding Link
+                  </button>
+                </div>
+              </SuccessCard>
+            ) : (
+              <>
+                <ModeSelector>
+                  <ModeButton 
+                    type="button" 
+                    $active={addMode === 'invite'} 
+                    onClick={() => setAddMode('invite')}
+                  >
+                    <FaPaperPlane /> Invite to HR Pipeline (Recommended)
+                  </ModeButton>
+                  <ModeButton 
+                    type="button" 
+                    $active={addMode === 'direct'} 
+                    onClick={() => setAddMode('direct')}
+                  >
+                    <FaUserPlus /> Direct Staff Activation
+                  </ModeButton>
+                </ModeSelector>
+
+                {addMode === 'invite' ? (
+                  <InfoBox>
+                    <strong>Standard HR Hiring Workflow:</strong> Register candidate details and immediately send them a secure WhatsApp/Web link to fill their digital profile, credentials, documents, and acceptance letter.
+                  </InfoBox>
                 ) : (
-                  <>
-                    <ModeSelector>
-                      <ModeButton 
-                        type="button" 
-                        $active={addMode === 'invite'} 
-                        onClick={() => setAddMode('invite')}
-                      >
-                        <FaPaperPlane /> Invite to HR Pipeline (Recommended)
-                      </ModeButton>
-                      <ModeButton 
-                        type="button" 
-                        $active={addMode === 'direct'} 
-                        onClick={() => setAddMode('direct')}
-                      >
-                        <FaUserPlus /> Direct Staff Activation
-                      </ModeButton>
-                    </ModeSelector>
-
-                    {addMode === 'invite' ? (
-                      <InfoBox>
-                        <strong>Standard HR Hiring Workflow:</strong> Register candidate details and immediately send them a secure WhatsApp/Web link to fill their digital profile, credentials, documents, and acceptance letter.
-                      </InfoBox>
-                    ) : (
-                      <InfoBox style={{ background: 'rgba(234, 179, 8, 0.08)', borderColor: 'rgba(234, 179, 8, 0.25)', color: '#fde047' }}>
-                        <strong>Immediate Direct Activation:</strong> Bypasses teacher self-onboarding. Instantly provisions LMS portal login, assigns batches, and synchronizes a completed record into HR Files.
-                      </InfoBox>
-                    )}
-
-                    <form onSubmit={handleAddTeacher}>
-                      <FormGridModal>
-                        <FormGroup>
-                          <label>Full Name*</label>
-                          <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Dr. Muhammad Ahmed" />
-                        </FormGroup>
-                        <FormGroup>
-                          <label>CNIC Number*</label>
-                          <input required maxLength={15} value={formData.cnic} onChange={handleCnicChange} placeholder="XXXXX-XXXXXXX-X" />
-                        </FormGroup>
-                        <FormGroup>
-                          <label>Phone Number*</label>
-                          <input required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="03XXXXXXXXX" />
-                        </FormGroup>
-                        <FormGroup>
-                          <label>Email Address*</label>
-                          <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="instructor@deepskills.pk" />
-                        </FormGroup>
-                        <FormGroup style={{ gridColumn: 'span 2' }}>
-                          <label>Specialization / Subject Domain</label>
-                          <input value={formData.specialization} onChange={e => setFormData({...formData, specialization: e.target.value})} placeholder="e.g. Frontend Development, UI/UX" />
-                        </FormGroup>
-                        <FormGroup style={{ gridColumn: 'span 2' }}>
-                          <label>{addMode === 'invite' ? 'Expected Monthly Salary (PKR)' : 'Agreed Monthly Salary (PKR)'}</label>
-                          <input type="number" value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} placeholder="e.g. 80000" />
-                        </FormGroup>
-
-                        {addMode === 'direct' && (
-                          <>
-                            <FormGroup style={{ gridColumn: 'span 2' }}>
-                              <label>Assign Course (Filters Batches)</label>
-                              <select value={formData.course_id} onChange={e => setFormData({...formData, course_id: e.target.value})}>
-                                <option value="">Select Course</option>
-                                {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                              </select>
-                            </FormGroup>
-                            
-                            {formData.course_id && (
-                              <FormGroup style={{ gridColumn: 'span 2' }}>
-                                <label>Select Batches</label>
-                                <MultiSelectContainer>
-                                  {batches.filter(b => {
-                                    const selectedCourse = courses.find(c => c.id === formData.course_id);
-                                    return b.course === selectedCourse?.title;
-                                  }).map(b => {
-                                    const isSelected = formData.selectedBatches.find(sb => sb.batch_id === b.id);
-                                    return (
-                                      <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                                        <MultiSelectItem>
-                                          <input 
-                                            type="checkbox" 
-                                            checked={!!isSelected} 
-                                            onChange={(e) => {
-                                              if (e.target.checked) {
-                                                if (!formData.selectedBatches.find(sb => sb.batch_id === b.id)) {
-                                                  setFormData({...formData, selectedBatches: [...formData.selectedBatches, { batch_id: b.id, role: 'Main' }]});
-                                                }
-                                              } else {
-                                                setFormData({...formData, selectedBatches: formData.selectedBatches.filter(sb => sb.batch_id !== b.id)});
-                                              }
-                                            }}
-                                          />
-                                          {b.batch_name}
-                                        </MultiSelectItem>
-                                        {isSelected && (
-                                          <select 
-                                            style={{ width: '120px', padding: '4px', fontSize: '0.8rem' }}
-                                            value={isSelected.role}
-                                            onChange={(e) => {
-                                              setFormData({
-                                                ...formData,
-                                                selectedBatches: formData.selectedBatches.map(sb => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
-                                              });
-                                            }}
-                                          >
-                                            <option value="Main">Main</option>
-                                            <option value="Assistant">Assistant</option>
-                                          </select>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </MultiSelectContainer>
-                              </FormGroup>
-                            )}
-                          </>
-                        )}
-
-                        <FormGroup style={{ gridColumn: 'span 2' }}>
-                          <label>{addMode === 'invite' ? 'Interview & Candidate Notes (Optional)' : 'Admin Notes (Optional)'}</label>
-                          <textarea rows="3" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any additional notes or qualifications..." />
-                        </FormGroup>
-                      </FormGridModal>
-                      <SubmitBtn type="submit" disabled={processing}>
-                        {processing ? "Processing..." : addMode === 'invite' ? "Generate & Send Onboarding Invite" : "Directly Activate Teacher"}
-                      </SubmitBtn>
-                    </form>
-                  </>
+                  <InfoBox style={{ background: 'rgba(234, 179, 8, 0.08)', borderColor: 'rgba(234, 179, 8, 0.25)', color: '#fde047' }}>
+                    <strong>Immediate Direct Activation:</strong> Bypasses teacher self-onboarding. Instantly provisions LMS portal login, assigns batches, and synchronizes a completed record into HR Files.
+                  </InfoBox>
                 )}
-              </ModalContent>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+
+                <form id="addTeacherForm" onSubmit={handleAddTeacher} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <FormGrid $columns={2}>
+                    <FormField label="Full Name" required error={formErrors.name}>
+                      <AdminInput
+                        value={formData.name}
+                        onChange={e => {
+                          setFormData({ ...formData, name: e.target.value });
+                          if (formErrors.name) setFormErrors(prev => ({ ...prev, name: undefined }));
+                        }}
+                        placeholder="e.g. Dr. Muhammad Ahmed"
+                        $hasError={Boolean(formErrors.name)}
+                      />
+                    </FormField>
+
+                    <FormField label="CNIC Number" required error={formErrors.cnic} hint="13 digits: XXXXX-XXXXXXX-X">
+                      <AdminInput
+                        maxLength={15}
+                        value={formData.cnic}
+                        onChange={handleCnicChange}
+                        placeholder="35202-1234567-9"
+                        $hasError={Boolean(formErrors.cnic)}
+                      />
+                    </FormField>
+
+                    <FormField label="Phone Number" required error={formErrors.phone} hint="Max 13 chars (e.g. 03001234567 or +923001234567)">
+                      <AdminInput
+                        maxLength={13}
+                        value={formData.phone}
+                        onChange={e => {
+                          setFormData({ ...formData, phone: formatPhone(e.target.value, 13) });
+                          if (formErrors.phone) setFormErrors(prev => ({ ...prev, phone: undefined }));
+                        }}
+                        placeholder="03001234567 or +923001234567"
+                        $hasError={Boolean(formErrors.phone)}
+                      />
+                    </FormField>
+
+                    <FormField label="Email Address" required error={formErrors.email}>
+                      <AdminInput
+                        type="email"
+                        value={formData.email}
+                        onChange={e => {
+                          setFormData({ ...formData, email: e.target.value });
+                          if (formErrors.email) setFormErrors(prev => ({ ...prev, email: undefined }));
+                        }}
+                        placeholder="instructor@deepskills.pk"
+                        $hasError={Boolean(formErrors.email)}
+                      />
+                    </FormField>
+                  </FormGrid>
+
+                  <FormField label="Specialization / Subject Domain">
+                    <AdminInput
+                      value={formData.specialization}
+                      onChange={e => setFormData({ ...formData, specialization: e.target.value })}
+                      placeholder="e.g. Frontend Development, UI/UX"
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={addMode === 'invite' ? 'Expected Monthly Salary (PKR)' : 'Agreed Monthly Salary (PKR)'}
+                    error={formErrors.salary}
+                    hint="Gross PKR monthly compensation (non-negative)"
+                  >
+                    <AdminInput
+                      type="number"
+                      min="0"
+                      step="1000"
+                      onKeyDown={e => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E') e.preventDefault();
+                      }}
+                      value={formData.salary}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val !== '' && Number(val) < 0) return;
+                        setFormData({ ...formData, salary: val });
+                        if (formErrors.salary) setFormErrors(prev => ({ ...prev, salary: undefined }));
+                      }}
+                      placeholder="e.g. 80000"
+                      $hasError={Boolean(formErrors.salary)}
+                    />
+                  </FormField>
+
+                  {addMode === 'direct' && (
+                    <>
+                      <FormField label="Assign Course (Filters Batches)">
+                        <AdminSelect
+                          value={formData.course_id}
+                          onChange={e => setFormData({ ...formData, course_id: e.target.value })}
+                        >
+                          <option value="">Select Course</option>
+                          {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                        </AdminSelect>
+                      </FormField>
+
+                      {formData.course_id && (
+                        <FormField label="Select Batches">
+                          <MultiSelectContainer>
+                            {batches.filter(b => {
+                              const selectedCourse = courses.find(c => c.id === formData.course_id);
+                              return b.course === selectedCourse?.title;
+                            }).map(b => {
+                              const isSelected = formData.selectedBatches.find(sb => sb.batch_id === b.id);
+                              return (
+                                <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                  <MultiSelectItem>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={!!isSelected} 
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          if (!formData.selectedBatches.find(sb => sb.batch_id === b.id)) {
+                                            setFormData({ ...formData, selectedBatches: [...formData.selectedBatches, { batch_id: b.id, role: 'Main' }] });
+                                          }
+                                        } else {
+                                          setFormData({ ...formData, selectedBatches: formData.selectedBatches.filter(sb => sb.batch_id !== b.id) });
+                                        }
+                                      }}
+                                    />
+                                    {b.batch_name}
+                                  </MultiSelectItem>
+                                  {isSelected && (
+                                    <select 
+                                      style={{ width: '120px', padding: '4px', fontSize: '0.8rem', background: '#111318', color: '#fff', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}
+                                      value={isSelected.role}
+                                      onChange={(e) => {
+                                        setFormData({
+                                          ...formData,
+                                          selectedBatches: formData.selectedBatches.map(sb => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
+                                        });
+                                      }}
+                                    >
+                                      <option value="Main">Main</option>
+                                      <option value="Assistant">Assistant</option>
+                                    </select>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </MultiSelectContainer>
+                        </FormField>
+                      )}
+                    </>
+                  )}
+
+                  <FormField label={addMode === 'invite' ? 'Interview & Candidate Notes (Optional)' : 'Admin Notes (Optional)'}>
+                    <AdminTextarea
+                      rows={3}
+                      value={formData.notes}
+                      onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Any additional notes or qualifications..."
+                    />
+                  </FormField>
+                </form>
+              </>
+            )}
+          </AdminModalBody>
+
+          <AdminModalFooter>
+            {inviteSuccessData ? (
+              <AdminButton
+                $variant="primary"
+                type="button"
+                onClick={() => {
+                  setInviteSuccessData(null);
+                  setIsAddModalOpen(false);
+                  setFormData({ name: '', cnic: '', phone: '', email: '', specialization: '', salary: '', course_id: '', selectedBatches: [], notes: '' });
+                }}
+              >
+                Done & Close
+              </AdminButton>
+            ) : (
+              <>
+                <AdminButton
+                  $variant="secondary"
+                  type="button"
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setFormErrors({});
+                  }}
+                >
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  $variant="primary"
+                  type="submit"
+                  form="addTeacherForm"
+                  disabled={processing}
+                >
+                  {processing ? "Processing..." : addMode === 'invite' ? "Generate & Send Onboarding Invite" : "Directly Activate Teacher"}
+                </AdminButton>
+              </>
+            )}
+          </AdminModalFooter>
+        </AdminModal>
       </Container>
     </AdminLayout>
   );
 };
 
-const FormGridModal = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  @media (max-width: 500px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
 export default TeacherManager;
+

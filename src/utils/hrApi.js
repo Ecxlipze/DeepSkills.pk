@@ -174,15 +174,61 @@ export const fetchAdminHRApplications = async () => {
 };
 
 export const fetchJDTemplates = async () => {
+  try {
+    const res = await requestJson('/api/admin/hr/templates', {
+      method: 'GET',
+      headers: { ...await getAuthHeaders() }
+    });
+    if (res?.data && Array.isArray(res.data)) {
+      return res.data;
+    }
+  } catch (_) {
+    // Fall back to client supabase if API is unreachable
+  }
+
   const { data, error } = await supabase
     .from('hr_jd_templates')
     .select('*')
     .eq('is_active', true)
-    .order('specialization', { ascending: true });
+    .order('specialization', { ascending: true })
+    .order('created_at', { ascending: true });
   if (error) {
     throw error;
   }
-  return data || [];
+
+  const seen = new Set();
+  return (data || []).filter((tpl) => {
+    const key = `${(tpl.specialization || '').trim().toLowerCase()}|${(tpl.employment_type || '').trim().toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+export const createJDTemplate = async (templatePayload) => {
+  const result = await requestJson('/api/admin/hr/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() },
+    body: JSON.stringify(templatePayload)
+  });
+  return result?.data;
+};
+
+export const updateJDTemplate = async (templateId, templatePayload) => {
+  const result = await requestJson('/api/admin/hr/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() },
+    body: JSON.stringify({ ...templatePayload, id: templateId })
+  });
+  return result?.data;
+};
+
+export const deleteJDTemplate = async (templateId) => {
+  const result = await requestJson(`/api/admin/hr/templates?id=${encodeURIComponent(templateId)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() }
+  });
+  return result?.data;
 };
 
 export const createJDDraft = (profile, template, options) => buildJdDraft(profile, template, options);

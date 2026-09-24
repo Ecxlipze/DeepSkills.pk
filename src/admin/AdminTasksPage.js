@@ -14,6 +14,19 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import { validateRequired, validateNumber, validateForm } from '../utils/formValidation';
 
 // ─── Styled Components ───
 
@@ -578,6 +591,8 @@ export default function AdminTasksPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showGradeModal, setShowGradeModal] = useState(false);
   const [gradingSubmission, setGradingSubmission] = useState(null);
+  const [createFormErrors, setCreateFormErrors] = useState({});
+  const [gradeFormErrors, setGradeFormErrors] = useState({});
 
   // Create Assignment Form State
   const [createForm, setCreateForm] = useState({
@@ -708,8 +723,17 @@ export default function AdminTasksPage() {
       toast.error('You do not have permission to create assignments.');
       return;
     }
-    if (!createForm.title.trim() || !createForm.course || !createForm.dueDate) {
-      toast.error('Please enter assignment title, course, and due date.');
+
+    const errors = validateForm(createForm, {
+      title: (v) => validateRequired(v, 'Assignment title'),
+      course: (v) => validateRequired(v, 'Academic course'),
+      dueDate: (v) => validateRequired(v, 'Due date & submission cutoff'),
+      totalMarks: (v) => validateNumber(v, { min: 1, max: 1000, integer: true, label: 'Total marks' })
+    });
+
+    setCreateFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
       return;
     }
 
@@ -738,7 +762,7 @@ export default function AdminTasksPage() {
 
       const payload = {
         action: 'create_task',
-        title: createForm.title,
+        title: createForm.title.trim(),
         category: createForm.category,
         course: createForm.course,
         batch: createForm.batch,
@@ -746,7 +770,7 @@ export default function AdminTasksPage() {
           ? batches.filter(b => b.course === createForm.course).map(b => b.batch_name)
           : [createForm.batch],
         due_date: createForm.dueDate,
-        total_marks: createForm.totalMarks,
+        total_marks: Number(createForm.totalMarks),
         description: createForm.description,
         file_url: uploadedFileUrls[0]?.url || null,
         file_urls: uploadedFileUrls
@@ -768,6 +792,7 @@ export default function AdminTasksPage() {
 
       toast.success('Assignment created & broadcasted successfully!');
       setShowCreateModal(false);
+      setCreateFormErrors({});
       setCreateForm({
         title: '',
         category: 'Assignment',
@@ -793,6 +818,7 @@ export default function AdminTasksPage() {
     setGradeScore(studentRow.marks_obtained !== null ? String(studentRow.marks_obtained) : '');
     setGradeLetter(studentRow.grade || 'A');
     setGradeFeedback(studentRow.feedback || '');
+    setGradeFormErrors({});
     setShowGradeModal(true);
   };
 
@@ -808,11 +834,18 @@ export default function AdminTasksPage() {
       return;
     }
 
-    const scoreNum = Number(gradeScore);
-    if (isNaN(scoreNum) || scoreNum < 0) {
-      toast.error('Please enter a valid numeric score.');
+    const maxMarks = Number(gradingSubmission.total_marks) || 100;
+    const errors = validateForm({ gradeScore }, {
+      gradeScore: (v) => validateNumber(v, { min: 0, max: maxMarks, label: 'Marks obtained' })
+    });
+
+    setGradeFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the evaluation errors before submitting.');
       return;
     }
+
+    const scoreNum = Number(gradeScore);
 
     setSubmittingGrade(true);
     try {
@@ -839,6 +872,7 @@ export default function AdminTasksPage() {
 
       toast.success('Evaluation saved & student notified!');
       setShowGradeModal(false);
+      setGradeFormErrors({});
       setGradingSubmission(null);
       if (selectedTask) fetchData(selectedTask.id);
       else fetchData();
@@ -943,30 +977,44 @@ export default function AdminTasksPage() {
       <Container>
         {/* Sub-Module Navigation Ribbon */}
         <SubNavRibbon>
-          <NavChip onClick={() => router.push('/admin/academic')}>
-            <FaChartLine /> Academic Hub
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/attendance')}>
-            <FaCalendarAlt /> Attendance
-          </NavChip>
+          {user?.role === 'admin' && (
+            <NavChip onClick={() => router.push('/admin/academic')}>
+              <FaChartLine /> Academic Hub
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+              <FaCalendarAlt /> Attendance
+            </NavChip>
+          )}
           <NavChip $active onClick={() => router.push('/admin/academic/tasks')}>
             <FaTasks /> Tasks & Homework
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/results')}>
-            <FaAward /> Exams & Results
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/announcements')}>
-            Announcements
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/complaints')}>
-            Grievances
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/chats')}>
-            Group Chats
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/reports')}>
-            Academic Reports
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/results')}>
+              <FaAward /> Exams & Results
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+              Announcements
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+              Grievances
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/chats')}>
+              Group Chats
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/reports')}>
+              Academic Reports
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         {/* Top Header */}
@@ -980,8 +1028,8 @@ export default function AdminTasksPage() {
 
           <div className="action-cluster">
             {canMutate && (
-              <HeaderBtn className="primary" onClick={() => setShowCreateModal(true)}>
-                <FaPlus /> New Assignment
+              <HeaderBtn className="primary" onClick={() => { setCreateFormErrors({}); setShowCreateModal(true); }}>
+                <FaPlus /> Create Assignment
               </HeaderBtn>
             )}
             <HeaderBtn className="secondary" onClick={() => fetchData()}>
@@ -1439,302 +1487,306 @@ export default function AdminTasksPage() {
         {/* ─── MODAL 1: BATCH-WIDE ASSIGNMENT CREATOR ─── */}
         <AnimatePresence>
           {showCreateModal && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowCreateModal(false)}
+            <AdminModal
+              isOpen={showCreateModal}
+              onClose={() => setShowCreateModal(false)}
+              maxWidth="650px"
             >
-              <ModalCard
-                initial={{ scale: 0.95, y: 15 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.95, y: 15 }}
-                onClick={e => e.stopPropagation()}
-              >
-                <ModalHeader>
-                  <h3>Create & Broadcast New Assignment</h3>
-                  <button className="close" onClick={() => setShowCreateModal(false)}>
-                    <FaTimes />
-                  </button>
-                </ModalHeader>
+              <AdminModalHeader
+                title="Create & Broadcast New Assignment"
+                subtitle="Publish a new homework, project, or task to courses and cohorts"
+                icon={<FaTasks />}
+                onClose={() => setShowCreateModal(false)}
+              />
 
-                <form onSubmit={handleCreateAssignment}>
-                  <ModalBody>
-                    <div>
-                      <label>Assignment Title *</label>
-                      <input
-                        required
-                        placeholder="e.g. Project Phase 1: Database Architecture"
-                        value={createForm.title}
-                        onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))}
-                      />
-                    </div>
+              <form onSubmit={handleCreateAssignment}>
+                <AdminModalBody>
+                  <FormField
+                    label="Assignment Title"
+                    required
+                    error={createFormErrors.title}
+                  >
+                    <AdminInput
+                      placeholder="e.g. Project Phase 1: Database Architecture"
+                      value={createForm.title}
+                      onChange={e => {
+                        setCreateForm(f => ({ ...f, title: e.target.value }));
+                        if (createFormErrors.title) setCreateFormErrors(p => ({ ...p, title: null }));
+                      }}
+                      hasError={!!createFormErrors.title}
+                    />
+                  </FormField>
 
-                    <div className="row-2">
-                      <div>
-                        <label>Category</label>
-                        <select
-                          value={createForm.category}
-                          onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
-                        >
-                          <option value="Assignment">Assignment</option>
-                          <option value="Homework">Homework</option>
-                          <option value="Quiz">Quiz</option>
-                          <option value="Project">Project</option>
-                          <option value="Lab Task">Lab Task</option>
-                        </select>
-                      </div>
+                  <FormGrid columns={2}>
+                    <FormField label="Category">
+                      <AdminSelect
+                        value={createForm.category}
+                        onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                      >
+                        <option value="Assignment">Assignment</option>
+                        <option value="Homework">Homework</option>
+                        <option value="Quiz">Quiz</option>
+                        <option value="Project">Project</option>
+                        <option value="Lab Task">Lab Task</option>
+                      </AdminSelect>
+                    </FormField>
 
-                      <div>
-                        <label>Total Maximum Marks</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="1000"
-                          value={createForm.totalMarks}
-                          onChange={e => setCreateForm(f => ({ ...f, totalMarks: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="row-2">
-                      <div>
-                        <label>Academic Course *</label>
-                        <select
-                          required
-                          value={createForm.course}
-                          onChange={e => setCreateForm(f => ({ ...f, course: e.target.value }))}
-                        >
-                          <option value="">Select Course...</option>
-                          {courses.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label>Target Batch</label>
-                        <select
-                          value={createForm.batch}
-                          onChange={e => setCreateForm(f => ({ ...f, batch: e.target.value }))}
-                        >
-                          <option value="All Batches">All Batches (Broadcast)</option>
-                          {batches
-                            .filter(b => !createForm.course || b.course === createForm.course)
-                            .map(b => (
-                              <option key={b.id} value={b.batch_name}>{b.batch_name}</option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label>Due Date & Submission Cutoff *</label>
-                      <input
-                        type="datetime-local"
-                        required
-                        value={createForm.dueDate}
-                        onChange={e => setCreateForm(f => ({ ...f, dueDate: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <label>Problem Statement & Instructions</label>
-                      <textarea
-                        placeholder="Provide detailed instructions, requirements, evaluation criteria, and submission format guidelines..."
-                        value={createForm.description}
-                        onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
-                      />
-                    </div>
-
-                    <div>
-                      <label>Attach Problem Files (PDF, ZIP, DOCX)</label>
-                      <input
-                        type="file"
-                        multiple
+                    <FormField
+                      label="Total Maximum Marks"
+                      required
+                      error={createFormErrors.totalMarks}
+                    >
+                      <AdminInput
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={createForm.totalMarks}
                         onChange={e => {
-                          const newFiles = Array.from(e.target.files || []);
-                          setCreateForm(f => ({ ...f, files: [...f.files, ...newFiles] }));
+                          setCreateForm(f => ({ ...f, totalMarks: e.target.value }));
+                          if (createFormErrors.totalMarks) setCreateFormErrors(p => ({ ...p, totalMarks: null }));
                         }}
+                        hasError={!!createFormErrors.totalMarks}
                       />
-                      {createForm.files.length > 0 && (
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                          {createForm.files.map((file, i) => (
-                            <FileChip key={i}>
-                              <FaPaperclip size={10} />
-                              <span>{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>
-                              <button
-                                type="button"
-                                onClick={() => setCreateForm(f => ({ ...f, files: f.files.filter((_, idx) => idx !== i) }))}
-                              >
-                                <FaTimes size={10} />
-                              </button>
-                            </FileChip>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </ModalBody>
+                    </FormField>
+                  </FormGrid>
 
-                  <ModalFooter>
-                    <HeaderBtn
-                      type="button"
-                      className="secondary"
-                      onClick={() => setShowCreateModal(false)}
-                      disabled={creatingTask}
+                  <FormGrid columns={2}>
+                    <FormField
+                      label="Academic Course"
+                      required
+                      error={createFormErrors.course}
                     >
-                      Cancel
-                    </HeaderBtn>
-                    <HeaderBtn
-                      type="submit"
-                      className="primary"
-                      disabled={creatingTask}
-                    >
-                      <FaSave /> {creatingTask ? 'Broadcasting...' : 'Publish & Broadcast'}
-                    </HeaderBtn>
-                  </ModalFooter>
-                </form>
-              </ModalCard>
-            </ModalOverlay>
+                      <AdminSelect
+                        value={createForm.course}
+                        onChange={e => {
+                          setCreateForm(f => ({ ...f, course: e.target.value }));
+                          if (createFormErrors.course) setCreateFormErrors(p => ({ ...p, course: null }));
+                        }}
+                        hasError={!!createFormErrors.course}
+                      >
+                        <option value="">Select Course...</option>
+                        {courses.map(c => <option key={c} value={c}>{c}</option>)}
+                      </AdminSelect>
+                    </FormField>
+
+                    <FormField label="Target Batch">
+                      <AdminSelect
+                        value={createForm.batch}
+                        onChange={e => setCreateForm(f => ({ ...f, batch: e.target.value }))}
+                      >
+                        <option value="All Batches">All Batches (Broadcast)</option>
+                        {batches
+                          .filter(b => !createForm.course || b.course === createForm.course)
+                          .map(b => (
+                            <option key={b.id} value={b.batch_name}>{b.batch_name}</option>
+                          ))}
+                      </AdminSelect>
+                    </FormField>
+                  </FormGrid>
+
+                  <FormField
+                    label="Due Date & Submission Cutoff"
+                    required
+                    error={createFormErrors.dueDate}
+                  >
+                    <AdminInput
+                      type="datetime-local"
+                      value={createForm.dueDate}
+                      onChange={e => {
+                        setCreateForm(f => ({ ...f, dueDate: e.target.value }));
+                        if (createFormErrors.dueDate) setCreateFormErrors(p => ({ ...p, dueDate: null }));
+                      }}
+                      hasError={!!createFormErrors.dueDate}
+                    />
+                  </FormField>
+
+                  <FormField label="Problem Statement & Instructions">
+                    <AdminTextarea
+                      rows={4}
+                      placeholder="Provide detailed instructions, requirements, evaluation criteria, and submission format guidelines..."
+                      value={createForm.description}
+                      onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                    />
+                  </FormField>
+
+                  <FormField label="Attach Problem Files (PDF, ZIP, DOCX)">
+                    <AdminInput
+                      type="file"
+                      multiple
+                      onChange={e => {
+                        const newFiles = Array.from(e.target.files || []);
+                        setCreateForm(f => ({ ...f, files: [...f.files, ...newFiles] }));
+                      }}
+                    />
+                    {createForm.files.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                        {createForm.files.map((file, i) => (
+                          <FileChip key={i}>
+                            <FaPaperclip size={10} />
+                            <span>{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setCreateForm(f => ({ ...f, files: f.files.filter((_, idx) => idx !== i) }))}
+                            >
+                              <FaTimes size={10} />
+                            </button>
+                          </FileChip>
+                        ))}
+                      </div>
+                    )}
+                  </FormField>
+                </AdminModalBody>
+
+                <AdminModalFooter>
+                  <AdminButton
+                    type="button"
+                    $variant="secondary"
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={creatingTask}
+                  >
+                    Cancel
+                  </AdminButton>
+                  <AdminButton
+                    type="submit"
+                    $variant="primary"
+                    disabled={creatingTask}
+                  >
+                    <FaSave /> {creatingTask ? 'Broadcasting...' : 'Publish & Broadcast'}
+                  </AdminButton>
+                </AdminModalFooter>
+              </form>
+            </AdminModal>
           )}
         </AnimatePresence>
 
         {/* ─── MODAL 2: RUBRIC GRADING & EVALUATION ─── */}
         <AnimatePresence>
           {showGradeModal && gradingSubmission && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowGradeModal(false)}
+            <AdminModal
+              isOpen={showGradeModal}
+              onClose={() => setShowGradeModal(false)}
+              maxWidth="650px"
             >
-              <ModalCard
-                initial={{ scale: 0.95, y: 15 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.95, y: 15 }}
-                onClick={e => e.stopPropagation()}
-              >
-                <ModalHeader>
-                  <div>
-                    <h3>Evaluate Submission: {gradingSubmission.student_name}</h3>
-                    <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>
-                      {gradingSubmission.student_cnic} • {selectedTask?.title}
+              <AdminModalHeader
+                title={`Evaluate Submission: ${gradingSubmission.student_name}`}
+                subtitle={`${gradingSubmission.student_cnic} • ${selectedTask?.title || 'Assignment'}`}
+                icon={<FaAward />}
+                onClose={() => setShowGradeModal(false)}
+              />
+
+              <form onSubmit={handleSaveGrade}>
+                <AdminModalBody>
+                  {/* Submission Metadata */}
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 10, padding: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                      <div>
+                        <div style={{ fontSize: '0.78rem', color: '#888', textTransform: 'uppercase' }}>Turned-In At</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                          {gradingSubmission.submitted_at ? new Date(gradingSubmission.submitted_at).toLocaleString() : '—'}
+                        </div>
+                      </div>
+
+                      {gradingSubmission.file_url ? (
+                        <a
+                          href={gradingSubmission.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: 'rgba(56, 189, 248, 0.15)',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            color: '#38bdf8',
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            fontSize: '0.85rem',
+                            textDecoration: 'none',
+                            fontWeight: 700
+                          }}
+                        >
+                          <FaDownload /> Download Submitted File
+                        </a>
+                      ) : (
+                        <span style={{ color: '#64748b', fontSize: '0.85rem' }}>No Attachment</span>
+                      )}
                     </div>
                   </div>
-                  <button className="close" onClick={() => setShowGradeModal(false)}>
-                    <FaTimes />
-                  </button>
-                </ModalHeader>
 
-                <form onSubmit={handleSaveGrade}>
-                  <ModalBody>
-                    {/* Submission Metadata */}
-                    <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 10, padding: 14 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-                        <div>
-                          <div style={{ fontSize: '0.78rem', color: '#888', textTransform: 'uppercase' }}>Turned-In At</div>
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                            {gradingSubmission.submitted_at ? new Date(gradingSubmission.submitted_at).toLocaleString() : '—'}
-                          </div>
-                        </div>
-
-                        {gradingSubmission.file_url ? (
-                          <a
-                            href={gradingSubmission.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              border: '1px solid rgba(56, 189, 248, 0.3)',
-                              color: '#38bdf8',
-                              padding: '8px 14px',
-                              borderRadius: 8,
-                              fontSize: '0.85rem',
-                              textDecoration: 'none',
-                              fontWeight: 700
-                            }}
-                          >
-                            <FaDownload /> Download Submitted File
-                          </a>
-                        ) : (
-                          <span style={{ color: '#64748b', fontSize: '0.85rem' }}>No Attachment</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Marks & Grade Letter */}
-                    <div className="row-2">
-                      <div>
-                        <label>Marks Obtained (Max {gradingSubmission.total_marks || 100}) *</label>
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          max={gradingSubmission.total_marks || 100}
-                          placeholder="e.g. 85"
-                          value={gradeScore}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setGradeScore(val);
-                            const max = gradingSubmission.total_marks || 100;
-                            const pct = (Number(val) / max) * 100;
-                            if (pct >= 85) setGradeLetter('A+');
-                            else if (pct >= 75) setGradeLetter('A');
-                            else if (pct >= 65) setGradeLetter('B');
-                            else if (pct >= 50) setGradeLetter('C');
-                            else setGradeLetter('F');
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label>Calculated Grade</label>
-                        <select
-                          value={gradeLetter}
-                          onChange={e => setGradeLetter(e.target.value)}
-                        >
-                          <option value="A+">A+ (Distinction)</option>
-                          <option value="A">A (Excellent)</option>
-                          <option value="B">B (Good)</option>
-                          <option value="C">C (Satisfactory)</option>
-                          <option value="D">D (Pass)</option>
-                          <option value="F">F (Fail)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Feedback */}
-                    <div>
-                      <label>Instructor Feedback & Evaluation Remarks</label>
-                      <textarea
-                        placeholder="Write constructive evaluation notes, areas of improvement, or commendable strengths in the submission..."
-                        value={gradeFeedback}
-                        onChange={e => setGradeFeedback(e.target.value)}
+                  {/* Marks & Grade Letter */}
+                  <FormGrid columns={2}>
+                    <FormField
+                      label={`Marks Obtained (Max ${gradingSubmission.total_marks || 100})`}
+                      required
+                      error={gradeFormErrors.gradeScore}
+                    >
+                      <AdminInput
+                        type="number"
+                        min="0"
+                        max={gradingSubmission.total_marks || 100}
+                        placeholder="e.g. 85"
+                        value={gradeScore}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setGradeScore(val);
+                          if (gradeFormErrors.gradeScore) setGradeFormErrors(p => ({ ...p, gradeScore: null }));
+                          const max = gradingSubmission.total_marks || 100;
+                          const pct = (Number(val) / max) * 100;
+                          if (pct >= 85) setGradeLetter('A+');
+                          else if (pct >= 75) setGradeLetter('A');
+                          else if (pct >= 65) setGradeLetter('B');
+                          else if (pct >= 50) setGradeLetter('C');
+                          else setGradeLetter('F');
+                        }}
+                        hasError={!!gradeFormErrors.gradeScore}
                       />
-                    </div>
-                  </ModalBody>
+                    </FormField>
 
-                  <ModalFooter>
-                    <HeaderBtn
-                      type="button"
-                      className="secondary"
-                      onClick={() => setShowGradeModal(false)}
-                      disabled={submittingGrade}
-                    >
-                      Cancel
-                    </HeaderBtn>
-                    <HeaderBtn
-                      type="submit"
-                      className="primary"
-                      disabled={submittingGrade}
-                    >
-                      <FaSave /> {submittingGrade ? 'Recording...' : 'Save Grade & Notify Student'}
-                    </HeaderBtn>
-                  </ModalFooter>
-                </form>
-              </ModalCard>
-            </ModalOverlay>
+                    <FormField label="Calculated Grade">
+                      <AdminSelect
+                        value={gradeLetter}
+                        onChange={e => setGradeLetter(e.target.value)}
+                      >
+                        <option value="A+">A+ (Distinction)</option>
+                        <option value="A">A (Excellent)</option>
+                        <option value="B">B (Good)</option>
+                        <option value="C">C (Satisfactory)</option>
+                        <option value="D">D (Pass)</option>
+                        <option value="F">F (Fail)</option>
+                      </AdminSelect>
+                    </FormField>
+                  </FormGrid>
+
+                  {/* Feedback */}
+                  <FormField label="Instructor Feedback & Evaluation Remarks">
+                    <AdminTextarea
+                      rows={3}
+                      placeholder="Write constructive evaluation notes, areas of improvement, or commendable strengths in the submission..."
+                      value={gradeFeedback}
+                      onChange={e => setGradeFeedback(e.target.value)}
+                    />
+                  </FormField>
+                </AdminModalBody>
+
+                <AdminModalFooter>
+                  <AdminButton
+                    type="button"
+                    $variant="secondary"
+                    onClick={() => setShowGradeModal(false)}
+                    disabled={submittingGrade}
+                  >
+                    Cancel
+                  </AdminButton>
+                  <AdminButton
+                    type="submit"
+                    $variant="primary"
+                    disabled={submittingGrade}
+                  >
+                    <FaSave /> {submittingGrade ? 'Recording...' : 'Save Grade & Notify Student'}
+                  </AdminButton>
+                </AdminModalFooter>
+              </form>
+            </AdminModal>
           )}
         </AnimatePresence>
 

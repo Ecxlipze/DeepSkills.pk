@@ -3,7 +3,6 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 import { Link } from "../lib/nextRouterDomCompat";
 import { FaLaptop, FaCode, FaPaintBrush, FaWordpress } from "react-icons/fa";
-import courseBg from "./assets/course-bg.png";
 import RegisterButton from "./components/RegisterButton";
 import btnIcon from "./assets/btn-icon.svg";
 import mernCardThumb from "./assets/mern-card.png";
@@ -29,7 +28,7 @@ const Section = styled.section`
 
 const Header = styled(motion.div)`
   text-align: center;
-  padding: 40px 20px;
+  padding: 56px 20px 32px;
 `;
 
 const SectionTitle = styled.h2`
@@ -55,7 +54,8 @@ const Tagline = styled.p`
   margin: 0;
   display: inline-block;
   font-weight: 600;
-  border: 1px solid #c9c9c9ff;
+  border: 1px solid rgba(205, 124, 124, 0.28);
+  background: rgba(123, 31, 46, 0.12);
   padding: 10px 20px;
   border-radius: 25px;
   @media (max-width: 768px) {
@@ -68,20 +68,18 @@ const Tagline = styled.p`
 const ContentContainer = styled(motion.div)`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: 95%;
-  max-width: 1400px;
-  margin: 0 auto;
-  background-image: url(${courseBg});
-  background-size: 100% 100%;
-  background-position: center;
-  background-repeat: no-repeat;
-  border: 1px solid #CD7C7C;
-  border-radius: 25px;
+  width: calc(100% - 40px);
+  max-width: 1200px;
+  margin: 0 auto 32px;
+  background: #000;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(205, 124, 124, 0.25);
+  border-radius: 28px;
   overflow: hidden;
-  margin-bottom: 80px;
 
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
+    border-radius: 20px;
   }
 `;
 
@@ -89,20 +87,21 @@ const Column = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 30px;
-  padding: 40px 20px;
-  position: relative;
+  gap: 28px;
+  padding: 40px;
+  min-width: 0;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 1;
+  & + & {
+    border-left: 1px solid rgba(205, 124, 124, 0.16);
   }
 
-  > * {
-    position: relative;
-    z-index: 2;
+  @media (max-width: 900px) {
+    padding: 28px 20px;
+
+    & + & {
+      border-left: 0;
+      border-top: 1px solid rgba(205, 124, 124, 0.16);
+    }
   }
 `;
 
@@ -125,7 +124,7 @@ const Separator = styled(motion.hr)`
   width: 100%;
   border: 0;
   height: 1px;
-  background-color: #ffffffff;
+  background: linear-gradient(90deg, transparent, #7B1F2E, transparent);
   margin-top: 10px;
   opacity: 0.5;
   transition: width 0.4s ease, opacity 0.4s ease;
@@ -140,8 +139,8 @@ const CourseCard = styled(CourseCardLink)`
   color: white;
   text-decoration: none;
   width: 100%;
-  max-width: 350px;
-  padding: 25px;
+  max-width: 440px;
+  padding: 16px 8px;
   border-radius: 10px;
   text-align: center;
   cursor: pointer;
@@ -149,6 +148,11 @@ const CourseCard = styled(CourseCardLink)`
   flex-direction: column;
   align-items: center;
   min-height: 450px;
+
+  &:focus-visible {
+    outline: 2px solid #CD7C7C;
+    outline-offset: 6px;
+  }
 
   &:hover {
     ${IconContainer} {
@@ -178,7 +182,7 @@ const CourseImage = styled.div`
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: 150px;
+  aspect-ratio: 2 / 1;
   background-color: #333;
   background-image: linear-gradient(135deg, rgba(123, 31, 46, 0.95), rgba(20, 20, 20, 0.95));
   border-radius: 15px;
@@ -202,7 +206,7 @@ const Description = styled.p`
 const BottomCTA = styled.div`
   text-align: center;
   width: 100%;
-  margin-top: -50px;
+  margin-top: 0;
   margin-bottom: 50px;
   position: relative;
   z-index: 2;
@@ -291,7 +295,7 @@ const CoursesSection = ({ initialCourses = null }) => {
                 <SmartCoverImage
                   src={getCourseImage(course.category)}
                   alt={`${course.title} course`}
-                  sizes="(max-width: 900px) 100vw, 350px"
+                  sizes="(max-width: 900px) 100vw, 440px"
                 />
               </CourseImage>
               <Description>{course.description}</Description>
@@ -314,7 +318,7 @@ const CoursesSection = ({ initialCourses = null }) => {
                 <SmartCoverImage
                   src={getCourseImage(course.category)}
                   alt={`${course.title} course`}
-                  sizes="(max-width: 900px) 100vw, 350px"
+                  sizes="(max-width: 900px) 100vw, 440px"
                 />
               </CourseImage>
               <Description>{course.description}</Description>

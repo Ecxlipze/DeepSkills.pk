@@ -10,6 +10,18 @@ import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
 import SmartCoverImage from '../../components/next/SmartCoverImage';
 import traineeImg from '../assets/trainee.svg';
+import {
+  FormField,
+  AdminInput,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  validateRequired,
+  validateUrl,
+  validateForm
+} from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -307,6 +319,7 @@ const TrainerManager = () => {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(emptyFormData);
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchTrainers();
@@ -346,10 +359,17 @@ const TrainerManager = () => {
       return;
     }
 
-    if (!formData.name.trim()) {
-      toast.error('Trainer name is required.');
+    const { isValid, errors: valErrors } = validateForm(formData, {
+      name: [(v) => validateRequired(v, 'Full Name')],
+      image_url: [(v) => v ? validateUrl(v, 'Profile Image URL') : null]
+    });
+
+    if (!isValid) {
+      setFormErrors(valErrors);
+      toast.error('Please resolve highlighted errors in the form.');
       return;
     }
+    setFormErrors({});
 
     setSubmitting(true);
     try {
@@ -376,6 +396,7 @@ const TrainerManager = () => {
 
       toast.success(editingId ? 'Trainer updated successfully.' : 'Trainer added successfully.');
       setFormData(emptyFormData);
+      setFormErrors({});
       setEditingId(null);
       await requestRevalidate(['/trainers']);
       await fetchTrainers();
@@ -393,6 +414,7 @@ const TrainerManager = () => {
       return;
     }
     setEditingId(trainer.id);
+    setFormErrors({});
     setFormData({
       name: trainer.name || '',
       role: trainer.role || '',
@@ -431,6 +453,7 @@ const TrainerManager = () => {
       if (editingId === trainer.id) {
         setEditingId(null);
         setFormData(emptyFormData);
+        setFormErrors({});
       }
       await requestRevalidate(['/trainers']);
       await fetchTrainers();
@@ -443,6 +466,7 @@ const TrainerManager = () => {
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData(emptyFormData);
+    setFormErrors({});
   };
 
   return (
@@ -461,33 +485,38 @@ const TrainerManager = () => {
       </Header>
 
       {canMutate && (
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit} noValidate>
           <FormTitle>{editingId ? 'Edit Trainer Profile' : 'Add New Trainer Profile'}</FormTitle>
-          <FormRow>
-            <InputGroup>
-              <Label>Full Name *</Label>
-              <Input
+          <FormGrid columns="1fr 1fr" gap="20px">
+            <FormField label="Full Name" required error={formErrors.name}>
+              <AdminInput
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, name: e.target.value });
+                  if (formErrors.name) setFormErrors(prev => ({ ...prev, name: null }));
+                }}
+                hasError={Boolean(formErrors.name)}
                 placeholder="e.g. John Doe"
                 required
               />
-            </InputGroup>
-            <InputGroup>
-              <Label>Role / Specialization</Label>
-              <Input
+            </FormField>
+            <FormField label="Role / Specialization">
+              <AdminInput
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 placeholder="e.g. Senior Full Stack Developer"
               />
-            </InputGroup>
-          </FormRow>
+            </FormField>
+          </FormGrid>
 
-          <InputGroup>
-            <Label>Profile Image URL (from Media Library or public CDN)</Label>
-            <Input
+          <FormField label="Profile Image URL" error={formErrors.image_url} hint="From Media Library or public CDN">
+            <AdminInput
               value={formData.image_url}
-              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, image_url: e.target.value });
+                if (formErrors.image_url) setFormErrors(prev => ({ ...prev, image_url: null }));
+              }}
+              hasError={Boolean(formErrors.image_url)}
               placeholder="e.g. https://.../media/photo.png"
             />
             {formData.image_url && (
@@ -502,29 +531,29 @@ const TrainerManager = () => {
                 <span>Image Preview</span>
               </ImagePreviewArea>
             )}
-          </InputGroup>
+          </FormField>
 
-          <InputGroup>
-            <Label>Biography & Professional Experience</Label>
-            <TextArea
+          <FormField label="Biography & Professional Experience">
+            <AdminTextarea
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
               placeholder="Describe their industry background, skills, and mentoring approach..."
+              rows={4}
             />
-          </InputGroup>
+          </FormField>
 
           <ButtonRow>
-            <Button type="submit" disabled={submitting}>
+            <AdminButton variant="primary" type="submit" disabled={submitting}>
               {submitting ? 'Saving...' : editingId ? 'Update Trainer' : 'Add Trainer'}
-            </Button>
+            </AdminButton>
             {editingId && (
-              <Button
+              <AdminButton
+                variant="secondary"
                 type="button"
                 onClick={handleCancelEdit}
-                style={{ background: '#444' }}
               >
                 Cancel
-              </Button>
+              </AdminButton>
             )}
           </ButtonRow>
         </Form>

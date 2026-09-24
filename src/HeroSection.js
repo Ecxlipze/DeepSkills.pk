@@ -103,20 +103,6 @@ const Heading = styled(motion.h1)`
   }
 `;
 
-const Tagline = styled(motion.h2)`
-  font-family: 'Inter', sans-serif;
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #FF0000;
-  text-transform: none;
-  letter-spacing: 0.5px;
-
-  @media (max-width: 768px) {
-    font-size: 1.1rem;
-  }
-`;
-
 const Divider = styled(motion.div)`
   width: 100%;
   max-width: 800px;
@@ -207,7 +193,6 @@ const CodeParticles = () => {
 
 const DEFAULT_HERO_CONTENT = {
   heading: "Build Skills That Secure Your Future",
-  tagline: "Industry-relevant digital skills designed to turn learners into professionals.",
   description: "At Deepskills, we equip young adults with practical, job-ready skills in design and web development, the skills that power today's digital economy. Design, develop and succeed!"
 };
 
@@ -344,10 +329,6 @@ const HeroSection = ({ initialContent = null }) => {
           {renderHeading(content.heading)}
         </Heading>
         
-        <Tagline>
-          {content.tagline}
-        </Tagline>
-
         <Divider 
           style={{ margin: "0 auto 30px" }}
         />
@@ -368,7 +349,7 @@ const HeroSection = ({ initialContent = null }) => {
 
           <RegisterButton
             to="/inquiry"
-            variant="secondary"
+            variant="primary"
             style={{ minWidth: isMobile ? "100%" : "220px" }}
           >
             <img src={btnIcon} alt="" style={{ width: "20px", height: "20px" }} />

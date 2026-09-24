@@ -9,6 +9,16 @@ import {
 } from '../utils/autoAttendance';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import {
+  FormField,
+  AdminInput,
+  AdminButton
+} from '../components/portal';
+import {
+  validateRequired,
+  validateNumber,
+  validateForm
+} from '../utils/formValidation';
 
 const Container = styled.div`
   color: #fff;
@@ -200,6 +210,7 @@ const AdminAttendanceSettings = () => {
   const { user } = useAuth();
   const canMutate = Boolean(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'full'));
   const [settings, setSettings] = useState(normalizeSettings(DEFAULT_ATTENDANCE_SETTINGS));
+  const [formErrors, setFormErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -227,6 +238,9 @@ const AdminAttendanceSettings = () => {
   const update = (field, value) => {
     if (!canMutate) return;
     setSettings((current) => ({ ...current, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors((prev) => ({ ...prev, [field]: null }));
+    }
   };
 
   const toggleWeekendDay = (day) => {
@@ -267,6 +281,28 @@ const AdminAttendanceSettings = () => {
       toast.error('You have view-only access to attendance settings.');
       return;
     }
+
+    const { isValid, errors: valErrors } = validateForm(settings, {
+      instituteName: [(v) => validateRequired(v, 'Institute Name')],
+      radiusMeters: [(v) => validateNumber(v, { min: 10, integer: true, fieldName: 'Allowed Radius' })],
+      maxAccuracyBufferMeters: [(v) => validateNumber(v, { min: 0, max: 500, integer: true, fieldName: 'GPS Accuracy Buffer' })],
+      latitude: [(v) => validateNumber(v, { min: -90, max: 90, fieldName: 'Latitude' })],
+      longitude: [(v) => validateNumber(v, { min: -180, max: 180, fieldName: 'Longitude' })],
+      onTimeWindowMins: [(v) => validateNumber(v, { min: 0, integer: true, fieldName: 'On-time Window' })],
+      lateThresholdMins: [(v) => validateNumber(v, { min: 0, integer: true, fieldName: 'Late Threshold' })],
+      absentCutoffMins: [
+        (v) => validateNumber(v, { min: 0, integer: true, fieldName: 'Absent Cutoff' }),
+        (v) => Number(v) < Number(settings.lateThresholdMins) ? 'Absent cutoff must be greater than or equal to late threshold' : null
+      ]
+    });
+
+    if (!isValid) {
+      setFormErrors(valErrors);
+      toast.error('Please resolve highlighted errors in the form.');
+      return;
+    }
+    setFormErrors({});
+
     setSaving(true);
     try {
       await saveAttendanceSettings(settings);
@@ -290,48 +326,96 @@ const AdminAttendanceSettings = () => {
           <Card as="form" onSubmit={handleSubmit}>
             <SectionTitle>Institute Location</SectionTitle>
             <FormGrid>
-              <Field>
-                Institute Name
-                <input value={settings.instituteName} onChange={(e) => update('instituteName', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                Allowed Radius (meters)
-                <input type="number" min="10" value={settings.radiusMeters} onChange={(e) => update('radiusMeters', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                GPS Accuracy Buffer (meters)
-                <input type="number" min="0" max="500" value={settings.maxAccuracyBufferMeters} onChange={(e) => update('maxAccuracyBufferMeters', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                Latitude
-                <input type="number" step="0.000001" value={settings.latitude} onChange={(e) => update('latitude', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                Longitude
-                <input type="number" step="0.000001" value={settings.longitude} onChange={(e) => update('longitude', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
+              <FormField label="Institute Name" required error={formErrors.instituteName} style={{ gridColumn: 'span 2' }}>
+                <AdminInput
+                  value={settings.instituteName}
+                  onChange={(e) => update('instituteName', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.instituteName)}
+                  placeholder="e.g. DeepSkills Main Campus"
+                />
+              </FormField>
+              <FormField label="Allowed Radius (meters)" required error={formErrors.radiusMeters}>
+                <AdminInput
+                  type="number"
+                  min="10"
+                  value={settings.radiusMeters}
+                  onChange={(e) => update('radiusMeters', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.radiusMeters)}
+                />
+              </FormField>
+              <FormField label="GPS Accuracy Buffer (meters)" required error={formErrors.maxAccuracyBufferMeters}>
+                <AdminInput
+                  type="number"
+                  min="0"
+                  max="500"
+                  value={settings.maxAccuracyBufferMeters}
+                  onChange={(e) => update('maxAccuracyBufferMeters', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.maxAccuracyBufferMeters)}
+                />
+              </FormField>
+              <FormField label="Latitude" required error={formErrors.latitude}>
+                <AdminInput
+                  type="number"
+                  step="0.000001"
+                  value={settings.latitude}
+                  onChange={(e) => update('latitude', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.latitude)}
+                />
+              </FormField>
+              <FormField label="Longitude" required error={formErrors.longitude}>
+                <AdminInput
+                  type="number"
+                  step="0.000001"
+                  value={settings.longitude}
+                  onChange={(e) => update('longitude', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.longitude)}
+                />
+              </FormField>
             </FormGrid>
 
             {canMutate && (
               <ButtonRow>
-                <Button type="button" $secondary onClick={useMyLocation} disabled={loading}>Use My Current Location</Button>
+                <AdminButton type="button" variant="secondary" onClick={useMyLocation} disabled={loading}>Use My Current Location</AdminButton>
               </ButtonRow>
             )}
 
             <SectionTitle style={{ marginTop: 30 }}>Time Windows</SectionTitle>
             <FormGrid>
-              <Field>
-                On-time window before start (mins)
-                <input type="number" min="0" value={settings.onTimeWindowMins} onChange={(e) => update('onTimeWindowMins', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                Late threshold after start (mins)
-                <input type="number" min="0" value={settings.lateThresholdMins} onChange={(e) => update('lateThresholdMins', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
-              <Field>
-                Absent cutoff after start (mins)
-                <input type="number" min="0" value={settings.absentCutoffMins} onChange={(e) => update('absentCutoffMins', e.target.value)} disabled={loading || !canMutate} />
-              </Field>
+              <FormField label="On-time window before start (mins)" required error={formErrors.onTimeWindowMins}>
+                <AdminInput
+                  type="number"
+                  min="0"
+                  value={settings.onTimeWindowMins}
+                  onChange={(e) => update('onTimeWindowMins', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.onTimeWindowMins)}
+                />
+              </FormField>
+              <FormField label="Late threshold after start (mins)" required error={formErrors.lateThresholdMins}>
+                <AdminInput
+                  type="number"
+                  min="0"
+                  value={settings.lateThresholdMins}
+                  onChange={(e) => update('lateThresholdMins', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.lateThresholdMins)}
+                />
+              </FormField>
+              <FormField label="Absent cutoff after start (mins)" required error={formErrors.absentCutoffMins}>
+                <AdminInput
+                  type="number"
+                  min="0"
+                  value={settings.absentCutoffMins}
+                  onChange={(e) => update('absentCutoffMins', e.target.value)}
+                  disabled={loading || !canMutate}
+                  hasError={Boolean(formErrors.absentCutoffMins)}
+                />
+              </FormField>
             </FormGrid>
 
             <div style={{ marginTop: 18 }}>
@@ -359,7 +443,9 @@ const AdminAttendanceSettings = () => {
 
             <ButtonRow>
               {canMutate ? (
-                <Button type="submit" disabled={saving || loading}>{saving ? 'Saving...' : 'Save Attendance Settings'}</Button>
+                <AdminButton variant="primary" type="submit" disabled={saving || loading}>
+                  {saving ? 'Saving...' : 'Save Attendance Settings'}
+                </AdminButton>
               ) : (
                 <span style={{ color: '#888', fontSize: '0.85rem' }}>View-only access: changes cannot be saved</span>
               )}

@@ -138,24 +138,19 @@ const InstructorCard = styled(motion.div)`
 
 const ImageBox = styled.div`
   width: 100%;
-  background: #fff;
+  background: #c7c7c7;
   border-radius: 12px;
   overflow: hidden;
   aspect-ratio: 1/1;
   position: relative;
 
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, transparent 30%, rgba(123, 31, 46, 0.1) 100%);
-    pointer-events: none;
-  }
-
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center top;
+    transform-origin: center top;
+    filter: grayscale(100%);
     transition: transform 0.6s ease;
   }
 `;
@@ -259,6 +254,7 @@ const DetailImageArea = styled(motion.div)`
       width: 100%;
       height: 100%;
       object-fit: cover;
+      filter: grayscale(100%);
     }
   }
 
@@ -367,7 +363,7 @@ const JoinFacultySection = styled.section`
 const FacultyCard = styled(motion.div)`
   max-width: 1100px;
   width: 100%;
-  background: rgba(25, 25, 25, 0.85);
+  background: #000;
   border: 1px solid rgba(217, 74, 94, 0.4);
   backdrop-filter: blur(12px);
   border-radius: 20px;

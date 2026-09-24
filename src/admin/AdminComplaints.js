@@ -17,6 +17,19 @@ import { downloadCsv } from '../utils/csvExport';
 import { supabase } from '../supabaseClient';
 import { getAuthHeaders } from '../utils/adminAccessApi';
 import { requestComplaints } from '../utils/complaintsApi';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import { validateRequired, validateCnic, validateForm, formatCnic } from '../utils/formValidation';
 
 // ──────────────────────────────────────────
 // Styled Components (DeepSkills Glassmorphic)
@@ -953,6 +966,7 @@ export function AdminComplaints() {
   // Log Ticket Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [creatingTicket, setCreatingTicket] = useState(false);
+  const [createFormErrors, setCreateFormErrors] = useState({});
   const [newTicketForm, setNewTicketForm] = useState({
     student_name: '',
     student_cnic: '',
@@ -1235,8 +1249,21 @@ export function AdminComplaints() {
   // Administrative Ticket Submission
   const handleCreateTicketSubmit = async (e) => {
     e.preventDefault();
-    if (!newTicketForm.subject.trim()) {
-      toast.error('Ticket subject is required.');
+    const errors = validateForm(newTicketForm, {
+      subject: (v) => {
+        const req = validateRequired(v, 'Subject');
+        if (req) return req;
+        if (v.trim().length < 5) return 'Subject must be at least 5 characters.';
+        return null;
+      },
+      category: (v) => validateRequired(v, 'Category'),
+      priority: (v) => validateRequired(v, 'Priority'),
+      ...(newTicketForm.student_cnic.trim() ? { student_cnic: (v) => validateCnic(v, false) } : {})
+    });
+
+    setCreateFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
       return;
     }
 
@@ -1247,6 +1274,7 @@ export function AdminComplaints() {
         ...newTicketForm
       }, 'Administrative ticket logged successfully.');
       setCreateModalOpen(false);
+      setCreateFormErrors({});
       setNewTicketForm({
         student_name: '',
         student_cnic: '',
@@ -1308,30 +1336,44 @@ export function AdminComplaints() {
     <Container>
       {/* Navigation Ribbon */}
       <SubNavRibbon>
-        <NavChip onClick={() => router.push('/admin/academic')}>
-          <FaChartBar /> Academic Hub
-        </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/attendance')}>
-          <FaCalendarCheck /> Attendance
-        </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/tasks')}>
-          <FaTasks /> Tasks & Homework
-        </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/results')}>
-          <FaAward /> Exams & Results
-        </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/announcements')}>
-          <FaBullhorn /> Announcements
-        </NavChip>
+        {user?.role === 'admin' && (
+          <NavChip onClick={() => router.push('/admin/academic')}>
+            <FaChartBar /> Academic Hub
+          </NavChip>
+        )}
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+            <FaCalendarCheck /> Attendance
+          </NavChip>
+        )}
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+            <FaTasks /> Tasks & Homework
+          </NavChip>
+        )}
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/results')}>
+            <FaAward /> Exams & Results
+          </NavChip>
+        )}
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+            <FaBullhorn /> Announcements
+          </NavChip>
+        )}
         <NavChip $active onClick={() => router.push('/admin/academic/complaints')}>
           <FaComments /> Grievances Desk
         </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/chats')}>
-          <FaComments /> Group Chats
-        </NavChip>
-        <NavChip onClick={() => router.push('/admin/academic/reports')}>
-          <FaBookOpen /> Academic Reports
-        </NavChip>
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/chats')}>
+            <FaComments /> Group Chats
+          </NavChip>
+        )}
+        {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+          <NavChip onClick={() => router.push('/admin/academic/reports')}>
+            <FaBookOpen /> Academic Reports
+          </NavChip>
+        )}
       </SubNavRibbon>
 
       {/* Header Bar */}
@@ -1342,7 +1384,7 @@ export function AdminComplaints() {
         </div>
         <div className="action-cluster">
           {canMutate && (
-            <HeaderBtn className="primary" onClick={() => setCreateModalOpen(true)}>
+            <HeaderBtn className="primary" onClick={() => { setCreateFormErrors({}); setCreateModalOpen(true); }}>
               <FaPlus /> Log Administrative Ticket
             </HeaderBtn>
           )}
@@ -1689,63 +1731,73 @@ export function AdminComplaints() {
       {/* Log Administrative Ticket Modal */}
       <AnimatePresence>
         {createModalOpen && (
-          <ModalOverlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setCreateModalOpen(false)}
+          <AdminModal
+            isOpen={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            maxWidth="650px"
           >
-            <ModalCard
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="modal-header">
-                <h3><FaComments style={{ color: '#7B1F2E' }} /> Log Administrative Ticket</h3>
-                <button type="button" onClick={() => setCreateModalOpen(false)} aria-label="Close modal">
-                  <FaTimes />
-                </button>
-              </div>
+            <AdminModalHeader
+              title="Log Administrative Ticket"
+              subtitle="Record a new student grievance or administrative issue"
+              icon={<FaComments />}
+              onClose={() => setCreateModalOpen(false)}
+            />
 
-              <form onSubmit={handleCreateTicketSubmit}>
-                <div className="form-group">
-                  <label>Subject / Grievance Summary *</label>
-                  <input
+            <form onSubmit={handleCreateTicketSubmit}>
+              <AdminModalBody>
+                <FormField
+                  label="Subject / Grievance Summary"
+                  required
+                  error={createFormErrors.subject}
+                  helperText="Provide a clear, brief summary (min 5 characters)"
+                >
+                  <AdminInput
                     type="text"
-                    required
                     placeholder="e.g., Request for batch transfer, Attendance review..."
                     value={newTicketForm.subject}
-                    onChange={e => setNewTicketForm({ ...newTicketForm, subject: e.target.value })}
+                    onChange={e => {
+                      setNewTicketForm({ ...newTicketForm, subject: e.target.value });
+                      if (createFormErrors.subject) setCreateFormErrors(p => ({ ...p, subject: null }));
+                    }}
+                    hasError={!!createFormErrors.subject}
                   />
-                </div>
+                </FormField>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Student Name</label>
-                    <input
+                <FormGrid columns={2}>
+                  <FormField
+                    label="Student Name"
+                    error={createFormErrors.student_name}
+                  >
+                    <AdminInput
                       type="text"
                       placeholder="Candidate full name"
                       value={newTicketForm.student_name}
                       onChange={e => setNewTicketForm({ ...newTicketForm, student_name: e.target.value })}
                     />
-                  </div>
+                  </FormField>
 
-                  <div className="form-group">
-                    <label>Student CNIC</label>
-                    <input
+                  <FormField
+                    label="Student CNIC"
+                    error={createFormErrors.student_cnic}
+                    helperText="13 digits: XXXXX-XXXXXXX-X"
+                  >
+                    <AdminInput
                       type="text"
                       placeholder="35201-XXXXXXX-X"
                       value={newTicketForm.student_cnic}
-                      onChange={e => setNewTicketForm({ ...newTicketForm, student_cnic: e.target.value })}
+                      onChange={e => {
+                        setNewTicketForm({ ...newTicketForm, student_cnic: formatCnic(e.target.value) });
+                        if (createFormErrors.student_cnic) setCreateFormErrors(p => ({ ...p, student_cnic: null }));
+                      }}
+                      maxLength={15}
+                      hasError={!!createFormErrors.student_cnic}
                     />
-                  </div>
-                </div>
+                  </FormField>
+                </FormGrid>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Batch Assignment</label>
-                    <select
+                <FormGrid columns={2}>
+                  <FormField label="Batch Assignment">
+                    <AdminSelect
                       value={newTicketForm.batch}
                       onChange={e => setNewTicketForm({ ...newTicketForm, batch: e.target.value })}
                     >
@@ -1753,53 +1805,62 @@ export function AdminComplaints() {
                       {(meta.batches || []).map(b => (
                         <option key={b.id || b.batch_name} value={b.batch_name}>{b.batch_name}</option>
                       ))}
-                    </select>
-                  </div>
+                    </AdminSelect>
+                  </FormField>
 
-                  <div className="form-group">
-                    <label>Category</label>
-                    <select
+                  <FormField label="Category" required error={createFormErrors.category}>
+                    <AdminSelect
                       value={newTicketForm.category}
                       onChange={e => setNewTicketForm({ ...newTicketForm, category: e.target.value })}
                     >
                       {(meta.categories || []).map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
-                    </select>
-                  </div>
-                </div>
+                    </AdminSelect>
+                  </FormField>
+                </FormGrid>
 
-                <div className="form-group">
-                  <label>Priority Level</label>
-                  <select
+                <FormField label="Priority Level" required error={createFormErrors.priority}>
+                  <AdminSelect
                     value={newTicketForm.priority}
                     onChange={e => setNewTicketForm({ ...newTicketForm, priority: e.target.value })}
                   >
                     <option value="Normal">Normal</option>
                     <option value="Urgent">Urgent Escalation</option>
-                  </select>
-                </div>
+                  </AdminSelect>
+                </FormField>
 
-                <div className="form-group">
-                  <label>Initial Message / Problem Description</label>
-                  <textarea
+                <FormField
+                  label="Initial Message / Problem Description"
+                  error={createFormErrors.initial_message}
+                >
+                  <AdminTextarea
+                    rows={4}
                     placeholder="Provide details about the issue or student request..."
                     value={newTicketForm.initial_message}
                     onChange={e => setNewTicketForm({ ...newTicketForm, initial_message: e.target.value })}
                   />
-                </div>
+                </FormField>
+              </AdminModalBody>
 
-                <div className="modal-actions">
-                  <HeaderBtn type="button" className="secondary" onClick={() => setCreateModalOpen(false)}>
-                    Cancel
-                  </HeaderBtn>
-                  <HeaderBtn type="submit" className="primary" disabled={creatingTicket}>
-                    {creatingTicket ? 'Logging Ticket...' : 'Create Grievance Ticket'}
-                  </HeaderBtn>
-                </div>
-              </form>
-            </ModalCard>
-          </ModalOverlay>
+              <AdminModalFooter>
+                <AdminButton
+                  type="button"
+                  $variant="secondary"
+                  onClick={() => setCreateModalOpen(false)}
+                >
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  type="submit"
+                  $variant="primary"
+                  disabled={creatingTicket}
+                >
+                  {creatingTicket ? 'Logging Ticket...' : 'Create Grievance Ticket'}
+                </AdminButton>
+              </AdminModalFooter>
+            </form>
+          </AdminModal>
         )}
       </AnimatePresence>
     </Container>

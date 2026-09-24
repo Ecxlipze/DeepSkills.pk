@@ -19,7 +19,7 @@ const nextConfig = {
   transpilePackages: ['react-router-dom'],
   turbopack: {
     resolveAlias: {
-      'react-router-dom': path.resolve(__dirname, 'lib/nextRouterDomCompat.js')
+      'react-router-dom': './lib/nextRouterDomCompat.js'
     }
   },
   compiler: {

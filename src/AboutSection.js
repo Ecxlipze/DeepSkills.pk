@@ -15,7 +15,7 @@ const MainCard = styled(motion.div)`
   display: flex;
   width: 100%;
   max-width: 1200px;
-  background-color: #353535;
+  background-color: #000;
   border-radius: 40px;
   overflow: hidden;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
@@ -66,7 +66,7 @@ const SectionHeading = styled.h2`
 `;
 
 const OfferItem = styled(motion.div)`
-  background-color: #2A2A2A;
+  background-color: #000;
   border-radius: 12px;
   padding: 10px 15px;
   display: flex;

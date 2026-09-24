@@ -2,9 +2,10 @@
 
 -- 1. Add new columns to courses table
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '🎓';
-ALTER TABLE courses ADD COLUMN IF NOT EXISTS accent_color TEXT DEFAULT 'blue';
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS accent_color TEXT DEFAULT 'maroon';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS reenrollment_discount_pct INTEGER DEFAULT 5;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS slug TEXT;
 
 -- 2. Add new columns to batches table
 ALTER TABLE batches ADD COLUMN IF NOT EXISTS course_id UUID REFERENCES courses(id) ON DELETE CASCADE;

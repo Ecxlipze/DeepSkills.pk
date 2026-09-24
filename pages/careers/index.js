@@ -615,7 +615,7 @@ const CultureGrid = styled.div`
 `;
 
 const CultureCard = styled(motion.div)`
-  background: rgba(25, 25, 25, 0.8);
+  background: #000;
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -623,7 +623,7 @@ const CultureCard = styled(motion.div)`
   transition: all 0.3s ease;
 
   &:hover {
-    background: rgba(40, 40, 40, 0.9);
+    background: #000;
     border-color: #CD7C7C;
     box-shadow: 0 15px 30px rgba(122, 30, 45, 0.25);
   }
@@ -677,7 +677,7 @@ const FilterBar = styled.div`
   flex-direction: column;
   gap: 16px;
   margin-bottom: 36px;
-  background: rgba(25, 25, 25, 0.7);
+  background: #000;
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -771,7 +771,7 @@ const JobsGrid = styled.div`
 `;
 
 const JobCard = styled(motion.div)`
-  background: rgba(25, 25, 25, 0.8);
+  background: #000;
   border: 1px solid ${props => props.$featured ? 'rgba(217, 74, 94, 0.6)' : 'rgba(255, 255, 255, 0.08)'};
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -789,7 +789,7 @@ const JobCard = styled(motion.div)`
 
   &:hover {
     border-color: #CD7C7C;
-    background: rgba(35, 35, 38, 0.9);
+    background: #000;
     box-shadow: 0 15px 30px rgba(122, 30, 45, 0.25);
   }
 
@@ -936,7 +936,7 @@ const JobCard = styled(motion.div)`
 const EmptyState = styled.div`
   text-align: center;
   padding: 70px 20px;
-  background: rgba(25, 25, 25, 0.5);
+  background: #000;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   max-width: 600px;
@@ -981,7 +981,7 @@ const ModalOverlay = styled(motion.div)`
 `;
 
 const ModalCard = styled(motion.div)`
-  background: #111318;
+  background: #000;
   border: 1px solid rgba(217, 74, 94, 0.3);
   border-radius: 18px;
   width: 100%;

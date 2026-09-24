@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import styled from 'styled-components';
 import PublicLayout from '../../components/next/PublicLayout';
 import Seo from '../../components/next/Seo';
-import { BLOG_CATEGORIES, fetchPublishedPosts } from '../../lib/blog';
+import { fetchBlogCategories, mergeBlogCategories, fetchPublishedPosts } from '../../lib/blog';
 import { breadcrumbSchema } from '../../lib/structuredData';
 import { maybeRevalidate } from '../../lib/rendering';
 import SmartCoverImage from '../../components/next/SmartCoverImage';
@@ -26,10 +26,11 @@ const gridReveal = {
   }
 };
 
-export default function BlogIndex({ posts }) {
+export default function BlogIndex({ posts, categories = [] }) {
   // Posts come from getStaticProps (ISR/on-demand revalidation keeps them fresh);
   // the old client-side refetch duplicated the same query on every visit.
   const livePosts = posts || [];
+  const categoryOptions = mergeBlogCategories(categories, livePosts.map((post) => post.category));
   const [category, setCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -64,23 +65,16 @@ export default function BlogIndex({ posts }) {
         >
           <h1>DeepSkills Blog</h1>
           <p>Tips, guides and insights on tech skills, career growth and learning.</p>
-          <CategoryScroller aria-label="Filter blog posts by category">
-            {['All', ...BLOG_CATEGORIES].map((item) => (
-              <CategoryButton
-                key={item}
-                type="button"
-                className={category === item ? 'active' : ''}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  setCategory(item);
-                  setCurrentPage(1);
-                }}
-              >
-                {item}
-              </CategoryButton>
-            ))}
-          </CategoryScroller>
+          <CategorySelector>
+            <label htmlFor="blog-category">Browse by category</label>
+            <select id="blog-category" value={category} onChange={(event) => {
+              setCategory(event.target.value);
+              setCurrentPage(1);
+            }}>
+              <option value="All">All categories</option>
+              {categoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </CategorySelector>
         </Hero>
 
         {featured && <FeaturedPost post={featured} />}
@@ -91,8 +85,8 @@ export default function BlogIndex({ posts }) {
               <BlogCard key={post.slug} post={post} />
             ))}
           </Grid>
-        ) : (
-          <EmptyState>No posts yet. Check back soon!</EmptyState>
+        ) : !featured && (
+          <EmptyState>{category === 'All' ? 'No posts yet. Check back soon!' : 'No posts in this category yet.'}</EmptyState>
         )}
 
         {rest.length > POSTS_PER_PAGE && (
@@ -201,11 +195,12 @@ function PostMeta({ post }) {
 }
 
 export async function getStaticProps() {
-  const posts = await fetchPublishedPosts();
+  const [posts, categories] = await Promise.all([fetchPublishedPosts(), fetchBlogCategories()]);
 
   return {
     props: {
-      posts
+      posts,
+      categories
     },
     ...maybeRevalidate(60)
   };
@@ -270,39 +265,25 @@ const Hero = styled(motion.div)`
   }
 `;
 
-const CategoryScroller = styled.div`
+const CategorySelector = styled.div`
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-
-`;
-
-const CategoryButton = styled(motion.button)`
-    border: 1px solid rgba(123, 31, 46, 0.55);
-    background: rgba(123, 31, 46, 0.08);
-    color: #e8e8e8;
-    border-radius: 8px;
-    padding: 10px 18px;
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-
-    &:hover {
-      border-color: #d94a5e;
-      background: rgba(123, 31, 46, 0.22);
-      box-shadow: 0 10px 24px rgba(123, 31, 46, 0.22);
-    }
-
-  &.active {
-    background: #7b1f2e;
-    border-color: #d94a5e;
+  font-family: 'Inter', sans-serif;
+  label { color: #ccc; font-size: 0.9rem; }
+  select {
+    width: min(100%, 360px);
+    padding: 13px 16px;
+    border: 1px solid rgba(205, 124, 124, 0.5);
+    border-radius: 10px;
+    background: #000;
     color: #fff;
-    box-shadow: 0 0 0 3px rgba(217, 74, 94, 0.12);
+    font: inherit;
+    color-scheme: dark;
+    cursor: pointer;
   }
+  select:focus-visible { outline: 2px solid #cd7c7c; outline-offset: 3px; }
 `;
 
 const Featured = styled(MotionLink)`

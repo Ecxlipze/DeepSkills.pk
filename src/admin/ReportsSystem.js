@@ -15,6 +15,8 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../supabaseClient';
 import { DEPARTMENTS } from '../utils/departments';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const DEPT_COLORS = {
   counsellor: '#378ADD',
@@ -763,6 +765,7 @@ function ScheduledTab({ schedules, templates, setupWarnings }) {
 
 export default function ReportsSystem({ mode = 'master' }) {
   const router = useRouter();
+  const { user } = useAuth();
   const { loading, setupWarnings, data } = useReportData();
   const [period, setPeriod] = useState({ type: 'this_month', year: new Date().getFullYear(), from: '', to: '', batchId: '' });
   const [activeTab, setActiveTab] = useState(mode === 'master' ? 'overview' : mode);
@@ -812,27 +815,41 @@ export default function ReportsSystem({ mode = 'master' }) {
       <Container className="report-print-root">
         {mode === 'academic' && (
           <SubNavRibbon className="no-print">
-            <NavChip onClick={() => router.push('/admin/academic')}>
-              <FaChartBar /> Academic Hub
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/attendance')}>
-              <FaCalendarCheck /> Attendance
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/tasks')}>
-              <FaTasks /> Tasks & Homework
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/results')}>
-              <FaAward /> Exams & Results
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/announcements')}>
-              <FaBullhorn /> Announcements
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
-              <FaComments /> Grievances
-            </NavChip>
-            <NavChip onClick={() => router.push('/admin/academic/chats')}>
-              <FaComments /> Group Chats
-            </NavChip>
+            {user?.role === 'admin' && (
+              <NavChip onClick={() => router.push('/admin/academic')}>
+                <FaChartBar /> Academic Hub
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+                <FaCalendarCheck /> Attendance
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+                <FaTasks /> Tasks & Homework
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/results')}>
+                <FaAward /> Exams & Results
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+                <FaBullhorn /> Announcements
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+                <FaComments /> Grievances
+              </NavChip>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+              <NavChip onClick={() => router.push('/admin/academic/chats')}>
+                <FaComments /> Group Chats
+              </NavChip>
+            )}
             <NavChip $active onClick={() => router.push('/admin/academic/reports')}>
               <FaBookOpen /> Academic Reports
             </NavChip>

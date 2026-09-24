@@ -13,9 +13,20 @@ import toast from 'react-hot-toast';
 import { Skeleton } from '../components/Skeleton';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { createNotification } from '../utils/notifications';
-import { syncStudentAccess } from '../utils/adminAccessApi';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import { validateRequired, validateNumber } from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -490,8 +501,13 @@ const EnrollmentManager = () => {
     }
   };
 
+  const [batchError, setBatchError] = useState('');
+  const [feeErrors, setFeeErrors] = useState({});
+
   const handleOpenBatchModal = (app) => {
     setSelectedApp(app);
+    setBatchError('');
+    setFeeErrors({});
     setIsBatchModalOpen(true);
     // Keep an existing assignment selected, but require a deliberate choice for new approvals.
     const appCourse = app.course || app.selectedCourse;
@@ -503,6 +519,17 @@ const EnrollmentManager = () => {
     setSelectedBatch(currentBatch?.id || '');
   };
 
+  const handleProceedToFeeModal = () => {
+    if (!selectedBatch) {
+      setBatchError('Please select a batch to assign.');
+      toast.error('Please select a batch to assign.');
+      return;
+    }
+    setBatchError('');
+    setIsBatchModalOpen(false);
+    setIsFeeModalOpen(true);
+  };
+
   const handleGrantAccess = async () => {
     if (!canMutate) {
       toast.error("You do not have permission to grant enrollment access.");
@@ -512,6 +539,21 @@ const EnrollmentManager = () => {
       toast.error("Please select a batch");
       return;
     }
+
+    const errors = {};
+    const feeErr = validateNumber(totalFee, { fieldName: 'Total Course Fee', required: true, positive: true, integer: true });
+    if (feeErr) errors.totalFee = feeErr;
+    if (planType === 'installment') {
+      const instErr = validateNumber(installmentCount, { fieldName: 'Installments', min: 2, max: 12, integer: true });
+      if (instErr) errors.installmentCount = instErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFeeErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+
     setProcessing(true);
     try {
       const batch = batches.find(b => b.id === selectedBatch);
@@ -815,154 +857,146 @@ const EnrollmentManager = () => {
       </AnimatePresence>
 
       {/* Batch Assignment Modal */}
-      <AnimatePresence>
-        {isBatchModalOpen && selectedApp && (
-          <Overlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <Modal
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
+      <AdminModal isOpen={isBatchModalOpen && Boolean(selectedApp)} onClose={() => setIsBatchModalOpen(false)} maxWidth="560px">
+        <AdminModalHeader
+          title="Assign Batch & Grant Access"
+          subtitle={`Confirming will add ${selectedApp?.cnic || 'candidate'} to the allowed users list and enable student LMS login.`}
+          onClose={() => setIsBatchModalOpen(false)}
+        />
+        <AdminModalBody>
+          <div style={{ padding: '12px 14px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '8px' }}>
+            <p style={{ color: '#34d399', fontSize: '0.85rem', margin: 0 }}>
+              <strong>Candidate:</strong> {selectedApp?.name} ({selectedApp?.cnic})
+            </p>
+          </div>
+
+          <FormField label="Target Course">
+            <AdminInput value={selectedApp?.course || selectedApp?.selectedCourse || ''} disabled />
+          </FormField>
+
+          <FormField label="Select Batch" required error={batchError}>
+            <AdminSelect
+              value={selectedBatch}
+              onChange={(e) => {
+                setSelectedBatch(e.target.value);
+                if (batchError) setBatchError('');
+              }}
+              $hasError={Boolean(batchError)}
             >
-              <ModalHeader>
-                <h2>Assign Batch & Grant Access</h2>
-                <FaTimes style={{ cursor: 'pointer', opacity: 0.5 }} onClick={() => setIsBatchModalOpen(false)} />
-              </ModalHeader>
-              <ModalContent>
-                <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(25, 135, 84, 0.1)', borderRadius: '10px', border: '1px solid rgba(25, 135, 84, 0.2)' }}>
-                  <p style={{ color: '#198754', fontSize: '0.9rem' }}>
-                    <strong>Note:</strong> Confirming this will add <strong>{selectedApp.cnic}</strong> to the allowed users list and enable their dashboard login.
-                  </p>
-                </div>
+              <option value="">Choose a batch...</option>
+              {batches
+                .filter(b => b.course === (selectedApp?.course || selectedApp?.selectedCourse) && b.status === 'Active')
+                .map(batch => (
+                  <option key={batch.id} value={batch.id}>
+                    {batch.batch_name} ({batch.time_shift})
+                  </option>
+                ))
+              }
+            </AdminSelect>
+          </FormField>
 
-                <FormGroup>
-                  <label>Target Course</label>
-                  <input value={selectedApp.course || selectedApp.selectedCourse} disabled />
-                </FormGroup>
-
-                <FormGroup>
-                  <label>Select Batch*</label>
-                  <select
-                    value={selectedBatch}
-                    onChange={(e) => setSelectedBatch(e.target.value)}
-                  >
-                    <option value="">Choose a batch...</option>
-                    {batches
-                      .filter(b => b.course === (selectedApp.course || selectedApp.selectedCourse) && b.status === 'Active')
-                      .map(batch => (
-                        <option key={batch.id} value={batch.id}>
-                          {batch.batch_name} ({batch.time_shift})
-                        </option>
-                      ))
-                    }
-                  </select>
-                </FormGroup>
-
-                {selectedBatch && (
-                  <InfoGrid style={{ marginTop: '20px' }}>
-                    <InfoItem>
-                      <label><FaClock /> Timing</label>
-                      <p>{batches.find(b => b.id === selectedBatch)?.time_shift}</p>
-                    </InfoItem>
-                    <InfoItem>
-                      <label><FaUserGraduate /> Students</label>
-                      <p>Currently {Math.floor(Math.random() * 20)} Enrolled</p>
-                    </InfoItem>
-                  </InfoGrid>
-                )}
-              </ModalContent>
-              <ModalFooter>
-                <SecondaryButton onClick={() => setIsBatchModalOpen(false)}>Cancel</SecondaryButton>
-                <PrimaryButton
-                  onClick={() => {
-                    setIsBatchModalOpen(false);
-                    setIsFeeModalOpen(true);
-                  }}
-                  disabled={processing || !selectedBatch}
-                >
-                  Next: Setup Fee Plan <FaChevronRight />
-                </PrimaryButton>
-              </ModalFooter>
-            </Modal>
-          </Overlay>
-        )}
-      </AnimatePresence>
+          {selectedBatch && (
+            <InfoGrid style={{ marginTop: '10px' }}>
+              <InfoItem>
+                <label><FaClock /> Timing</label>
+                <p>{batches.find(b => b.id === selectedBatch)?.time_shift}</p>
+              </InfoItem>
+              <InfoItem>
+                <label><FaUserGraduate /> Students</label>
+                <p>Currently {Math.floor(Math.random() * 20)} Enrolled</p>
+              </InfoItem>
+            </InfoGrid>
+          )}
+        </AdminModalBody>
+        <AdminModalFooter>
+          <AdminButton $variant="secondary" type="button" onClick={() => setIsBatchModalOpen(false)}>
+            Cancel
+          </AdminButton>
+          <AdminButton
+            $variant="primary"
+            type="button"
+            onClick={handleProceedToFeeModal}
+            disabled={processing || !selectedBatch}
+          >
+            Next: Setup Fee Plan <FaChevronRight />
+          </AdminButton>
+        </AdminModalFooter>
+      </AdminModal>
 
       {/* Fee Setup Modal */}
-      <AnimatePresence>
-        {isFeeModalOpen && selectedApp && (
-          <Overlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+      <AdminModal isOpen={isFeeModalOpen && Boolean(selectedApp)} onClose={() => setIsFeeModalOpen(false)} maxWidth="560px">
+        <AdminModalHeader
+          title="Setup Fee Plan"
+          subtitle="Configure tuition schedule and installments for this candidate."
+          icon={FaMoneyCheckAlt}
+          onClose={() => setIsFeeModalOpen(false)}
+        />
+        <AdminModalBody>
+          <div style={{ padding: '12px 14px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '8px' }}>
+            <p style={{ color: '#60a5fa', fontSize: '0.85rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaInfoCircle /> Configure how {selectedApp?.name} will pay for {selectedApp?.course || selectedApp?.selectedCourse}.
+            </p>
+          </div>
+
+          <FormField label="Total Course Fee (PKR)" required error={feeErrors.totalFee}>
+            <AdminInput
+              type="number"
+              value={totalFee}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                setTotalFee(isNaN(val) ? '' : val);
+                if (feeErrors.totalFee) setFeeErrors(prev => ({ ...prev, totalFee: undefined }));
+              }}
+              placeholder="e.g. 25000"
+              $hasError={Boolean(feeErrors.totalFee)}
+            />
+          </FormField>
+
+          <FormField label="Payment Plan">
+            <AdminSelect value={planType} onChange={(e) => setPlanType(e.target.value)}>
+              <option value="installment">Installment Plan</option>
+              <option value="full">One-time Full Payment</option>
+            </AdminSelect>
+          </FormField>
+
+          {planType === 'installment' && (
+            <FormField label="Number of Installments" error={feeErrors.installmentCount}>
+              <AdminSelect
+                value={installmentCount}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  setInstallmentCount(isNaN(val) ? 2 : val);
+                  if (feeErrors.installmentCount) setFeeErrors(prev => ({ ...prev, installmentCount: undefined }));
+                }}
+                $hasError={Boolean(feeErrors.installmentCount)}
+              >
+                {[2, 3, 4, 5, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n} Months</option>)}
+              </AdminSelect>
+              {totalFee > 0 && installmentCount > 0 && (
+                <p style={{ marginTop: '6px', fontSize: '0.82rem', color: '#34d399', fontWeight: '600' }}>
+                  Monthly: Rs. {Math.round(totalFee / installmentCount).toLocaleString()} / month
+                </p>
+              )}
+            </FormField>
+          )}
+        </AdminModalBody>
+        <AdminModalFooter>
+          <AdminButton $variant="secondary" type="button" onClick={() => {
+            setIsFeeModalOpen(false);
+            setIsBatchModalOpen(true);
+          }}>
+            Back
+          </AdminButton>
+          <AdminButton
+            $variant="primary"
+            type="button"
+            onClick={handleGrantAccess}
+            disabled={processing}
           >
-            <Modal
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-            >
-              <ModalHeader>
-                <h2><FaMoneyCheckAlt /> Setup Fee Plan</h2>
-                <FaTimes style={{ cursor: 'pointer', opacity: 0.5 }} onClick={() => setIsFeeModalOpen(false)} />
-              </ModalHeader>
-              <ModalContent>
-                <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(79, 142, 247, 0.1)', borderRadius: '10px', border: '1px solid rgba(79, 142, 247, 0.2)' }}>
-                  <p style={{ color: '#4F8EF7', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FaInfoCircle /> Configure how this student will pay for the course.
-                  </p>
-                </div>
-
-                <FormGroup>
-                  <label>Total Course Fee (Rs.)</label>
-                  <input
-                    type="number"
-                    value={totalFee}
-                    onChange={(e) => setTotalFee(parseInt(e.target.value))}
-                  />
-                </FormGroup>
-
-                <FormGroup>
-                  <label>Payment Plan</label>
-                  <select value={planType} onChange={(e) => setPlanType(e.target.value)}>
-                    <option value="installment">Installment Plan</option>
-                    <option value="full">One-time Full Payment</option>
-                  </select>
-                </FormGroup>
-
-                {planType === 'installment' && (
-                  <FormGroup>
-                    <label>Number of Installments</label>
-                    <select
-                      value={installmentCount}
-                      onChange={(e) => setInstallmentCount(parseInt(e.target.value))}
-                    >
-                      {[2,3,4,5,6,8,10,12].map(n => <option key={n} value={n}>{n} Months</option>)}
-                    </select>
-                    <p style={{ marginTop: '10px', fontSize: '0.85rem', color: '#10B981', fontWeight: '600' }}>
-                      Calculated: Rs. {Math.round(totalFee / installmentCount).toLocaleString()} / month
-                    </p>
-                  </FormGroup>
-                )}
-              </ModalContent>
-              <ModalFooter>
-                <SecondaryButton onClick={() => {
-                  setIsFeeModalOpen(false);
-                  setIsBatchModalOpen(true);
-                }}>Back</SecondaryButton>
-                <PrimaryButton
-                  onClick={handleGrantAccess}
-                  disabled={processing}
-                >
-                  <FaCheck /> {processing ? 'Generating...' : 'Finalize Admission'}
-                </PrimaryButton>
-              </ModalFooter>
-            </Modal>
-          </Overlay>
-        )}
-      </AnimatePresence>
+            <FaCheck /> {processing ? 'Generating...' : 'Finalize Admission'}
+          </AdminButton>
+        </AdminModalFooter>
+      </AdminModal>
     </Container>
   );
 };

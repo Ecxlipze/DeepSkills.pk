@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 
-const ACCENT = { blue:'#3b82f6', purple:'#9333ea', green:'#10b981', amber:'#f59e0b', red:'#ef4444', teal:'#14b8a6' };
+const ACCENT = { maroon:'#7B1F2E', blue:'#7B1F2E', purple:'#9333ea', green:'#10b981', amber:'#f59e0b', red:'#ef4444', teal:'#14b8a6' };
 const ICONS = { laptop:FaLaptopCode, palette:FaPalette, chart:FaChartLine, mobile:FaMobileAlt, shield:FaShieldAlt, video:FaVideo, pen:FaPen, globe:FaGlobe, robot:FaRobot, compass:FaDraftingCompass, wrench:FaWrench, grad:FaGraduationCap, code:FaCode, database:FaDatabase };
 const getIcon = (k) => ICONS[k] || FaGraduationCap;
 
@@ -199,7 +199,7 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   if(loading||!course) return <AdminLayout><Container style={{textAlign:'center',padding:'60px',color:'#555'}}>{loading?'Loading...':'Course not found'}</Container></AdminLayout>;
 
   const IconComp = getIcon(course.icon);
-  const accentColor = ACCENT[course.accent_color]||ACCENT.blue;
+  const accentColor = ACCENT[course.accent_color] || ACCENT.maroon;
 
   return (
     <AdminLayout>

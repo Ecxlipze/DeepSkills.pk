@@ -17,6 +17,22 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { supabase } from '../supabaseClient';
 import { getAuthHeaders } from '../utils/adminAccessApi';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton
+} from '../components/portal';
+import {
+  validateRequired,
+  validateNumber,
+  validateForm
+} from '../utils/formValidation';
 
 export const DEFAULT_FEE_SETTINGS = {
   general: {
@@ -169,9 +185,13 @@ export default function FeeSettings() {
   // Modals
   const [editingCourse, setEditingCourse] = useState(null);
   const [courseSaving, setCourseSaving] = useState(false);
+  const [courseErrors, setCourseErrors] = useState({});
   const [editingScholarship, setEditingScholarship] = useState(null);
+  const [scholarshipErrors, setScholarshipErrors] = useState({});
   const [editingBank, setEditingBank] = useState(null);
+  const [bankErrors, setBankErrors] = useState({});
   const [editingWallet, setEditingWallet] = useState(null);
+  const [walletErrors, setWalletErrors] = useState({});
 
   // Simulator State for Installments
   const [simFee, setSimFee] = useState(30000);
@@ -376,6 +396,19 @@ export default function FeeSettings() {
   // Save Single Course Tuition Updates
   const handleSaveCourseTuition = async () => {
     if (!editingCourse || !canMutate) return;
+
+    const { isValid, errors } = validateForm(editingCourse, {
+      price: [(v) => validateNumber(v, { min: 0, fieldName: 'Tuition Fee' })],
+      duration: [(v) => validateRequired(v, 'Course Duration')],
+      reenrollment_discount_pct: [(v) => validateNumber(v, { min: 0, max: 100, fieldName: 'Alumni Discount' })]
+    });
+
+    if (!isValid) {
+      setCourseErrors(errors);
+      toast.error('Please fix the errors in tuition settings.');
+      return;
+    }
+    setCourseErrors({});
     setCourseSaving(true);
 
     const updates = {
@@ -435,10 +468,19 @@ export default function FeeSettings() {
 
   // Scholarship Bracket Management
   const handleSaveScholarship = (item) => {
-    if (!item.name) {
-      toast.error('Scholarship name is required.');
+    const { isValid, errors } = validateForm(item, {
+      name: [(v) => validateRequired(v, 'Scholarship Name')],
+      discountPct: [(v) => validateNumber(v, { min: 1, max: 100, fieldName: 'Concession Percentage' })],
+      maxAmount: [(v) => validateNumber(v, { min: 0, fieldName: 'Maximum Benefit Cap' })]
+    });
+
+    if (!isValid) {
+      setScholarshipErrors(errors);
+      toast.error('Please resolve errors in the scholarship form.');
       return;
     }
+    setScholarshipErrors({});
+
     const currentList = settings.scholarships || [];
     let updated;
     if (item.isNew) {
@@ -466,10 +508,19 @@ export default function FeeSettings() {
 
   // Bank Account Management
   const handleSaveBank = (bank) => {
-    if (!bank.bankName || !bank.accountNumber) {
-      toast.error('Bank name and account number are required.');
+    const { isValid, errors } = validateForm(bank, {
+      bankName: [(v) => validateRequired(v, 'Bank Name')],
+      accountTitle: [(v) => validateRequired(v, 'Account Title')],
+      accountNumber: [(v) => validateRequired(v, 'Account Number')]
+    });
+
+    if (!isValid) {
+      setBankErrors(errors);
+      toast.error('Please resolve errors in the bank account form.');
       return;
     }
+    setBankErrors({});
+
     const current = settings.paymentGateways?.bankAccounts || [];
     let updated;
     if (bank.isNew) {
@@ -509,10 +560,19 @@ export default function FeeSettings() {
 
   // Mobile Wallet Management
   const handleSaveWallet = (wallet) => {
-    if (!wallet.provider || !wallet.accountNumber) {
-      toast.error('Wallet provider and mobile number are required.');
+    const { isValid, errors } = validateForm(wallet, {
+      provider: [(v) => validateRequired(v, 'Wallet Provider')],
+      accountTitle: [(v) => validateRequired(v, 'Account Title')],
+      accountNumber: [(v) => validateRequired(v, 'Mobile / Account Number')]
+    });
+
+    if (!isValid) {
+      setWalletErrors(errors);
+      toast.error('Please resolve errors in the mobile wallet form.');
       return;
     }
+    setWalletErrors({});
+
     const current = settings.paymentGateways?.mobileWallets || [];
     let updated;
     if (wallet.isNew) {
@@ -1895,411 +1955,445 @@ export default function FeeSettings() {
         )}
 
         {/* Modal: Edit Course Tuition */}
-        <AnimatePresence>
-          {editingCourse && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => !courseSaving && setEditingCourse(null)}
-            >
-              <ModalCard
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
+        {editingCourse && (
+          <AdminModal
+            isOpen={Boolean(editingCourse)}
+            onClose={() => {
+              if (!courseSaving) {
+                setEditingCourse(null);
+                setCourseErrors({});
+              }
+            }}
+            maxWidth="550px"
+          >
+            <AdminModalHeader
+              title="Edit Tuition Pricing"
+              subtitle={editingCourse.title}
+              onClose={() => {
+                if (!courseSaving) {
+                  setEditingCourse(null);
+                  setCourseErrors({});
+                }
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormField
+                  label="Base Tuition Fee (PKR)"
+                  required
+                  error={courseErrors.price}
+                  hint="Standard total fee charged for this course program."
+                >
+                  <AdminInput
+                    type="number"
+                    value={editingCourse.price ?? 0}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, price: e.target.value })}
+                    placeholder="e.g. 35000"
+                    hasError={Boolean(courseErrors.price)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Course Duration"
+                  required
+                  error={courseErrors.duration}
+                  hint="e.g. 3 Months / 12 Weeks"
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingCourse.duration || ''}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, duration: e.target.value })}
+                    placeholder="e.g. 3 Months / 12 Weeks"
+                    hasError={Boolean(courseErrors.duration)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Re-Enrollment / Alumni Discount (%)"
+                  error={courseErrors.reenrollment_discount_pct}
+                  hint="Concession percentage for graduates who enroll in this second course."
+                >
+                  <AdminInput
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editingCourse.reenrollment_discount_pct ?? 20}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, reenrollment_discount_pct: e.target.value })}
+                    placeholder="20"
+                    hasError={Boolean(courseErrors.reenrollment_discount_pct)}
+                  />
+                </FormField>
+
+                <FormField label="Course Category">
+                  <AdminInput
+                    type="text"
+                    value={editingCourse.category || ''}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, category: e.target.value })}
+                    placeholder="e.g. Artificial Intelligence, Development, Design"
+                  />
+                </FormField>
+
+                <FormField label="Catalog Status">
+                  <AdminSelect
+                    value={editingCourse.status || 'Active'}
+                    onChange={(e) => setEditingCourse({ ...editingCourse, status: e.target.value })}
+                  >
+                    <option value="Active">Active (Open for Admission)</option>
+                    <option value="Inactive">Inactive (Archived)</option>
+                  </AdminSelect>
+                </FormField>
+              </div>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingCourse(null);
+                  setCourseErrors({});
+                }}
+                disabled={courseSaving}
               >
-                <div className="modal-header">
-                  <div>
-                    <h3>Edit Tuition Pricing</h3>
-                    <p className="sub">{editingCourse.title}</p>
-                  </div>
-                  <button type="button" className="close-btn" onClick={() => setEditingCourse(null)}>
-                    <FaTimes />
-                  </button>
-                </div>
-
-                <div className="modal-body">
-                  <div className="modal-field">
-                    <label>Base Tuition Fee (PKR)</label>
-                    <input
-                      type="number"
-                      value={editingCourse.price ?? 0}
-                      onChange={(e) => setEditingCourse({ ...editingCourse, price: e.target.value })}
-                      placeholder="e.g. 35000"
-                    />
-                    <span className="field-hint">Standard total fee charged for this course program.</span>
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Course Duration</label>
-                    <input
-                      type="text"
-                      value={editingCourse.duration || ''}
-                      onChange={(e) => setEditingCourse({ ...editingCourse, duration: e.target.value })}
-                      placeholder="e.g. 3 Months / 12 Weeks"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Re-Enrollment / Alumni Discount (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={editingCourse.reenrollment_discount_pct ?? 20}
-                      onChange={(e) => setEditingCourse({ ...editingCourse, reenrollment_discount_pct: e.target.value })}
-                      placeholder="20"
-                    />
-                    <span className="field-hint">Concession percentage for graduates who enroll in this second course.</span>
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Course Category</label>
-                    <input
-                      type="text"
-                      value={editingCourse.category || ''}
-                      onChange={(e) => setEditingCourse({ ...editingCourse, category: e.target.value })}
-                      placeholder="e.g. Artificial Intelligence, Development, Design"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Catalog Status</label>
-                    <select
-                      value={editingCourse.status || 'Active'}
-                      onChange={(e) => setEditingCourse({ ...editingCourse, status: e.target.value })}
-                    >
-                      <option value="Active">Active (Open for Admission)</option>
-                      <option value="Inactive">Inactive (Archived)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="cancel-btn"
-                    onClick={() => setEditingCourse(null)}
-                    disabled={courseSaving}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="save-btn"
-                    onClick={handleSaveCourseTuition}
-                    disabled={courseSaving}
-                  >
-                    {courseSaving ? <FaSyncAlt className="spinner" /> : <FaSave />}
-                    <span>{courseSaving ? 'Updating...' : 'Save Pricing'}</span>
-                  </button>
-                </div>
-              </ModalCard>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="button"
+                variant="primary"
+                onClick={handleSaveCourseTuition}
+                disabled={courseSaving}
+              >
+                {courseSaving ? <FaSyncAlt className="spinner" /> : <FaSave />}
+                <span>{courseSaving ? 'Updating...' : 'Save Pricing'}</span>
+              </AdminButton>
+            </AdminModalFooter>
+          </AdminModal>
+        )}
 
         {/* Modal: Edit / Add Scholarship */}
-        <AnimatePresence>
-          {editingScholarship && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingScholarship(null)}
-            >
-              <ModalCard
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="modal-header">
-                  <div>
-                    <h3>{editingScholarship.isNew ? 'Add Scholarship Bracket' : 'Edit Scholarship Bracket'}</h3>
-                    <p className="sub">Define eligibility terms and tuition fee concession caps.</p>
-                  </div>
-                  <button type="button" className="close-btn" onClick={() => setEditingScholarship(null)}>
-                    <FaTimes />
-                  </button>
-                </div>
+        {editingScholarship && (
+          <AdminModal
+            isOpen={Boolean(editingScholarship)}
+            onClose={() => {
+              setEditingScholarship(null);
+              setScholarshipErrors({});
+            }}
+            maxWidth="550px"
+          >
+            <AdminModalHeader
+              title={editingScholarship.isNew ? 'Add Scholarship Bracket' : 'Edit Scholarship Bracket'}
+              subtitle="Define eligibility terms and tuition fee concession caps."
+              onClose={() => {
+                setEditingScholarship(null);
+                setScholarshipErrors({});
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormField
+                  label="Scholarship Name"
+                  required
+                  error={scholarshipErrors.name}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingScholarship.name || ''}
+                    onChange={(e) => setEditingScholarship({ ...editingScholarship, name: e.target.value })}
+                    placeholder="e.g. Women in Tech Fellowship"
+                    hasError={Boolean(scholarshipErrors.name)}
+                  />
+                </FormField>
 
-                <div className="modal-body">
-                  <div className="modal-field">
-                    <label>Scholarship Name</label>
-                    <input
-                      type="text"
-                      value={editingScholarship.name || ''}
-                      onChange={(e) => setEditingScholarship({ ...editingScholarship, name: e.target.value })}
-                      placeholder="e.g. Women in Tech Fellowship"
-                    />
-                  </div>
+                <FormField
+                  label="Concession Percentage (%)"
+                  required
+                  error={scholarshipErrors.discountPct}
+                >
+                  <AdminInput
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={editingScholarship.discountPct ?? 25}
+                    onChange={(e) => setEditingScholarship({ ...editingScholarship, discountPct: Number(e.target.value) })}
+                    placeholder="25"
+                    hasError={Boolean(scholarshipErrors.discountPct)}
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Concession Percentage (%)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={editingScholarship.discountPct ?? 25}
-                      onChange={(e) => setEditingScholarship({ ...editingScholarship, discountPct: Number(e.target.value) })}
-                      placeholder="25"
-                    />
-                  </div>
+                <FormField
+                  label="Maximum Benefit Cap (PKR)"
+                  error={scholarshipErrors.maxAmount}
+                  hint="Maximum fee discount in rupees granted under this category."
+                >
+                  <AdminInput
+                    type="number"
+                    value={editingScholarship.maxAmount ?? 10000}
+                    onChange={(e) => setEditingScholarship({ ...editingScholarship, maxAmount: Number(e.target.value) })}
+                    placeholder="10000"
+                    hasError={Boolean(scholarshipErrors.maxAmount)}
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Maximum Benefit Cap (PKR)</label>
-                    <input
-                      type="number"
-                      value={editingScholarship.maxAmount ?? 10000}
-                      onChange={(e) => setEditingScholarship({ ...editingScholarship, maxAmount: Number(e.target.value) })}
-                      placeholder="10000"
-                    />
-                    <span className="field-hint">Maximum fee discount in rupees granted under this category.</span>
-                  </div>
+                <FormField label="Eligibility & Verification Criteria">
+                  <AdminTextarea
+                    rows={3}
+                    value={editingScholarship.criteria || ''}
+                    onChange={(e) => setEditingScholarship({ ...editingScholarship, criteria: e.target.value })}
+                    placeholder="Documentation or test score required to qualify..."
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Eligibility & Verification Criteria</label>
-                    <textarea
-                      rows={3}
-                      value={editingScholarship.criteria || ''}
-                      onChange={(e) => setEditingScholarship({ ...editingScholarship, criteria: e.target.value })}
-                      placeholder="Documentation or test score required to qualify..."
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Status</label>
-                    <select
-                      value={editingScholarship.isActive !== false ? 'active' : 'inactive'}
-                      onChange={(e) => setEditingScholarship({ ...editingScholarship, isActive: e.target.value === 'active' })}
-                    >
-                      <option value="active">Active (Available for Counselors)</option>
-                      <option value="inactive">Paused / Inactive</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="modal-footer">
-                  <button type="button" className="cancel-btn" onClick={() => setEditingScholarship(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="save-btn"
-                    onClick={() => handleSaveScholarship(editingScholarship)}
+                <FormField label="Status">
+                  <AdminSelect
+                    value={editingScholarship.isActive !== false ? 'active' : 'inactive'}
+                    onChange={(e) => setEditingScholarship({ ...editingScholarship, isActive: e.target.value === 'active' })}
                   >
-                    <FaSave /> Apply Bracket
-                  </button>
-                </div>
-              </ModalCard>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+                    <option value="active">Active (Available for Counselors)</option>
+                    <option value="inactive">Paused / Inactive</option>
+                  </AdminSelect>
+                </FormField>
+              </div>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingScholarship(null);
+                  setScholarshipErrors({});
+                }}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="button"
+                variant="primary"
+                onClick={() => handleSaveScholarship(editingScholarship)}
+              >
+                <FaSave /> Apply Bracket
+              </AdminButton>
+            </AdminModalFooter>
+          </AdminModal>
+        )}
 
         {/* Modal: Edit / Add Bank Account */}
-        <AnimatePresence>
-          {editingBank && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingBank(null)}
-            >
-              <ModalCard
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="modal-header">
-                  <div>
-                    <h3>{editingBank.isNew ? 'Add Bank Account' : 'Edit Bank Account'}</h3>
-                    <p className="sub">Published on official vouchers for student tuition deposits.</p>
-                  </div>
-                  <button type="button" className="close-btn" onClick={() => setEditingBank(null)}>
-                    <FaTimes />
-                  </button>
-                </div>
+        {editingBank && (
+          <AdminModal
+            isOpen={Boolean(editingBank)}
+            onClose={() => {
+              setEditingBank(null);
+              setBankErrors({});
+            }}
+            maxWidth="550px"
+          >
+            <AdminModalHeader
+              title={editingBank.isNew ? 'Add Bank Account' : 'Edit Bank Account'}
+              subtitle="Published on official vouchers for student tuition deposits."
+              onClose={() => {
+                setEditingBank(null);
+                setBankErrors({});
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormField
+                  label="Bank Name"
+                  required
+                  error={bankErrors.bankName}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingBank.bankName || ''}
+                    onChange={(e) => setEditingBank({ ...editingBank, bankName: e.target.value })}
+                    placeholder="e.g. Meezan Bank Limited"
+                    hasError={Boolean(bankErrors.bankName)}
+                  />
+                </FormField>
 
-                <div className="modal-body">
-                  <div className="modal-field">
-                    <label>Bank Name</label>
-                    <input
-                      type="text"
-                      value={editingBank.bankName || ''}
-                      onChange={(e) => setEditingBank({ ...editingBank, bankName: e.target.value })}
-                      placeholder="e.g. Meezan Bank Limited"
-                    />
-                  </div>
+                <FormField
+                  label="Account Title"
+                  required
+                  error={bankErrors.accountTitle}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingBank.accountTitle || ''}
+                    onChange={(e) => setEditingBank({ ...editingBank, accountTitle: e.target.value })}
+                    placeholder="e.g. DeepSkills Institute (Pvt) Ltd"
+                    hasError={Boolean(bankErrors.accountTitle)}
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Account Title</label>
-                    <input
-                      type="text"
-                      value={editingBank.accountTitle || ''}
-                      onChange={(e) => setEditingBank({ ...editingBank, accountTitle: e.target.value })}
-                      placeholder="e.g. DeepSkills Institute (Pvt) Ltd"
-                    />
-                  </div>
+                <FormField
+                  label="Account Number"
+                  required
+                  error={bankErrors.accountNumber}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingBank.accountNumber || ''}
+                    onChange={(e) => setEditingBank({ ...editingBank, accountNumber: e.target.value })}
+                    placeholder="e.g. 01020304050607"
+                    hasError={Boolean(bankErrors.accountNumber)}
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Account Number</label>
-                    <input
-                      type="text"
-                      value={editingBank.accountNumber || ''}
-                      onChange={(e) => setEditingBank({ ...editingBank, accountNumber: e.target.value })}
-                      placeholder="e.g. 01020304050607"
-                    />
-                  </div>
+                <FormField label="IBAN (24 Characters)">
+                  <AdminInput
+                    type="text"
+                    value={editingBank.iban || ''}
+                    onChange={(e) => setEditingBank({ ...editingBank, iban: e.target.value.toUpperCase() })}
+                    placeholder="e.g. PK36MEZN0001020304050607"
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>IBAN (24 Characters)</label>
-                    <input
-                      type="text"
-                      value={editingBank.iban || ''}
-                      onChange={(e) => setEditingBank({ ...editingBank, iban: e.target.value.toUpperCase() })}
-                      placeholder="e.g. PK36MEZN0001020304050607"
-                    />
-                  </div>
+                <FormField label="Branch Name & City">
+                  <AdminInput
+                    type="text"
+                    value={editingBank.branch || ''}
+                    onChange={(e) => setEditingBank({ ...editingBank, branch: e.target.value })}
+                    placeholder="e.g. DHA Phase 5 Branch, Lahore"
+                  />
+                </FormField>
 
-                  <div className="modal-field">
-                    <label>Branch Name & City</label>
-                    <input
-                      type="text"
-                      value={editingBank.branch || ''}
-                      onChange={(e) => setEditingBank({ ...editingBank, branch: e.target.value })}
-                      placeholder="e.g. DHA Phase 5 Branch, Lahore"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Display Status</label>
-                    <select
-                      value={editingBank.isActive !== false ? 'active' : 'inactive'}
-                      onChange={(e) => setEditingBank({ ...editingBank, isActive: e.target.value === 'active' })}
-                    >
-                      <option value="active">Active (Visible on Vouchers & Portal)</option>
-                      <option value="inactive">Inactive / Hidden</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="modal-footer">
-                  <button type="button" className="cancel-btn" onClick={() => setEditingBank(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="save-btn"
-                    onClick={() => handleSaveBank(editingBank)}
+                <FormField label="Display Status">
+                  <AdminSelect
+                    value={editingBank.isActive !== false ? 'active' : 'inactive'}
+                    onChange={(e) => setEditingBank({ ...editingBank, isActive: e.target.value === 'active' })}
                   >
-                    <FaSave /> Apply Account
-                  </button>
-                </div>
-              </ModalCard>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+                    <option value="active">Active (Visible on Vouchers & Portal)</option>
+                    <option value="inactive">Inactive / Hidden</option>
+                  </AdminSelect>
+                </FormField>
+              </div>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingBank(null);
+                  setBankErrors({});
+                }}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="button"
+                variant="primary"
+                onClick={() => handleSaveBank(editingBank)}
+              >
+                <FaSave /> Apply Account
+              </AdminButton>
+            </AdminModalFooter>
+          </AdminModal>
+        )}
 
         {/* Modal: Edit / Add Mobile Wallet */}
-        <AnimatePresence>
-          {editingWallet && (
-            <ModalOverlay
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEditingWallet(null)}
-            >
-              <ModalCard
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="modal-header">
-                  <div>
-                    <h3>{editingWallet.isNew ? 'Add Mobile Wallet' : 'Edit Mobile Wallet'}</h3>
-                    <p className="sub">JazzCash, EasyPaisa, SadaPay or Nayapay numbers.</p>
-                  </div>
-                  <button type="button" className="close-btn" onClick={() => setEditingWallet(null)}>
-                    <FaTimes />
-                  </button>
-                </div>
-
-                <div className="modal-body">
-                  <div className="modal-field">
-                    <label>Wallet Provider</label>
-                    <select
-                      value={editingWallet.provider || 'JazzCash'}
-                      onChange={(e) => setEditingWallet({ ...editingWallet, provider: e.target.value })}
-                    >
-                      <option value="JazzCash">JazzCash</option>
-                      <option value="EasyPaisa">EasyPaisa</option>
-                      <option value="SadaPay">SadaPay</option>
-                      <option value="NayaPay">NayaPay</option>
-                    </select>
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Account Title</label>
-                    <input
-                      type="text"
-                      value={editingWallet.accountTitle || ''}
-                      onChange={(e) => setEditingWallet({ ...editingWallet, accountTitle: e.target.value })}
-                      placeholder="e.g. DeepSkills Central Accounts"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Mobile / Account Number</label>
-                    <input
-                      type="text"
-                      value={editingWallet.accountNumber || ''}
-                      onChange={(e) => setEditingWallet({ ...editingWallet, accountNumber: e.target.value })}
-                      placeholder="e.g. 0300-1234567"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Merchant Till Number (Optional)</label>
-                    <input
-                      type="text"
-                      value={editingWallet.tillNumber || ''}
-                      onChange={(e) => setEditingWallet({ ...editingWallet, tillNumber: e.target.value })}
-                      placeholder="e.g. 889900"
-                    />
-                  </div>
-
-                  <div className="modal-field">
-                    <label>Display Status</label>
-                    <select
-                      value={editingWallet.isActive !== false ? 'active' : 'inactive'}
-                      onChange={(e) => setEditingWallet({ ...editingWallet, isActive: e.target.value === 'active' })}
-                    >
-                      <option value="active">Active (Visible on Vouchers & Portal)</option>
-                      <option value="inactive">Inactive / Hidden</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="modal-footer">
-                  <button type="button" className="cancel-btn" onClick={() => setEditingWallet(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="save-btn"
-                    onClick={() => handleSaveWallet(editingWallet)}
+        {editingWallet && (
+          <AdminModal
+            isOpen={Boolean(editingWallet)}
+            onClose={() => {
+              setEditingWallet(null);
+              setWalletErrors({});
+            }}
+            maxWidth="550px"
+          >
+            <AdminModalHeader
+              title={editingWallet.isNew ? 'Add Mobile Wallet' : 'Edit Mobile Wallet'}
+              subtitle="JazzCash, EasyPaisa, SadaPay or Nayapay numbers."
+              onClose={() => {
+                setEditingWallet(null);
+                setWalletErrors({});
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormField
+                  label="Wallet Provider"
+                  required
+                  error={walletErrors.provider}
+                >
+                  <AdminSelect
+                    value={editingWallet.provider || 'JazzCash'}
+                    onChange={(e) => setEditingWallet({ ...editingWallet, provider: e.target.value })}
+                    hasError={Boolean(walletErrors.provider)}
                   >
-                    <FaSave /> Apply Wallet
-                  </button>
-                </div>
-              </ModalCard>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+                    <option value="JazzCash">JazzCash</option>
+                    <option value="EasyPaisa">EasyPaisa</option>
+                    <option value="SadaPay">SadaPay</option>
+                    <option value="NayaPay">NayaPay</option>
+                  </AdminSelect>
+                </FormField>
+
+                <FormField
+                  label="Account Title"
+                  required
+                  error={walletErrors.accountTitle}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingWallet.accountTitle || ''}
+                    onChange={(e) => setEditingWallet({ ...editingWallet, accountTitle: e.target.value })}
+                    placeholder="e.g. DeepSkills Central Accounts"
+                    hasError={Boolean(walletErrors.accountTitle)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Mobile / Account Number"
+                  required
+                  error={walletErrors.accountNumber}
+                >
+                  <AdminInput
+                    type="text"
+                    value={editingWallet.accountNumber || ''}
+                    onChange={(e) => setEditingWallet({ ...editingWallet, accountNumber: e.target.value })}
+                    placeholder="e.g. 0300-1234567"
+                    hasError={Boolean(walletErrors.accountNumber)}
+                  />
+                </FormField>
+
+                <FormField label="Merchant Till Number (Optional)">
+                  <AdminInput
+                    type="text"
+                    value={editingWallet.tillNumber || ''}
+                    onChange={(e) => setEditingWallet({ ...editingWallet, tillNumber: e.target.value })}
+                    placeholder="e.g. 889900"
+                  />
+                </FormField>
+
+                <FormField label="Display Status">
+                  <AdminSelect
+                    value={editingWallet.isActive !== false ? 'active' : 'inactive'}
+                    onChange={(e) => setEditingWallet({ ...editingWallet, isActive: e.target.value === 'active' })}
+                  >
+                    <option value="active">Active (Visible on Vouchers & Portal)</option>
+                    <option value="inactive">Inactive / Hidden</option>
+                  </AdminSelect>
+                </FormField>
+              </div>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setEditingWallet(null);
+                  setWalletErrors({});
+                }}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="button"
+                variant="primary"
+                onClick={() => handleSaveWallet(editingWallet)}
+              >
+                <FaSave /> Apply Wallet
+              </AdminButton>
+            </AdminModalFooter>
+          </AdminModal>
+        )}
       </Container>
     </AdminLayout>
   );

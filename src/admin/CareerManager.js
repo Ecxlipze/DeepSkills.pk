@@ -16,6 +16,19 @@ import {
   formatJobDate
 } from '../../lib/careers';
 import {
+  AdminModal,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  validateRequired,
+  validateForm
+} from '../utils/formValidation';
+import {
   FaBriefcase,
   FaUsers,
   FaPlus,
@@ -527,6 +540,7 @@ export default function CareerManager() {
   // Modals
   const [jobModalOpen, setJobModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
+  const [jobErrors, setJobErrors] = useState({});
   const [savingJob, setSavingJob] = useState(false);
 
   const [appDetailModalOpen, setAppDetailModalOpen] = useState(false);
@@ -605,6 +619,7 @@ export default function CareerManager() {
 
   // Open Create Job
   const handleOpenCreateJob = () => {
+    setJobErrors({});
     setEditingJob({
       title: '',
       slug: '',
@@ -627,6 +642,7 @@ export default function CareerManager() {
 
   // Open Edit Job
   const handleOpenEditJob = (job) => {
+    setJobErrors({});
     setEditingJob({
       ...job,
       responsibilities: Array.isArray(job.responsibilities) && job.responsibilities.length ? job.responsibilities : [''],
@@ -639,10 +655,16 @@ export default function CareerManager() {
 
   // Save Job
   const handleSaveJob = async () => {
-    if (!editingJob.title?.trim()) {
-      toast.error('Please enter a job title');
+    const { isValid, errors: valErrors } = validateForm(editingJob, {
+      title: [(v) => validateRequired(v, 'Job Title')],
+      slug: [(v) => validateRequired(v, 'URL Slug')]
+    });
+    if (!isValid) {
+      setJobErrors(valErrors);
+      toast.error('Please resolve highlighted errors in the form.');
       return;
     }
+    setJobErrors({});
 
     setSavingJob(true);
     try {
@@ -659,6 +681,7 @@ export default function CareerManager() {
       if (res.status === 'success') {
         toast.success(editingJob.id ? 'Job posting updated' : 'Job posting created');
         setJobModalOpen(false);
+        setJobErrors({});
         loadData();
       } else {
         toast.error(res.message || 'Failed to save job');
@@ -1039,391 +1062,383 @@ export default function CareerManager() {
         )}
 
         {/* Modal: Create/Edit Job */}
-        <AnimatePresence>
-          {jobModalOpen && (
-            <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ModalCard initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
-                <ModalHeader>
-                  <h2>{editingJob?.id ? 'Edit Job Posting' : 'Post New Job Opening'}</h2>
-                  <button onClick={() => setJobModalOpen(false)}><FaTimes /></button>
-                </ModalHeader>
-                <ModalBody>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Job Title *</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Senior Full-Stack Instructor"
-                        value={editingJob?.title || ''}
-                        onChange={(e) => {
-                          const title = e.target.value;
-                          setEditingJob((prev) => ({
-                            ...prev,
-                            title,
-                            slug: prev.id ? prev.slug : slugify(title)
-                          }));
-                        }}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>URL Slug *</label>
-                      <input
-                        type="text"
-                        placeholder="senior-full-stack-instructor"
-                        value={editingJob?.slug || ''}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
-                      />
-                    </div>
-                  </div>
+        <AdminModal
+          isOpen={jobModalOpen}
+          onClose={() => { setJobModalOpen(false); setJobErrors({}); }}
+          title={editingJob?.id ? 'Edit Job Posting' : 'Post New Job Opening'}
+          subtitle="Configure career position details, requirements, and publishing status"
+          maxWidth="750px"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => { setJobModalOpen(false); setJobErrors({}); }}>
+                Cancel
+              </AdminButton>
+              <AdminButton
+                variant="primary"
+                type="submit"
+                form="job-posting-form"
+                disabled={savingJob}
+              >
+                <FaSave /> {savingJob ? 'Saving...' : 'Save Job Posting'}
+              </AdminButton>
+            </>
+          }
+        >
+          <form id="job-posting-form" onSubmit={(e) => { e.preventDefault(); handleSaveJob(); }} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <FormGrid columns="1fr 1fr" gap="14px">
+              <FormField label="Job Title" required error={jobErrors.title}>
+                <AdminInput
+                  placeholder="e.g. Senior Full-Stack Instructor"
+                  value={editingJob?.title || ''}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setEditingJob((prev) => ({
+                      ...prev,
+                      title,
+                      slug: prev.id ? prev.slug : slugify(title)
+                    }));
+                    if (jobErrors.title) setJobErrors(prev => ({ ...prev, title: null }));
+                  }}
+                  hasError={Boolean(jobErrors.title)}
+                  required
+                />
+              </FormField>
+              <FormField label="URL Slug" required error={jobErrors.slug}>
+                <AdminInput
+                  placeholder="senior-full-stack-instructor"
+                  value={editingJob?.slug || ''}
+                  onChange={(e) => {
+                    setEditingJob((prev) => ({ ...prev, slug: slugify(e.target.value) }));
+                    if (jobErrors.slug) setJobErrors(prev => ({ ...prev, slug: null }));
+                  }}
+                  hasError={Boolean(jobErrors.slug)}
+                  required
+                />
+              </FormField>
+            </FormGrid>
 
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Department *</label>
-                      <select
-                        value={editingJob?.department || 'Software & IT'}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, department: e.target.value }))}
-                      >
-                        {CAREER_DEPARTMENTS.filter((d) => d !== 'All').map((dept) => (
-                          <option key={dept} value={dept}>{dept}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Employment Type</label>
-                      <select
-                        value={editingJob?.job_type || 'Full-time'}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, job_type: e.target.value }))}
-                      >
-                        {JOB_TYPES.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+            <FormGrid columns="1fr 1fr" gap="14px">
+              <FormField label="Department" required>
+                <AdminSelect
+                  value={editingJob?.department || 'Software & IT'}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, department: e.target.value }))}
+                >
+                  {CAREER_DEPARTMENTS.filter((d) => d !== 'All').map((dept) => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </AdminSelect>
+              </FormField>
+              <FormField label="Employment Type">
+                <AdminSelect
+                  value={editingJob?.job_type || 'Full-time'}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, job_type: e.target.value }))}
+                >
+                  {JOB_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </AdminSelect>
+              </FormField>
+            </FormGrid>
 
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Workplace Policy</label>
-                      <select
-                        value={editingJob?.workplace_type || 'On-site'}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, workplace_type: e.target.value }))}
-                      >
-                        {WORKPLACE_TYPES.map((w) => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Location</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Lahore, Pakistan"
-                        value={editingJob?.location || ''}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, location: e.target.value }))}
-                      />
-                    </div>
-                  </div>
+            <FormGrid columns="1fr 1fr" gap="14px">
+              <FormField label="Workplace Policy">
+                <AdminSelect
+                  value={editingJob?.workplace_type || 'On-site'}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, workplace_type: e.target.value }))}
+                >
+                  {WORKPLACE_TYPES.map((w) => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </AdminSelect>
+              </FormField>
+              <FormField label="Location">
+                <AdminInput
+                  placeholder="e.g. Lahore, Pakistan"
+                  value={editingJob?.location || ''}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, location: e.target.value }))}
+                />
+              </FormField>
+            </FormGrid>
 
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Experience Level</label>
-                      <select
-                        value={editingJob?.experience_level || 'Mid Level'}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, experience_level: e.target.value }))}
-                      >
-                        {EXPERIENCE_LEVELS.map((lvl) => (
-                          <option key={lvl} value={lvl}>{lvl}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Salary Range (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. PKR 100k - 150k or Negotiable"
-                        value={editingJob?.salary_range || ''}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, salary_range: e.target.value }))}
-                      />
-                    </div>
-                  </div>
+            <FormGrid columns="1fr 1fr" gap="14px">
+              <FormField label="Experience Level">
+                <AdminSelect
+                  value={editingJob?.experience_level || 'Mid Level'}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, experience_level: e.target.value }))}
+                >
+                  {EXPERIENCE_LEVELS.map((lvl) => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </AdminSelect>
+              </FormField>
+              <FormField label="Salary Range (Optional)">
+                <AdminInput
+                  placeholder="e.g. PKR 100k - 150k or Negotiable"
+                  value={editingJob?.salary_range || ''}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, salary_range: e.target.value }))}
+                />
+              </FormField>
+            </FormGrid>
 
-                  <div className="form-group">
-                    <label>Job Description / Overview</label>
-                    <textarea
-                      placeholder="Detailed overview of the role, team, and scope of work..."
-                      value={editingJob?.description || ''}
-                      onChange={(e) => setEditingJob((prev) => ({ ...prev, description: e.target.value }))}
+            <FormField label="Job Description / Overview">
+              <AdminTextarea
+                placeholder="Detailed overview of the role, team, and scope of work..."
+                value={editingJob?.description || ''}
+                onChange={(e) => setEditingJob((prev) => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+            </FormField>
+
+            {/* Key Responsibilities */}
+            <FormField label="Key Responsibilities">
+              <div className="list-editor">
+                {(editingJob?.responsibilities || []).map((resp, idx) => (
+                  <div className="item-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <AdminInput
+                      placeholder="Add a responsibility..."
+                      value={resp}
+                      onChange={(e) => {
+                        const updated = [...editingJob.responsibilities];
+                        updated[idx] = e.target.value;
+                        setEditingJob((prev) => ({ ...prev, responsibilities: updated }));
+                      }}
                     />
+                    <AdminButton
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        const updated = editingJob.responsibilities.filter((_, i) => i !== idx);
+                        setEditingJob((prev) => ({ ...prev, responsibilities: updated }));
+                      }}
+                    >
+                      <FaTimes />
+                    </AdminButton>
                   </div>
+                ))}
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingJob((prev) => ({
+                      ...prev,
+                      responsibilities: [...(prev.responsibilities || []), '']
+                    }));
+                  }}
+                  style={{ marginTop: '4px' }}
+                >
+                  + Add Responsibility
+                </AdminButton>
+              </div>
+            </FormField>
 
-                  {/* Key Responsibilities */}
-                  <div className="form-group">
-                    <label>Key Responsibilities</label>
-                    <div className="list-editor">
-                      {(editingJob?.responsibilities || []).map((resp, idx) => (
-                        <div className="item-row" key={idx}>
-                          <input
-                            type="text"
-                            placeholder="Add a responsibility..."
-                            value={resp}
-                            onChange={(e) => {
-                              const updated = [...editingJob.responsibilities];
-                              updated[idx] = e.target.value;
-                              setEditingJob((prev) => ({ ...prev, responsibilities: updated }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = editingJob.responsibilities.filter((_, i) => i !== idx);
-                              setEditingJob((prev) => ({ ...prev, responsibilities: updated }));
-                            }}
-                          >
-                            <FaTimes />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        className="add-btn"
-                        onClick={() => {
-                          setEditingJob((prev) => ({
-                            ...prev,
-                            responsibilities: [...(prev.responsibilities || []), '']
-                          }));
-                        }}
-                      >
-                        + Add Responsibility
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Requirements */}
-                  <div className="form-group">
-                    <label>Requirements & Qualifications</label>
-                    <div className="list-editor">
-                      {(editingJob?.requirements || []).map((reqItem, idx) => (
-                        <div className="item-row" key={idx}>
-                          <input
-                            type="text"
-                            placeholder="Add a requirement..."
-                            value={reqItem}
-                            onChange={(e) => {
-                              const updated = [...editingJob.requirements];
-                              updated[idx] = e.target.value;
-                              setEditingJob((prev) => ({ ...prev, requirements: updated }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = editingJob.requirements.filter((_, i) => i !== idx);
-                              setEditingJob((prev) => ({ ...prev, requirements: updated }));
-                            }}
-                          >
-                            <FaTimes />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        className="add-btn"
-                        onClick={() => {
-                          setEditingJob((prev) => ({
-                            ...prev,
-                            requirements: [...(prev.requirements || []), '']
-                          }));
-                        }}
-                      >
-                        + Add Requirement
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Benefits */}
-                  <div className="form-group">
-                    <label>Perks & Benefits</label>
-                    <div className="list-editor">
-                      {(editingJob?.benefits || []).map((bItem, idx) => (
-                        <div className="item-row" key={idx}>
-                          <input
-                            type="text"
-                            placeholder="Add a perk or benefit..."
-                            value={bItem}
-                            onChange={(e) => {
-                              const updated = [...editingJob.benefits];
-                              updated[idx] = e.target.value;
-                              setEditingJob((prev) => ({ ...prev, benefits: updated }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = editingJob.benefits.filter((_, i) => i !== idx);
-                              setEditingJob((prev) => ({ ...prev, benefits: updated }));
-                            }}
-                          >
-                            <FaTimes />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        className="add-btn"
-                        onClick={() => {
-                          setEditingJob((prev) => ({
-                            ...prev,
-                            benefits: [...(prev.benefits || []), '']
-                          }));
-                        }}
-                      >
-                        + Add Benefit
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Posting Status</label>
-                      <select
-                        value={editingJob?.status || 'draft'}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, status: e.target.value }))}
-                      >
-                        <option value="draft">Draft (Hidden)</option>
-                        <option value="published">Published (Live on Website)</option>
-                        <option value="closed">Closed (Applications Ended)</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Application Deadline (Optional)</label>
-                      <input
-                        type="date"
-                        value={editingJob?.deadline || ''}
-                        onChange={(e) => setEditingJob((prev) => ({ ...prev, deadline: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                    <input
-                      type="checkbox"
-                      id="is_featured"
-                      checked={Boolean(editingJob?.is_featured)}
-                      onChange={(e) => setEditingJob((prev) => ({ ...prev, is_featured: e.target.checked }))}
+            {/* Requirements */}
+            <FormField label="Requirements & Qualifications">
+              <div className="list-editor">
+                {(editingJob?.requirements || []).map((reqItem, idx) => (
+                  <div className="item-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <AdminInput
+                      placeholder="Add a requirement..."
+                      value={reqItem}
+                      onChange={(e) => {
+                        const updated = [...editingJob.requirements];
+                        updated[idx] = e.target.value;
+                        setEditingJob((prev) => ({ ...prev, requirements: updated }));
+                      }}
                     />
-                    <label htmlFor="is_featured" style={{ fontSize: '0.9rem', cursor: 'pointer' }}>
-                      Feature this job at the top of the careers page
-                    </label>
+                    <AdminButton
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        const updated = editingJob.requirements.filter((_, i) => i !== idx);
+                        setEditingJob((prev) => ({ ...prev, requirements: updated }));
+                      }}
+                    >
+                      <FaTimes />
+                    </AdminButton>
                   </div>
-                </ModalBody>
-                <ModalFooter>
-                  <SecondaryButton onClick={() => setJobModalOpen(false)}>Cancel</SecondaryButton>
-                  <PrimaryButton disabled={savingJob} onClick={handleSaveJob}>
-                    <FaSave /> {savingJob ? 'Saving...' : 'Save Job Posting'}
-                  </PrimaryButton>
-                </ModalFooter>
-              </ModalCard>
-            </ModalOverlay>
-          )}
-        </AnimatePresence>
+                ))}
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingJob((prev) => ({
+                      ...prev,
+                      requirements: [...(prev.requirements || []), '']
+                    }));
+                  }}
+                  style={{ marginTop: '4px' }}
+                >
+                  + Add Requirement
+                </AdminButton>
+              </div>
+            </FormField>
+
+            {/* Benefits */}
+            <FormField label="Perks & Benefits">
+              <div className="list-editor">
+                {(editingJob?.benefits || []).map((bItem, idx) => (
+                  <div className="item-row" key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <AdminInput
+                      placeholder="Add a perk or benefit..."
+                      value={bItem}
+                      onChange={(e) => {
+                        const updated = [...editingJob.benefits];
+                        updated[idx] = e.target.value;
+                        setEditingJob((prev) => ({ ...prev, benefits: updated }));
+                      }}
+                    />
+                    <AdminButton
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        const updated = editingJob.benefits.filter((_, i) => i !== idx);
+                        setEditingJob((prev) => ({ ...prev, benefits: updated }));
+                      }}
+                    >
+                      <FaTimes />
+                    </AdminButton>
+                  </div>
+                ))}
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingJob((prev) => ({
+                      ...prev,
+                      benefits: [...(prev.benefits || []), '']
+                    }));
+                  }}
+                  style={{ marginTop: '4px' }}
+                >
+                  + Add Benefit
+                </AdminButton>
+              </div>
+            </FormField>
+
+            <FormGrid columns="1fr 1fr" gap="14px">
+              <FormField label="Posting Status">
+                <AdminSelect
+                  value={editingJob?.status || 'draft'}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, status: e.target.value }))}
+                >
+                  <option value="draft">Draft (Hidden)</option>
+                  <option value="published">Published (Live on Website)</option>
+                  <option value="closed">Closed (Applications Ended)</option>
+                </AdminSelect>
+              </FormField>
+              <FormField label="Application Deadline (Optional)">
+                <AdminInput
+                  type="date"
+                  value={editingJob?.deadline || ''}
+                  onChange={(e) => setEditingJob((prev) => ({ ...prev, deadline: e.target.value }))}
+                />
+              </FormField>
+            </FormGrid>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+              <input
+                type="checkbox"
+                id="is_featured"
+                checked={Boolean(editingJob?.is_featured)}
+                onChange={(e) => setEditingJob((prev) => ({ ...prev, is_featured: e.target.checked }))}
+              />
+              <label htmlFor="is_featured" style={{ fontSize: '0.9rem', cursor: 'pointer', color: '#cbd5e1' }}>
+                Feature this job at the top of the careers page
+              </label>
+            </div>
+          </form>
+        </AdminModal>
 
         {/* Modal: Application Review Detail */}
-        <AnimatePresence>
-          {appDetailModalOpen && selectedApp && (
-            <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ModalCard initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
-                <ModalHeader>
+        <AdminModal
+          isOpen={Boolean(appDetailModalOpen && selectedApp)}
+          onClose={() => setAppDetailModalOpen(false)}
+          title={`Application: ${selectedApp?.full_name || ''}`}
+          subtitle={selectedApp ? `Position: ${selectedApp.job?.title} • Applied on ${new Date(selectedApp.created_at).toLocaleString()}` : ''}
+          maxWidth="680px"
+          footer={
+            <>
+              <AdminButton variant="secondary" onClick={() => setAppDetailModalOpen(false)}>
+                Close
+              </AdminButton>
+              <AdminButton variant="primary" disabled={savingAppNotes} onClick={handleSaveAppNotes}>
+                <FaSave /> {savingAppNotes ? 'Saving...' : 'Save Notes'}
+              </AdminButton>
+            </>
+          }
+        >
+          {selectedApp && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Email</div>
+                  <div style={{ fontWeight: 600 }}><a href={`mailto:${selectedApp.email}`} style={{ color: '#fff' }}>{selectedApp.email}</a></div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Phone</div>
+                  <div style={{ fontWeight: 600 }}>{selectedApp.phone}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>CNIC</div>
+                  <div style={{ fontWeight: 600 }}>{selectedApp.cnic || 'N/A'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Resume</div>
                   <div>
-                    <h2>Application: {selectedApp.full_name}</h2>
-                    <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
-                      Position: {selectedApp.job?.title} &bull; Applied on {new Date(selectedApp.created_at).toLocaleString()}
-                    </span>
+                    <a
+                      href={selectedApp.resume_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <FaFilePdf /> Download Resume
+                    </a>
                   </div>
-                  <button onClick={() => setAppDetailModalOpen(false)}><FaTimes /></button>
-                </ModalHeader>
-                <ModalBody>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: '8px' }}>
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Email</div>
-                      <div style={{ fontWeight: 600 }}><a href={`mailto:${selectedApp.email}`} style={{ color: '#fff' }}>{selectedApp.email}</a></div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Phone</div>
-                      <div style={{ fontWeight: 600 }}>{selectedApp.phone}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>CNIC</div>
-                      <div style={{ fontWeight: 600 }}>{selectedApp.cnic || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#9ca3af', textTransform: 'uppercase' }}>Resume</div>
-                      <div>
-                        <a
-                          href={selectedApp.resume_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <FaFilePdf /> Download Resume
-                        </a>
-                      </div>
-                    </div>
+                </div>
+              </div>
+
+              {selectedApp.linkedin_url && (
+                <div style={{ fontSize: '0.9rem' }}>
+                  <strong>LinkedIn:</strong> <a href={selectedApp.linkedin_url} target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>{selectedApp.linkedin_url}</a>
+                </div>
+              )}
+
+              {selectedApp.portfolio_url && (
+                <div style={{ fontSize: '0.9rem' }}>
+                  <strong>Portfolio:</strong> <a href={selectedApp.portfolio_url} target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>{selectedApp.portfolio_url}</a>
+                </div>
+              )}
+
+              {selectedApp.cover_letter && (
+                <FormField label="Cover Letter / Candidate Note">
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '14px', borderRadius: '8px', fontSize: '0.92rem', lineHeight: '1.6', whiteSpace: 'pre-wrap', color: '#e5e7eb', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {selectedApp.cover_letter}
                   </div>
+                </FormField>
+              )}
 
-                  {selectedApp.linkedin_url && (
-                    <div style={{ fontSize: '0.9rem' }}>
-                      <strong>LinkedIn:</strong> <a href={selectedApp.linkedin_url} target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>{selectedApp.linkedin_url}</a>
-                    </div>
-                  )}
+              <FormField label="Candidate Status">
+                <AdminSelect
+                  value={selectedApp.status}
+                  onChange={(e) => handleUpdateAppStatus(selectedApp.id, e.target.value)}
+                >
+                  {APPLICATION_STATUSES.map((st) => (
+                    <option key={st} value={st}>{st.toUpperCase()}</option>
+                  ))}
+                </AdminSelect>
+              </FormField>
 
-                  {selectedApp.portfolio_url && (
-                    <div style={{ fontSize: '0.9rem' }}>
-                      <strong>Portfolio:</strong> <a href={selectedApp.portfolio_url} target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>{selectedApp.portfolio_url}</a>
-                    </div>
-                  )}
-
-                  {selectedApp.cover_letter && (
-                    <div className="form-group">
-                      <label>Cover Letter / Candidate Note</label>
-                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '14px', borderRadius: '8px', fontSize: '0.92rem', lineHeight: '1.6', whiteSpace: 'pre-wrap', color: '#e5e7eb' }}>
-                        {selectedApp.cover_letter}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Candidate Status</label>
-                      <select
-                        value={selectedApp.status}
-                        onChange={(e) => handleUpdateAppStatus(selectedApp.id, e.target.value)}
-                      >
-                        {APPLICATION_STATUSES.map((st) => (
-                          <option key={st} value={st}>{st.toUpperCase()}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Internal Admin Notes</label>
-                    <textarea
-                      placeholder="Add interview notes, evaluator feedback, rating..."
-                      value={selectedApp.admin_notes || ''}
-                      onChange={(e) => setSelectedApp((prev) => ({ ...prev, admin_notes: e.target.value }))}
-                    />
-                  </div>
-                </ModalBody>
-                <ModalFooter>
-                  <SecondaryButton onClick={() => setAppDetailModalOpen(false)}>Close</SecondaryButton>
-                  <PrimaryButton disabled={savingAppNotes} onClick={handleSaveAppNotes}>
-                    <FaSave /> {savingAppNotes ? 'Saving...' : 'Save Notes'}
-                  </PrimaryButton>
-                </ModalFooter>
-              </ModalCard>
-            </ModalOverlay>
+              <FormField label="Internal Admin Notes">
+                <AdminTextarea
+                  placeholder="Add interview notes, evaluator feedback, rating..."
+                  value={selectedApp.admin_notes || ''}
+                  onChange={(e) => setSelectedApp((prev) => ({ ...prev, admin_notes: e.target.value }))}
+                  rows={3}
+                />
+              </FormField>
+            </div>
           )}
-        </AnimatePresence>
+        </AdminModal>
       </Container>
     </AdminLayout>
   );

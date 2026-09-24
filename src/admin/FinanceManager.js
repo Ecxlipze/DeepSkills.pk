@@ -20,6 +20,18 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
 import { createFeeReceiptPdf, createTeacherPayslipPdf } from '../utils/financePdf';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import { validateRequired, validateNumber, validateForm } from '../utils/formValidation';
 
 const normalizeTab = (raw) => {
   if (!raw || raw === 'overview') return 'overview';
@@ -78,6 +90,8 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
   const [selectedTeacherForHistory, setSelectedTeacherForHistory] = useState(null);
   const [isSalaryHistoryModalOpen, setIsSalaryHistoryModalOpen] = useState(false);
+  const [paymentFormErrors, setPaymentFormErrors] = useState({});
+  const [salaryFormErrors, setSalaryFormErrors] = useState({});
   const [paymentData, setPaymentData] = useState({
     method: 'cash',
     reference: '',
@@ -247,6 +261,19 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       toast.error("You have view-only access to finance.");
       return;
     }
+
+    const errors = validateForm(formData, {
+      amount: (v) => validateNumber(v, { min: 1, label: 'Payment amount' }),
+      paidDate: (v) => validateRequired(v, 'Paid date'),
+      method: (v) => validateRequired(v, 'Payment method')
+    });
+
+    setPaymentFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
+      return;
+    }
+
     try {
       const paymentAmount = Number(formData.amount) || selectedInstallment.amount;
       const { error } = await supabase
@@ -265,6 +292,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
 
       toast.success("Payment recorded successfully!");
       setIsPaymentModalOpen(false);
+      setPaymentFormErrors({});
 
       // Immediately sync selectedStudent local state if modal is active
       if (selectedStudent) {
@@ -308,6 +336,20 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       return;
     }
     if (!selectedTeacherForPay) return;
+
+    const errors = validateForm(formData, {
+      amount: (v) => validateNumber(v, { min: 1, label: 'Disbursement amount' }),
+      month: (v) => validateRequired(v, 'Payroll month'),
+      paidDate: (v) => validateRequired(v, 'Disbursement date'),
+      method: (v) => validateRequired(v, 'Payment method')
+    });
+
+    setSalaryFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
+      return;
+    }
+
     try {
       const currentMonth = formData.month || new Date().toISOString().slice(0, 7);
       const payAmount = Number(formData.amount);
@@ -328,8 +370,6 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(payload)
       });
-
-
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.status === 'error') {
@@ -371,6 +411,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       }));
 
       setIsSalaryModalOpen(false);
+      setSalaryFormErrors({});
       setSelectedTeacherForPay(null);
       fetchFinanceData(); // Full refresh in background
     } catch (err) {
@@ -1534,293 +1575,257 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
       {/* Record Payment Modal */}
       <AnimatePresence>
         {isPaymentModalOpen && selectedInstallment && (
-          <ModalOverlay
-            style={{ zIndex: 2000 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <AdminModal
+            isOpen={isPaymentModalOpen}
+            onClose={() => { setIsPaymentModalOpen(false); setPaymentFormErrors({}); }}
+            maxWidth="480px"
           >
-            <ModalContent
-              style={{ maxWidth: '480px' }}
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-            >
-              <ModalHeader>
-                <div className="modal-title-col">
-                  <h2>Record Payment</h2>
-                  <p>
-                    {selectedStudent?.student?.name} • Inst #{selectedInstallment.installment_number || '1'}
-                  </p>
-                </div>
-                <CloseBtn onClick={() => setIsPaymentModalOpen(false)} title="Close Modal">
-                  <FaTimes />
-                </CloseBtn>
-              </ModalHeader>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                handleRecordPayment(Object.fromEntries(formData));
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Payment Amount (PKR)
-                    </label>
-                    <Input
-                      type="number"
-                      name="amount"
-                      defaultValue={selectedInstallment.amount}
-                      required
-                      min="1"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Paid Date
-                    </label>
-                    <Input
-                      type="date"
-                      name="paidDate"
-                      defaultValue={new Date().toISOString().split('T')[0]}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Payment Method
-                    </label>
-                    <Select name="method" defaultValue="cash" required>
-                      <option value="cash">Cash in Hand</option>
-                      <option value="bank_transfer">Bank Transfer / IBFT</option>
-                      <option value="online">Online / EasyPaisa / JazzCash</option>
-                      <option value="cheque">Cheque</option>
-                    </Select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Transaction / Reference # (Optional)
-                    </label>
-                    <Input
-                      type="text"
-                      name="reference"
-                      placeholder="e.g. TXN-98421 or Bank Slip ID"
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Notes / Remarks (Optional)
-                    </label>
-                    <Input
-                      type="text"
-                      name="notes"
-                      placeholder="e.g. Paid at reception desk"
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                    <Button
-                      type="button"
-                      onClick={() => setIsPaymentModalOpen(false)}
-                      style={{ flex: 1, justifyContent: 'center' }}
-                    >
-                      Cancel
-                    </Button>
-                    <SubmitBtn type="submit" style={{ flex: 2, margin: 0, justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <FaCheckCircle /> Confirm & Record
-                    </SubmitBtn>
-                  </div>
-                </div>
-              </form>
-            </ModalContent>
-          </ModalOverlay>
+            <AdminModalHeader
+              title="Record Payment"
+              subtitle={`${selectedStudent?.student?.name} • Inst #${selectedInstallment.installment_number || '1'}`}
+              icon={<FaMoneyBillWave />}
+              onClose={() => { setIsPaymentModalOpen(false); setPaymentFormErrors({}); }}
+            />
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              handleRecordPayment(Object.fromEntries(formData));
+            }}>
+              <AdminModalBody>
+                <FormField
+                  label="Payment Amount (PKR)"
+                  required
+                  error={paymentFormErrors.amount}
+                >
+                  <AdminInput
+                    type="number"
+                    name="amount"
+                    defaultValue={selectedInstallment.amount}
+                    min="1"
+                    hasError={!!paymentFormErrors.amount}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Paid Date"
+                  required
+                  error={paymentFormErrors.paidDate}
+                >
+                  <AdminInput
+                    type="date"
+                    name="paidDate"
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                    hasError={!!paymentFormErrors.paidDate}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Payment Method"
+                  required
+                  error={paymentFormErrors.method}
+                >
+                  <AdminSelect name="method" defaultValue="cash" hasError={!!paymentFormErrors.method}>
+                    <option value="cash">Cash in Hand</option>
+                    <option value="bank_transfer">Bank Transfer / IBFT</option>
+                    <option value="online">Online / EasyPaisa / JazzCash</option>
+                    <option value="cheque">Cheque</option>
+                  </AdminSelect>
+                </FormField>
+
+                <FormField label="Transaction / Reference # (Optional)">
+                  <AdminInput
+                    type="text"
+                    name="reference"
+                    placeholder="e.g. TXN-98421 or Bank Slip ID"
+                  />
+                </FormField>
+
+                <FormField label="Notes / Remarks (Optional)">
+                  <AdminInput
+                    type="text"
+                    name="notes"
+                    placeholder="e.g. Paid at reception desk"
+                  />
+                </FormField>
+              </AdminModalBody>
+
+              <AdminModalFooter>
+                <AdminButton
+                  type="button"
+                  $variant="secondary"
+                  onClick={() => { setIsPaymentModalOpen(false); setPaymentFormErrors({}); }}
+                >
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  type="submit"
+                  $variant="primary"
+                >
+                  <FaCheckCircle /> Confirm & Record
+                </AdminButton>
+              </AdminModalFooter>
+            </form>
+          </AdminModal>
         )}
       </AnimatePresence>
 
       {/* Pay Teacher Salary Modal */}
       <AnimatePresence>
         {isSalaryModalOpen && selectedTeacherForPay && (
-          <ModalOverlay
-            style={{ zIndex: 2000 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <AdminModal
+            isOpen={isSalaryModalOpen}
+            onClose={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); setSalaryFormErrors({}); }}
+            maxWidth="540px"
           >
-            <ModalContent
-              style={{ maxWidth: '520px' }}
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-            >
-              <ModalHeader>
-                <div className="modal-title-col">
-                  <h2>Disburse Salary: {selectedTeacherForPay.name}</h2>
-                  <p>
-                    <span>{selectedTeacherForPay.specialization || 'Faculty Instructor'}</span>
-                    {selectedTeacherForPay.cnic && (
-                      <>
-                        <span>•</span>
-                        <span>CNIC: {selectedTeacherForPay.cnic}</span>
-                      </>
-                    )}
-                  </p>
-                </div>
-                <CloseBtn onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }} title="Close Modal">
-                  <FaTimes />
-                </CloseBtn>
-              </ModalHeader>
+            <AdminModalHeader
+              title={`Disburse Salary: ${selectedTeacherForPay.name}`}
+              subtitle={`${selectedTeacherForPay.specialization || 'Faculty Instructor'} ${selectedTeacherForPay.cnic ? `• CNIC: ${selectedTeacherForPay.cnic}` : ''}`}
+              icon={<FaCoins />}
+              onClose={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); setSalaryFormErrors({}); }}
+            />
 
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                handlePaySalary(Object.fromEntries(formData));
-              }}>
-                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Faculty Base Salary Info Card */}
-                  <div style={{
-                    background: 'rgba(139, 92, 246, 0.08)',
-                    border: '1px solid rgba(139, 92, 246, 0.25)',
-                    borderRadius: '12px',
-                    padding: '14px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        background: 'linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                        fontWeight: 700,
-                        fontSize: '0.9rem'
-                      }}>
-                        {getInitials(selectedTeacherForPay.name)}
-                      </div>
-                      <div>
-                        <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.92rem' }}>
-                          {selectedTeacherForPay.name}
-                        </div>
-                        <div style={{ color: '#a78bfa', fontSize: '0.78rem' }}>
-                          {selectedTeacherForPay.email || selectedTeacherForPay.specialization || 'Instructional Staff'}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: '#94a3b8', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 600 }}>
-                        Base Monthly
-                      </div>
-                      <div style={{ color: (selectedTeacherForPay.monthlySalary || 0) > 0 ? '#fff' : '#f59e0b', fontWeight: 800, fontSize: '1.05rem' }}>
-                        {(selectedTeacherForPay.monthlySalary || 0) > 0 ? `Rs. ${Number(selectedTeacherForPay.monthlySalary).toLocaleString()}` : 'Custom / Unconfigured'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Disbursement Amount (PKR)
-                    </label>
-                    <Input
-                      type="number"
-                      name="amount"
-                      defaultValue={(selectedTeacherForPay.monthlySalary || 0) > 0 ? selectedTeacherForPay.monthlySalary : ''}
-                      placeholder="Enter salary amount in PKR (e.g. 50000)"
-                      required
-                      min="1"
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                        Payroll Month
-                      </label>
-                      <Input
-                        type="month"
-                        name="month"
-                        defaultValue={new Date().toISOString().slice(0, 7)}
-                        required
-                      />
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              handlePaySalary(Object.fromEntries(formData));
+            }}>
+              <AdminModalBody>
+                {/* Faculty Base Salary Info Card */}
+                <div style={{
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  border: '1px solid rgba(139, 92, 246, 0.25)',
+                  borderRadius: '12px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '4px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: '0.9rem'
+                    }}>
+                      {getInitials(selectedTeacherForPay.name)}
                     </div>
                     <div>
-                      <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                        Disbursement Date
-                      </label>
-                      <Input
-                        type="date"
-                        name="paidDate"
-                        defaultValue={new Date().toISOString().split('T')[0]}
-                        required
-                      />
+                      <div style={{ color: '#fff', fontWeight: 700, fontSize: '0.92rem' }}>
+                        {selectedTeacherForPay.name}
+                      </div>
+                      <div style={{ color: '#a78bfa', fontSize: '0.78rem' }}>
+                        {selectedTeacherForPay.email || selectedTeacherForPay.specialization || 'Instructional Staff'}
+                      </div>
                     </div>
                   </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Payment Method
-                    </label>
-                    <Select name="method" defaultValue="bank_transfer" style={{ width: '100%' }} required>
-                      <option value="bank_transfer">Bank Transfer / IBFT</option>
-                      <option value="cash">Cash Voucher</option>
-                      <option value="online">Online / EasyPaisa / JazzCash</option>
-                      <option value="cheque">Cheque</option>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Bank Slip / Transaction Reference # (Optional)
-                    </label>
-                    <Input
-                      type="text"
-                      name="reference"
-                      placeholder="e.g. IBFT-982138 or Cheque #49281"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', color: '#94a3b8', fontSize: '0.82rem', fontWeight: 600 }}>
-                      Payroll Remarks / Notes (Optional)
-                    </label>
-                    <Input
-                      type="text"
-                      name="notes"
-                      placeholder="e.g. Cleared via HBL corporate payroll account"
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                    <Button
-                      type="button"
-                      onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); }}
-                      style={{ flex: 1, justifyContent: 'center' }}
-                    >
-                      Cancel
-                    </Button>
-                    <SubmitBtn
-                      type="submit"
-                      style={{
-                        flex: 2,
-                        margin: 0,
-                        justifyContent: 'center',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: 'linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%)',
-                        borderColor: 'rgba(139, 92, 246, 0.4)'
-                      }}
-                    >
-                      <FaCheckCircle /> Confirm & Disburse Salary
-                    </SubmitBtn>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: '#94a3b8', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Base Monthly
+                    </div>
+                    <div style={{ color: (selectedTeacherForPay.monthlySalary || 0) > 0 ? '#fff' : '#f59e0b', fontWeight: 800, fontSize: '1.05rem' }}>
+                      {(selectedTeacherForPay.monthlySalary || 0) > 0 ? `Rs. ${Number(selectedTeacherForPay.monthlySalary).toLocaleString()}` : 'Custom / Unconfigured'}
+                    </div>
                   </div>
                 </div>
-              </form>
-            </ModalContent>
-          </ModalOverlay>
+
+                <FormField
+                  label="Disbursement Amount (PKR)"
+                  required
+                  error={salaryFormErrors.amount}
+                >
+                  <AdminInput
+                    type="number"
+                    name="amount"
+                    defaultValue={(selectedTeacherForPay.monthlySalary || 0) > 0 ? selectedTeacherForPay.monthlySalary : ''}
+                    placeholder="Enter salary amount in PKR (e.g. 50000)"
+                    min="1"
+                    hasError={!!salaryFormErrors.amount}
+                  />
+                </FormField>
+
+                <FormGrid columns={2}>
+                  <FormField
+                    label="Payroll Month"
+                    required
+                    error={salaryFormErrors.month}
+                  >
+                    <AdminInput
+                      type="month"
+                      name="month"
+                      defaultValue={new Date().toISOString().slice(0, 7)}
+                      hasError={!!salaryFormErrors.month}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label="Disbursement Date"
+                    required
+                    error={salaryFormErrors.paidDate}
+                  >
+                    <AdminInput
+                      type="date"
+                      name="paidDate"
+                      defaultValue={new Date().toISOString().split('T')[0]}
+                      hasError={!!salaryFormErrors.paidDate}
+                    />
+                  </FormField>
+                </FormGrid>
+
+                <FormField
+                  label="Payment Method"
+                  required
+                  error={salaryFormErrors.method}
+                >
+                  <AdminSelect name="method" defaultValue="bank_transfer" hasError={!!salaryFormErrors.method}>
+                    <option value="bank_transfer">Bank Transfer / IBFT</option>
+                    <option value="cash">Cash Voucher</option>
+                    <option value="online">Online / EasyPaisa / JazzCash</option>
+                    <option value="cheque">Cheque</option>
+                  </AdminSelect>
+                </FormField>
+
+                <FormField label="Bank Slip / Transaction Reference # (Optional)">
+                  <AdminInput
+                    type="text"
+                    name="reference"
+                    placeholder="e.g. IBFT-982138 or Cheque #49281"
+                  />
+                </FormField>
+
+                <FormField label="Payroll Remarks / Notes (Optional)">
+                  <AdminInput
+                    type="text"
+                    name="notes"
+                    placeholder="e.g. Cleared via HBL corporate payroll account"
+                  />
+                </FormField>
+              </AdminModalBody>
+
+              <AdminModalFooter>
+                <AdminButton
+                  type="button"
+                  $variant="secondary"
+                  onClick={() => { setIsSalaryModalOpen(false); setSelectedTeacherForPay(null); setSalaryFormErrors({}); }}
+                >
+                  Cancel
+                </AdminButton>
+                <AdminButton
+                  type="submit"
+                  $variant="primary"
+                >
+                  <FaCheckCircle /> Confirm & Disburse Salary
+                </AdminButton>
+              </AdminModalFooter>
+            </form>
+          </AdminModal>
         )}
       </AnimatePresence>
 

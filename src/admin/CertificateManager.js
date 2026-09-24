@@ -7,6 +7,15 @@ import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import {
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  FormGrid,
+  FormSection
+} from '../components/portal';
+import { validateRequired, validateCnic, validateForm, formatCnic } from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -22,81 +31,6 @@ const Header = styled.div`
   margin-bottom: 30px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding-bottom: 20px;
-`;
-
-const Form = styled.form`
-  background: #111;
-  padding: 30px;
-  border-radius: 15px;
-  margin-bottom: 40px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  border: 1px solid rgba(123, 31, 46, 0.2);
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const InputGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const Label = styled.label`
-  font-size: 0.9rem;
-  color: #888;
-  font-weight: 500;
-`;
-
-const Input = styled.input`
-  padding: 12px 15px;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  color: #fff;
-  outline: none;
-  transition: border-color 0.3s;
-
-  &:focus {
-    border-color: #7B1F2E;
-  }
-`;
-
-const Select = styled.select`
-  padding: 12px 15px;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  color: #fff;
-  outline: none;
-
-  &:focus {
-    border-color: #7B1F2E;
-  }
-`;
-
-const SubmitBtn = styled.button`
-  padding: 14px;
-  background: #7B1F2E;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  grid-column: span 2;
-  transition: all 0.3s;
-
-  &:hover {
-    background: #9b283b;
-    transform: translateY(-2px);
-  }
-
-  @media (max-width: 768px) {
-    grid-column: span 1;
-  }
 `;
 
 const TableContainer = styled.div`
@@ -155,6 +89,7 @@ const CertificateManager = () => {
   const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
   const [availableCourses, setAvailableCourses] = useState([]);
   const [availableBatches, setAvailableBatches] = useState([]);
   const [formData, setFormData] = useState({
@@ -201,29 +136,27 @@ const CertificateManager = () => {
     }
   };
 
-  const formatCnic = (value) => {
-    const cleaned = value.replace(/\D/g, '');
-    let formatted = '';
-    
-    if (cleaned.length > 0) {
-      formatted = cleaned.substring(0, 5);
-    }
-    if (cleaned.length > 5) {
-      formatted += '-' + cleaned.substring(5, 12);
-    }
-    if (cleaned.length > 12) {
-      formatted += '-' + cleaned.substring(12, 13);
-    }
-    
-    return formatted;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canMutate) {
       toast.error('You have view-only access. Modifying certificates is not permitted.');
       return;
     }
+
+    const errors = validateForm(formData, {
+      certificate_no: (v) => validateRequired(v, 'Certificate number'),
+      student_name: (v) => validateRequired(v, 'Student name'),
+      student_cnic: (v) => validateCnic(v, true),
+      course_name: (v) => validateRequired(v, 'Course name'),
+      issue_date: (v) => validateRequired(v, 'Issue date')
+    });
+
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -242,6 +175,7 @@ const CertificateManager = () => {
         toast.success('Certificate issued');
       }
 
+      setFormErrors({});
       setFormData({
         certificate_no: '',
         student_name: '',
@@ -269,6 +203,7 @@ const CertificateManager = () => {
       toast.error('You have view-only access. Editing certificates is not permitted.');
       return;
     }
+    setFormErrors({});
     setEditingId(cert.id);
     setFormData({
       certificate_no: cert.certificate_no,
@@ -316,121 +251,191 @@ const CertificateManager = () => {
       </Header>
 
       {canMutate && (
-      <Form onSubmit={handleSubmit}>
-        <InputGroup>
-          <Label>Certificate Number</Label>
-          <Input 
-            placeholder="e.g. DS-2024-001" 
-            value={formData.certificate_no}
-            onChange={(e) => setFormData({...formData, certificate_no: e.target.value})}
-            required 
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Student Name</Label>
-          <Input 
-            placeholder="Full Name" 
-            value={formData.student_name}
-            onChange={(e) => setFormData({...formData, student_name: e.target.value})}
-            required 
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Student CNIC</Label>
-          <Input 
-            placeholder="e.g. 35202-1234567-9" 
-            value={formData.student_cnic}
-            onChange={(e) => setFormData({...formData, student_cnic: formatCnic(e.target.value)})}
-            required 
-            maxLength={15}
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Course Name</Label>
-          <Select 
-            value={formData.course_name}
-            onChange={(e) => setFormData({...formData, course_name: e.target.value})}
-            required 
+      <form onSubmit={handleSubmit} style={{
+        background: '#111318',
+        padding: '24px 28px',
+        borderRadius: '16px',
+        marginBottom: '40px',
+        border: '1px solid rgba(255, 255, 255, 0.08)'
+      }}>
+        <FormGrid columns={2}>
+          <FormField
+            label="Certificate Number"
+            required
+            error={formErrors.certificate_no}
+            helperText="e.g. DS-2024-001"
           >
-            <option value="">Select Course</option>
-            {availableCourses.map(c => (
-              <option key={c.id} value={c.title}>{c.title}</option>
-            ))}
-            <option value="Internship">Internship</option>
-            <option value="General">General / Other</option>
-          </Select>
-        </InputGroup>
-        <InputGroup>
-          <Label>Batch Name</Label>
-          <Select 
-            value={formData.batch_name}
-            onChange={(e) => setFormData({...formData, batch_name: e.target.value})}
-          >
-            <option value="">Select Batch (Optional)</option>
-            {availableBatches.map(b => (
-              <option key={b.id} value={b.name}>{b.name}</option>
-            ))}
-          </Select>
-        </InputGroup>
-        <InputGroup>
-          <Label>Certificate Type</Label>
-          <Select 
-            value={formData.certificate_type}
-            onChange={(e) => setFormData({...formData, certificate_type: e.target.value})}
-          >
-            <option value="Completion">Completion</option>
-            <option value="Excellence">Excellence</option>
-            <option value="Participation">Participation</option>
-            <option value="Internship">Internship</option>
-          </Select>
-        </InputGroup>
-        <InputGroup>
-          <Label>Issue Date</Label>
-          <Input 
-            type="date" 
-            value={formData.issue_date}
-            onChange={(e) => setFormData({...formData, issue_date: e.target.value})}
-            required 
-          />
-        </InputGroup>
+            <AdminInput 
+              placeholder="e.g. DS-2024-001" 
+              value={formData.certificate_no}
+              onChange={(e) => {
+                setFormData({...formData, certificate_no: e.target.value});
+                if (formErrors.certificate_no) setFormErrors(p => ({ ...p, certificate_no: null }));
+              }}
+              hasError={!!formErrors.certificate_no}
+            />
+          </FormField>
 
-        <div style={{ gridColumn: 'span 2', marginTop: '20px', borderTop: '1px solid #333', paddingTop: '20px' }}>
-          <h3 style={{ marginBottom: '15px', color: '#7B1F2E' }}>Signatories (Optional)</h3>
+          <FormField
+            label="Student Name"
+            required
+            error={formErrors.student_name}
+          >
+            <AdminInput 
+              placeholder="Full Name" 
+              value={formData.student_name}
+              onChange={(e) => {
+                setFormData({...formData, student_name: e.target.value});
+                if (formErrors.student_name) setFormErrors(p => ({ ...p, student_name: null }));
+              }}
+              hasError={!!formErrors.student_name}
+            />
+          </FormField>
+
+          <FormField
+            label="Student CNIC"
+            required
+            error={formErrors.student_cnic}
+            helperText="13 digits: XXXXX-XXXXXXX-X"
+          >
+            <AdminInput 
+              placeholder="e.g. 35202-1234567-9" 
+              value={formData.student_cnic}
+              onChange={(e) => {
+                setFormData({...formData, student_cnic: formatCnic(e.target.value)});
+                if (formErrors.student_cnic) setFormErrors(p => ({ ...p, student_cnic: null }));
+              }}
+              maxLength={15}
+              hasError={!!formErrors.student_cnic}
+            />
+          </FormField>
+
+          <FormField
+            label="Course Name"
+            required
+            error={formErrors.course_name}
+          >
+            <AdminSelect 
+              value={formData.course_name}
+              onChange={(e) => {
+                setFormData({...formData, course_name: e.target.value});
+                if (formErrors.course_name) setFormErrors(p => ({ ...p, course_name: null }));
+              }}
+              hasError={!!formErrors.course_name}
+            >
+              <option value="">Select Course</option>
+              {availableCourses.map(c => (
+                <option key={c.id} value={c.title}>{c.title}</option>
+              ))}
+              <option value="Internship">Internship</option>
+              <option value="General">General / Other</option>
+            </AdminSelect>
+          </FormField>
+
+          <FormField label="Batch Name (Optional)">
+            <AdminSelect 
+              value={formData.batch_name}
+              onChange={(e) => setFormData({...formData, batch_name: e.target.value})}
+            >
+              <option value="">Select Batch (Optional)</option>
+              {availableBatches.map(b => (
+                <option key={b.id} value={b.name}>{b.name}</option>
+              ))}
+            </AdminSelect>
+          </FormField>
+
+          <FormField label="Certificate Type" required>
+            <AdminSelect 
+              value={formData.certificate_type}
+              onChange={(e) => setFormData({...formData, certificate_type: e.target.value})}
+            >
+              <option value="Completion">Completion</option>
+              <option value="Excellence">Excellence</option>
+              <option value="Participation">Participation</option>
+              <option value="Internship">Internship</option>
+            </AdminSelect>
+          </FormField>
+
+          <FormField
+            label="Issue Date"
+            required
+            error={formErrors.issue_date}
+          >
+            <AdminInput 
+              type="date" 
+              value={formData.issue_date}
+              onChange={(e) => {
+                setFormData({...formData, issue_date: e.target.value});
+                if (formErrors.issue_date) setFormErrors(p => ({ ...p, issue_date: null }));
+              }}
+              hasError={!!formErrors.issue_date}
+            />
+          </FormField>
+        </FormGrid>
+
+        <div style={{ marginTop: '24px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '20px' }}>
+          <h3 style={{ marginBottom: '16px', color: '#ff8a99', fontSize: '1rem', fontWeight: 700 }}>
+            Signatories (Optional)
+          </h3>
+          <FormGrid columns={2}>
+            <FormField label="Signatory 1 Name">
+              <AdminInput 
+                value={formData.signatory_1_name}
+                onChange={(e) => setFormData({...formData, signatory_1_name: e.target.value})}
+              />
+            </FormField>
+            <FormField label="Signatory 1 Role">
+              <AdminInput 
+                value={formData.signatory_1_role}
+                onChange={(e) => setFormData({...formData, signatory_1_role: e.target.value})}
+              />
+            </FormField>
+            <FormField label="Signatory 2 Name">
+              <AdminInput 
+                value={formData.signatory_2_name}
+                onChange={(e) => setFormData({...formData, signatory_2_name: e.target.value})}
+              />
+            </FormField>
+            <FormField label="Signatory 2 Role">
+              <AdminInput 
+                value={formData.signatory_2_role}
+                onChange={(e) => setFormData({...formData, signatory_2_role: e.target.value})}
+              />
+            </FormField>
+          </FormGrid>
         </div>
 
-        <InputGroup>
-          <Label>Signatory 1 Name</Label>
-          <Input 
-            value={formData.signatory_1_name}
-            onChange={(e) => setFormData({...formData, signatory_1_name: e.target.value})}
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Signatory 1 Role</Label>
-          <Input 
-            value={formData.signatory_1_role}
-            onChange={(e) => setFormData({...formData, signatory_1_role: e.target.value})}
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Signatory 2 Name</Label>
-          <Input 
-            value={formData.signatory_2_name}
-            onChange={(e) => setFormData({...formData, signatory_2_name: e.target.value})}
-          />
-        </InputGroup>
-        <InputGroup>
-          <Label>Signatory 2 Role</Label>
-          <Input 
-            value={formData.signatory_2_role}
-            onChange={(e) => setFormData({...formData, signatory_2_role: e.target.value})}
-          />
-        </InputGroup>
-
-        <SubmitBtn type="submit" disabled={loading}>
-          {editingId ? 'Update Certificate' : 'Issue Certificate'}
-        </SubmitBtn>
-      </Form>
+        <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+          <AdminButton type="submit" $variant="primary" disabled={loading}>
+            {editingId ? 'Update Certificate' : 'Issue Certificate'}
+          </AdminButton>
+          {editingId && (
+            <AdminButton
+              type="button"
+              $variant="secondary"
+              onClick={() => {
+                setEditingId(null);
+                setFormErrors({});
+                setFormData({
+                  certificate_no: '',
+                  student_name: '',
+                  student_cnic: '',
+                  course_name: '',
+                  batch_name: '',
+                  certificate_type: 'Completion',
+                  issue_date: new Date().toISOString().split('T')[0],
+                  signatory_1_name: 'Samira Hadid',
+                  signatory_1_role: 'Supervisor',
+                  signatory_2_name: 'Aaron Loeb',
+                  signatory_2_role: 'Co Founder'
+                });
+              }}
+            >
+              Cancel Edit
+            </AdminButton>
+          )}
+        </div>
+      </form>
       )}
 
       <TableContainer>

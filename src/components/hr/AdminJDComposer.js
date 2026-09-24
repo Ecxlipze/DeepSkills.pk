@@ -41,6 +41,8 @@ const Field = styled.label`
 `;
 
 const Input = styled.input`
+  box-sizing: border-box;
+  width: 100%;
   background: #0a0a0a;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.1);
@@ -49,6 +51,8 @@ const Input = styled.input`
 `;
 
 const Select = styled.select`
+  box-sizing: border-box;
+  width: 100%;
   background: #0a0a0a;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.1);
@@ -57,6 +61,8 @@ const Select = styled.select`
 `;
 
 const Textarea = styled.textarea`
+  box-sizing: border-box;
+  width: 100%;
   background: #0a0a0a;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.1);

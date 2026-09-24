@@ -19,6 +19,19 @@ import AnnouncementCard from '../components/AnnouncementCard';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { downloadCsv } from '../utils/csvExport';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import { validateRequired, validateForm } from '../utils/formValidation';
 
 // ──────────────────────────────────────────
 // Styled Components (DeepSkills Glassmorphic)
@@ -805,6 +818,7 @@ const AdminAnnouncements = () => {
     scheduledAt: '',
     attachments: []
   });
+  const [formErrors, setFormErrors] = useState({});
 
   // Reader Inspection Modal State
   const [selectedForReads, setSelectedForReads] = useState(null);
@@ -975,6 +989,7 @@ const AdminAnnouncements = () => {
       scheduledAt: '',
       attachments: []
     });
+    setFormErrors({});
     setEditingId(null);
   };
 
@@ -992,6 +1007,7 @@ const AdminAnnouncements = () => {
       toast.error('You do not have permission to edit announcements.');
       return;
     }
+    setFormErrors({});
     setForm({
       title: a.title,
       body: a.body || a.content || '',
@@ -1020,8 +1036,19 @@ const AdminAnnouncements = () => {
       toast.error('You do not have permission to post announcements.');
       return;
     }
-    if (!form.title.trim() || !form.body.trim()) {
-      toast.error('Announcement title and body are required.');
+
+    const errors = validateForm(form, {
+      title: (v) => validateRequired(v, 'Announcement title'),
+      body: (v) => validateRequired(v, 'Bulletin content'),
+      ...(form.scheduleFor ? { scheduledAt: (v) => validateRequired(v, 'Publication date and time') } : {})
+    });
+    if (!form.audienceRoles || form.audienceRoles.length === 0) {
+      errors.audienceRoles = 'Please select at least one recipient role.';
+    }
+
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      toast.error('Please resolve the form errors before submitting.');
       return;
     }
 
@@ -1276,30 +1303,44 @@ const AdminAnnouncements = () => {
       <Container>
         {/* Navigation Ribbon */}
         <SubNavRibbon>
-          <NavChip onClick={() => router.push('/admin/academic')}>
-            <FaChartBar /> Academic Hub
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/attendance')}>
-            <FaCalendarCheck /> Attendance
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/tasks')}>
-            <FaTasks /> Tasks & Homework
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/results')}>
-            <FaAward /> Exams & Results
-          </NavChip>
+          {user?.role === 'admin' && (
+            <NavChip onClick={() => router.push('/admin/academic')}>
+              <FaChartBar /> Academic Hub
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+              <FaCalendarCheck /> Attendance
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+              <FaTasks /> Tasks & Homework
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/results')}>
+              <FaAward /> Exams & Results
+            </NavChip>
+          )}
           <NavChip $active onClick={() => router.push('/admin/academic/announcements')}>
             <FaBullhorn /> Announcements
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/complaints')}>
-            <FaComments /> Grievances
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/chats')}>
-            <FaComments /> Group Chats
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/reports')}>
-            <FaBookOpen /> Academic Reports
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+              <FaComments /> Grievances
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/chats')}>
+              <FaComments /> Group Chats
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/reports')}>
+              <FaBookOpen /> Academic Reports
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         {/* Header Bar */}
@@ -1643,74 +1684,82 @@ const AdminAnnouncements = () => {
         {/* ─── Modal 1: Create / Edit Announcement ─── */}
         <AnimatePresence>
           {showCreateModal && (
-            <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCreateModal(false)}>
-              <ModalCard
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                onClick={e => e.stopPropagation()}
-                $wide
-              >
-                <div className="modal-header">
-                  <h3>
-                    <FaBullhorn style={{ color: '#7B1F2E' }} />
-                    {editingId ? 'Edit Institutional Announcement' : 'Publish New Campus Bulletin'}
-                  </h3>
-                  <button type="button" onClick={() => setShowCreateModal(false)}><FaTimes /></button>
-                </div>
+            <AdminModal
+              isOpen={showCreateModal}
+              onClose={() => setShowCreateModal(false)}
+              maxWidth="700px"
+            >
+              <AdminModalHeader
+                title={editingId ? 'Edit Institutional Announcement' : 'Publish New Campus Bulletin'}
+                subtitle={editingId ? 'Modify existing announcement details' : 'Broadcast updates to students and faculty'}
+                icon={<FaBullhorn />}
+                onClose={() => setShowCreateModal(false)}
+              />
 
-                <form onSubmit={handleSaveAnnouncement} className="modal-body">
-                  <FormGroup>
-                    <label>Announcement Title *</label>
-                    <input
+              <form onSubmit={handleSaveAnnouncement}>
+                <AdminModalBody>
+                  <FormField
+                    label="Announcement Title"
+                    required
+                    error={formErrors.title}
+                    helperText="Keep the headline concise and clear (max 120 chars)"
+                  >
+                    <AdminInput
                       type="text"
                       placeholder="e.g. Midterm Examination Schedule & Advisory — Spring Session"
                       value={form.title}
-                      onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                      onChange={e => {
+                        setForm(f => ({ ...f, title: e.target.value }));
+                        if (formErrors.title) setFormErrors(prev => ({ ...prev, title: null }));
+                      }}
                       maxLength={120}
-                      required
+                      hasError={!!formErrors.title}
                     />
-                  </FormGroup>
+                  </FormField>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-                    <FormGroup>
-                      <label>Priority Level</label>
-                      <select
+                  <FormGrid columns={2}>
+                    <FormField label="Priority Level">
+                      <AdminSelect
                         value={form.priority}
                         onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}
                       >
                         <option value="normal">Normal Notice</option>
                         <option value="urgent">Urgent / High Priority</option>
                         <option value="info">Informational Bulletin</option>
-                      </select>
-                    </FormGroup>
+                      </AdminSelect>
+                    </FormField>
 
-                    <FormGroup>
-                      <label>Audience Scope</label>
-                      <select
+                    <FormField label="Audience Scope">
+                      <AdminSelect
                         value={form.audienceType}
                         onChange={e => setForm(f => ({ ...f, audienceType: e.target.value }))}
                       >
                         <option value="broadcast">Campus-Wide Broadcast (Everyone)</option>
                         <option value="targeted">Targeted Courses & Cohorts</option>
-                      </select>
-                    </FormGroup>
-                  </div>
+                      </AdminSelect>
+                    </FormField>
+                  </FormGrid>
 
-                  <FormGroup>
-                    <label>Recipient Roles</label>
+                  <FormField
+                    label="Recipient Roles"
+                    required
+                    error={formErrors.audienceRoles}
+                  >
                     <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#cbd5e1' }}>
                         <input
                           type="checkbox"
                           checked={form.audienceRoles.includes('student')}
                           onChange={() => {
-                            setForm(f => ({
-                              ...f,
-                              audienceRoles: f.audienceRoles.includes('student')
+                            setForm(f => {
+                              const newRoles = f.audienceRoles.includes('student')
                                 ? f.audienceRoles.filter(r => r !== 'student')
-                                : [...f.audienceRoles, 'student']
-                            }));
+                                : [...f.audienceRoles, 'student'];
+                              if (newRoles.length > 0 && formErrors.audienceRoles) {
+                                setFormErrors(prev => ({ ...prev, audienceRoles: null }));
+                              }
+                              return { ...f, audienceRoles: newRoles };
+                            });
                           }}
                         /> Enrolled Students
                       </label>
@@ -1719,22 +1768,24 @@ const AdminAnnouncements = () => {
                           type="checkbox"
                           checked={form.audienceRoles.includes('teacher')}
                           onChange={() => {
-                            setForm(f => ({
-                              ...f,
-                              audienceRoles: f.audienceRoles.includes('teacher')
+                            setForm(f => {
+                              const newRoles = f.audienceRoles.includes('teacher')
                                 ? f.audienceRoles.filter(r => r !== 'teacher')
-                                : [...f.audienceRoles, 'teacher']
-                            }));
+                                : [...f.audienceRoles, 'teacher'];
+                              if (newRoles.length > 0 && formErrors.audienceRoles) {
+                                setFormErrors(prev => ({ ...prev, audienceRoles: null }));
+                              }
+                              return { ...f, audienceRoles: newRoles };
+                            });
                           }}
                         /> Faculty & Instructors
                       </label>
                     </div>
-                  </FormGroup>
+                  </FormField>
 
                   {form.audienceType === 'targeted' && (
                     <>
-                      <FormGroup>
-                        <label>Target Courses ({form.audienceCourses.length} selected)</label>
+                      <FormField label={`Target Courses (${form.audienceCourses.length} selected)`}>
                         <MultiSelectGroup>
                           {courses.map(c => {
                             const isSelected = form.audienceCourses.includes(c);
@@ -1755,10 +1806,9 @@ const AdminAnnouncements = () => {
                             );
                           })}
                         </MultiSelectGroup>
-                      </FormGroup>
+                      </FormField>
 
-                      <FormGroup>
-                        <label>Target Cohorts / Batches ({form.audienceBatches.length} selected)</label>
+                      <FormField label={`Target Cohorts / Batches (${form.audienceBatches.length} selected)`}>
                         <MultiSelectGroup>
                           {batches.map(b => {
                             const isSelected = form.audienceBatches.includes(b);
@@ -1779,19 +1829,26 @@ const AdminAnnouncements = () => {
                             );
                           })}
                         </MultiSelectGroup>
-                      </FormGroup>
+                      </FormField>
                     </>
                   )}
 
-                  <FormGroup>
-                    <label>Bulletin Content *</label>
-                    <textarea
+                  <FormField
+                    label="Bulletin Content"
+                    required
+                    error={formErrors.body}
+                  >
+                    <AdminTextarea
+                      rows={5}
                       placeholder="Write the full announcement message, syllabus updates, or advisory here..."
                       value={form.body}
-                      onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-                      required
+                      onChange={e => {
+                        setForm(f => ({ ...f, body: e.target.value }));
+                        if (formErrors.body) setFormErrors(prev => ({ ...prev, body: null }));
+                      }}
+                      hasError={!!formErrors.body}
                     />
-                  </FormGroup>
+                  </FormField>
 
                   {/* Reach Preview Estimator */}
                   <ReachPreviewCard>
@@ -1825,139 +1882,136 @@ const AdminAnnouncements = () => {
                   </div>
 
                   {form.scheduleFor && (
-                    <FormGroup>
-                      <label>Publication Date & Time</label>
-                      <input
+                    <FormField
+                      label="Publication Date & Time"
+                      required
+                      error={formErrors.scheduledAt}
+                    >
+                      <AdminInput
                         type="datetime-local"
                         value={form.scheduledAt}
-                        onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
-                        required={form.scheduleFor}
+                        onChange={e => {
+                          setForm(f => ({ ...f, scheduledAt: e.target.value }));
+                          if (formErrors.scheduledAt) setFormErrors(prev => ({ ...prev, scheduledAt: null }));
+                        }}
+                        hasError={!!formErrors.scheduledAt}
                       />
-                    </FormGroup>
+                    </FormField>
                   )}
+                </AdminModalBody>
 
-                  <div className="modal-footer">
-                    <HeaderBtn type="button" className="secondary" onClick={() => setShowCreateModal(false)}>
-                      Cancel
-                    </HeaderBtn>
-                    <HeaderBtn type="submit" className="primary" disabled={saving}>
-                      <FaBullhorn /> {saving ? 'Publishing...' : (editingId ? 'Update Announcement' : 'Publish Announcement')}
-                    </HeaderBtn>
-                  </div>
-                </form>
-              </ModalCard>
-            </ModalOverlay>
+                <AdminModalFooter>
+                  <AdminButton
+                    type="button"
+                    $variant="secondary"
+                    onClick={() => setShowCreateModal(false)}
+                  >
+                    Cancel
+                  </AdminButton>
+                  <AdminButton
+                    type="submit"
+                    $variant="primary"
+                    disabled={saving}
+                  >
+                    <FaBullhorn /> {saving ? 'Publishing...' : (editingId ? 'Update Announcement' : 'Publish Announcement')}
+                  </AdminButton>
+                </AdminModalFooter>
+              </form>
+            </AdminModal>
           )}
         </AnimatePresence>
 
         {/* ─── Modal 2: Read Receipts Audit ─── */}
         <AnimatePresence>
           {selectedForReads && (
-            <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedForReads(null)}>
-              <ModalCard
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                onClick={e => e.stopPropagation()}
-                $wide
-              >
-                <div className="modal-header">
-                  <div>
-                    <h3><FaUsers style={{ color: '#38bdf8' }} /> Read Receipts & Engagement Audit</h3>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: '#94a3b8' }}>
-                      Bulletin: <strong>{selectedForReads.title}</strong>
+            <AdminModal
+              isOpen={!!selectedForReads}
+              onClose={() => setSelectedForReads(null)}
+              maxWidth="750px"
+            >
+              <AdminModalHeader
+                title="Read Receipts & Engagement Audit"
+                subtitle={`Bulletin: ${selectedForReads.title}`}
+                icon={<FaUsers />}
+                onClose={() => setSelectedForReads(null)}
+              />
+
+              <AdminModalBody>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                  <div style={{ fontSize: '0.88rem', color: '#cbd5e1' }}>
+                    Total Readers: <strong style={{ color: '#38bdf8' }}>{readerList.length}</strong> acknowledgment{readerList.length !== 1 ? 's' : ''}
+                  </div>
+
+                  <div style={{ position: 'relative', width: '220px' }}>
+                    <AdminInput
+                      type="text"
+                      placeholder="Search reader name or CNIC..."
+                      value={readerSearch}
+                      onChange={e => setReaderSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {loadingReaders ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                    <FaSync className="fa-spin" style={{ marginBottom: '8px', fontSize: '1.2rem' }} />
+                    <p style={{ margin: 0 }}>Auditing candidate read receipts...</p>
+                  </div>
+                ) : filteredReaders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', background: '#0e1014', borderRadius: '10px' }}>
+                    <FaExclamationCircle size={32} style={{ marginBottom: '8px', color: '#64748b' }} />
+                    <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                      {readerSearch ? 'No matching readers found.' : 'No candidate acknowledgments recorded yet.'}
                     </p>
                   </div>
-                  <button type="button" onClick={() => setSelectedForReads(null)}><FaTimes /></button>
-                </div>
-
-                <div className="modal-body">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: '0.88rem', color: '#cbd5e1' }}>
-                      Total Readers: <strong style={{ color: '#38bdf8' }}>{readerList.length}</strong> acknowledgment{readerList.length !== 1 ? 's' : ''}
-                    </div>
-
-                    <div style={{ position: 'relative', width: '220px' }}>
-                      <input
-                        type="text"
-                        placeholder="Search reader name or CNIC..."
-                        value={readerSearch}
-                        onChange={e => setReaderSearch(e.target.value)}
-                        style={{
-                          width: '100%',
-                          background: '#090a0d',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '8px',
-                          padding: '6px 10px',
-                          color: '#fff',
-                          fontSize: '0.82rem',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {loadingReaders ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-                      <FaSync className="fa-spin" style={{ marginBottom: '8px', fontSize: '1.2rem' }} />
-                      <p style={{ margin: 0 }}>Auditing candidate read receipts...</p>
-                    </div>
-                  ) : filteredReaders.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#64748b', background: '#0e1014', borderRadius: '10px' }}>
-                      <FaExclamationCircle size={32} style={{ marginBottom: '8px', color: '#64748b' }} />
-                      <p style={{ margin: 0, fontSize: '0.9rem' }}>
-                        {readerSearch ? 'No matching readers found.' : 'No candidate acknowledgments recorded yet.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
-                      <Table>
-                        <thead>
-                          <tr>
-                            <th>Recipient Name</th>
-                            <th>Role</th>
-                            <th>CNIC</th>
-                            <th>Cohort / Batch</th>
-                            <th>Acknowledged At</th>
+                ) : (
+                  <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px' }}>
+                    <Table>
+                      <thead>
+                        <tr>
+                          <th>Recipient Name</th>
+                          <th>Role</th>
+                          <th>CNIC</th>
+                          <th>Cohort / Batch</th>
+                          <th>Acknowledged At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredReaders.map((r, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontWeight: 600, color: '#fff' }}>{r.name}</td>
+                            <td>
+                              <span style={{
+                                fontSize: '0.72rem',
+                                textTransform: 'uppercase',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: r.role === 'student' ? 'rgba(55,138,221,0.15)' : 'rgba(34,197,94,0.15)',
+                                color: r.role === 'student' ? '#38bdf8' : '#4ade80'
+                              }}>
+                                {r.role}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.cnic || '—'}</td>
+                            <td style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.batch || r.course || 'Campus'}</td>
+                            <td style={{ fontSize: '0.8rem', color: '#34d399' }}>
+                              {r.read_at ? new Date(r.read_at).toLocaleString() : 'Recent'}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {filteredReaders.map((r, idx) => (
-                            <tr key={idx}>
-                              <td style={{ fontWeight: 600, color: '#fff' }}>{r.name}</td>
-                              <td>
-                                <span style={{
-                                  fontSize: '0.72rem',
-                                  textTransform: 'uppercase',
-                                  fontWeight: 700,
-                                  padding: '2px 8px',
-                                  borderRadius: '4px',
-                                  background: r.role === 'student' ? 'rgba(55,138,221,0.15)' : 'rgba(34,197,94,0.15)',
-                                  color: r.role === 'student' ? '#38bdf8' : '#4ade80'
-                                }}>
-                                  {r.role}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.cnic || '—'}</td>
-                              <td style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.batch || r.course || 'Campus'}</td>
-                              <td style={{ fontSize: '0.8rem', color: '#34d399' }}>
-                                {r.read_at ? new Date(r.read_at).toLocaleString() : 'Recent'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </AdminModalBody>
 
-                <div className="modal-footer">
-                  <HeaderBtn className="primary" onClick={() => setSelectedForReads(null)}>
-                    Close
-                  </HeaderBtn>
-                </div>
-              </ModalCard>
-            </ModalOverlay>
+              <AdminModalFooter>
+                <AdminButton $variant="primary" onClick={() => setSelectedForReads(null)}>
+                  Close
+                </AdminButton>
+              </AdminModalFooter>
+            </AdminModal>
           )}
         </AnimatePresence>
       </Container>

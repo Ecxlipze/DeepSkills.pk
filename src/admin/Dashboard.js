@@ -9,6 +9,9 @@ import {
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import AdminLayout from '../components/AdminLayout';
+import { useAuth } from '../context/AuthContext';
+import { useDepartment } from '../context/DepartmentContext';
+import { canAccess } from '../utils/permissions';
 import { portalTheme } from '../components/portal/PortalTheme';
 import { PortalCard } from '../components/portal/PortalCard';
 import { MetricCard } from '../components/portal/MetricCard';
@@ -327,6 +330,8 @@ const HealthItem = styled.div`
 `;
 
 export const AdminDashboard = () => {
+  const { user } = useAuth();
+  const { visibleDepartments } = useDepartment();
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalTeachers: 0,
@@ -375,6 +380,18 @@ export const AdminDashboard = () => {
     }
   };
 
+  const allDeptCards = [
+    { id: 'counsellor', to: '/admin/counsellor', color: '#378ADD', icon: '🎓', title: 'Counsellor', desc: 'Lead pipeline, inquiries & direct enrollment' },
+    { id: 'hr', to: '/admin/hr', color: '#8B5CF6', icon: '👔', title: 'HR & Faculty', desc: 'Teacher hiring, documents & contracts' },
+    { id: 'finance', to: '/admin/finance', color: '#10B981', icon: '💰', title: 'Finance', desc: 'Fee collection, payroll & revenue statements' },
+    { id: 'academic', to: '/admin/academic', color: '#F59E0B', icon: '📚', title: 'Academics', desc: 'Attendance geofencing, tasks & exams' },
+    { id: 'management', to: '/admin/management', color: '#EF4444', icon: '🏢', title: 'Management', desc: 'Courses, certificates, users & blogs' }
+  ];
+
+  const accessibleDeptCards = user?.role === 'admin'
+    ? allDeptCards
+    : allDeptCards.filter((card) => visibleDepartments.some((d) => d.id === card.id));
+
   return (
     <AdminLayout>
       <Container>
@@ -387,16 +404,20 @@ export const AdminDashboard = () => {
         >
           <div className="left">
             <span className="tag">DeepSkills ERP</span>
-            <h2>Super Admin Dashboard</h2>
+            <h2>{user?.role === 'admin' ? 'Super Admin Dashboard' : 'Operational Dashboard'}</h2>
             <p>Complete operational overview across academic, admissions, HR, and finance departments.</p>
           </div>
           <div className="actions">
-            <ActionButton to="/admin/counsellor/enroll" $primary>
-              <FaUserPlus /> New Enrollment
-            </ActionButton>
-            <ActionButton to="/admin/reports">
-              <FaChartBar /> Export Reports
-            </ActionButton>
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'counsellor', 'view') || canAccess(user?.permissions || {}, 'students', 'view')) && (
+              <ActionButton to="/admin/counsellor/enroll" $primary>
+                <FaUserPlus /> New Enrollment
+              </ActionButton>
+            )}
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+              <ActionButton to="/admin/reports">
+                <FaChartBar /> Export Reports
+              </ActionButton>
+            )}
           </div>
         </HeaderBanner>
 
@@ -440,61 +461,29 @@ export const AdminDashboard = () => {
         </MetricsGrid>
 
         {/* 3. Department Quick Jump */}
-        <DeptSection>
-          <SectionHeader>
-            <h3>
-              <span className="icon"><FaServer /></span>
-              Institute Departments
-            </h3>
-          </SectionHeader>
+        {accessibleDeptCards.length > 0 && (
+          <DeptSection>
+            <SectionHeader>
+              <h3>
+                <span className="icon"><FaServer /></span>
+                Institute Departments
+              </h3>
+            </SectionHeader>
 
-          <DeptGrid>
-            <DeptCard to="/admin/counsellor" $color="#378ADD">
-              <div className="dept-top">
-                <div className="icon-box">🎓</div>
-                <span className="arrow">→</span>
-              </div>
-              <span className="dept-title">Counsellor</span>
-              <span className="dept-desc">Lead pipeline, inquiries & direct enrollment</span>
-            </DeptCard>
-
-            <DeptCard to="/admin/hr" $color="#8B5CF6">
-              <div className="dept-top">
-                <div className="icon-box">👔</div>
-                <span className="arrow">→</span>
-              </div>
-              <span className="dept-title">HR & Faculty</span>
-              <span className="dept-desc">Teacher hiring, documents & contracts</span>
-            </DeptCard>
-
-            <DeptCard to="/admin/finance" $color="#10B981">
-              <div className="dept-top">
-                <div className="icon-box">💰</div>
-                <span className="arrow">→</span>
-              </div>
-              <span className="dept-title">Finance</span>
-              <span className="dept-desc">Fee collection, payroll & revenue statements</span>
-            </DeptCard>
-
-            <DeptCard to="/admin/academic" $color="#F59E0B">
-              <div className="dept-top">
-                <div className="icon-box">📚</div>
-                <span className="arrow">→</span>
-              </div>
-              <span className="dept-title">Academics</span>
-              <span className="dept-desc">Attendance geofencing, tasks & exams</span>
-            </DeptCard>
-
-            <DeptCard to="/admin/management" $color="#EF4444">
-              <div className="dept-top">
-                <div className="icon-box">🏢</div>
-                <span className="arrow">→</span>
-              </div>
-              <span className="dept-title">Management</span>
-              <span className="dept-desc">Courses, certificates, users & blogs</span>
-            </DeptCard>
-          </DeptGrid>
-        </DeptSection>
+            <DeptGrid>
+              {accessibleDeptCards.map((card) => (
+                <DeptCard key={card.id} to={card.to} $color={card.color}>
+                  <div className="dept-top">
+                    <div className="icon-box">{card.icon}</div>
+                    <span className="arrow">→</span>
+                  </div>
+                  <span className="dept-title">{card.title}</span>
+                  <span className="dept-desc">{card.desc}</span>
+                </DeptCard>
+              ))}
+            </DeptGrid>
+          </DeptSection>
+        )}
 
         {/* 4. Main 2-Column Content */}
         <MainGrid>
@@ -506,9 +495,11 @@ export const AdminDashboard = () => {
                 <span className="icon"><FaUserGraduate /></span>
                 Recent Admissions
               </h3>
-              <Link to="/admin/management/students">
-                Manage Students <FaArrowRight size={10} />
-              </Link>
+              {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'students', 'view')) && (
+                <Link to="/admin/management/students">
+                  Manage Students <FaArrowRight size={10} />
+                </Link>
+              )}
             </SectionHeader>
 
             <ModernTable>
@@ -590,11 +581,13 @@ export const AdminDashboard = () => {
               </HealthItem>
             </HealthList>
 
-            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${portalTheme.colors.borderSubtle}` }}>
-              <ActionButton to="/admin/users/activity" style={{ width: '100%', justifyContent: 'center' }}>
-                View Audit Activity Logs →
-              </ActionButton>
-            </div>
+            {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'users', 'view')) && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${portalTheme.colors.borderSubtle}` }}>
+                <ActionButton to="/admin/users/activity" style={{ width: '100%', justifyContent: 'center' }}>
+                  View Audit Activity Logs →
+                </ActionButton>
+              </div>
+            )}
           </PortalCard>
 
         </MainGrid>

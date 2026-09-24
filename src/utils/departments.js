@@ -131,6 +131,9 @@ export const canAccessDepartment = (user, departmentId) => {
   const department = DEPARTMENTS.find((item) => item.id === departmentId);
   if (!user || !department) return false;
   if (user.role === 'admin') return true;
+  if (department.id === 'all') {
+    return Boolean(canAccess(user.permissions || {}, 'dashboard', 'view'));
+  }
   if (department.superAdminOnly) return false;
   if (department.permissionKey) {
     return Boolean(canAccess(user.permissions || {}, department.permissionKey, 'view'));
@@ -156,7 +159,12 @@ export const getDepartmentByPath = (pathname = '') => {
 
 export const getDefaultDepartmentPath = (user) => {
   if (user?.role === 'admin') return '/admin/dashboard';
-  return getVisibleDepartments(user)[0]?.path || '/login';
+  const visible = getVisibleDepartments(user);
+  if (!visible.length) return '/login';
+  const firstDept = visible[0];
+  const nav = getDepartmentNav(user, firstDept.id);
+  const target = nav.find((item) => item.path && !item.section);
+  return target?.path || firstDept.path || '/login';
 };
 
 export const getDepartmentRouteAccess = (pathname = '') => {
@@ -184,16 +192,43 @@ export const getDepartmentRouteAccess = (pathname = '') => {
 };
 
 export const getDepartmentNav = (user, departmentId, badges = {}) => {
-  const items = DEPARTMENT_NAV[departmentId] || DEPARTMENT_NAV.all;
-  return items.filter((item, index, arr) => {
-    if (item.section) {
-      const next = arr[index + 1];
-      return Boolean(next && !next.section);
-    }
+  let rawItems = DEPARTMENT_NAV[departmentId] || DEPARTMENT_NAV.all;
+
+  // For custom staff roles accessing dashboard, rename 'SUPER ADMIN' header to 'MAIN'
+  if (departmentId === 'all' && user?.role !== 'admin') {
+    rawItems = rawItems.map((item) =>
+      item.section === 'SUPER ADMIN' ? { ...item, section: 'MAIN' } : item
+    );
+  }
+
+  // 1. Filter out items user lacks access to
+  const accessibleItems = rawItems.filter((item) => {
+    if (item.section) return true; // Keep candidate section headers for pass 2
     if (user?.role === 'admin') return true;
-    if (!item.permissionKey) return false;
+    if (!item.permissionKey) return false; // Hide un-keyed overview items for custom roles
     return canAccess(user.permissions || {}, item.permissionKey, 'view');
-  }).map((item) => item.badgeKey ? { ...item, badge: Boolean(badges[item.badgeKey]) } : item);
+  });
+
+  // 2. Remove orphan/empty section headers (sections with no accessible items under them)
+  const result = [];
+  for (let i = 0; i < accessibleItems.length; i++) {
+    const item = accessibleItems[i];
+    if (item.section) {
+      let hasChildren = false;
+      for (let j = i + 1; j < accessibleItems.length; j++) {
+        if (accessibleItems[j].section) break;
+        hasChildren = true;
+        break;
+      }
+      if (hasChildren) {
+        result.push(item);
+      }
+    } else {
+      result.push(item.badgeKey ? { ...item, badge: Boolean(badges[item.badgeKey]) } : item);
+    }
+  }
+
+  return result;
 };
 
 export const getDepartmentTitle = (pathname = '') => {

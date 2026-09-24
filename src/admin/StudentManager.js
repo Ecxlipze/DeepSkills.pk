@@ -13,6 +13,8 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '../components/Skeleton';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/permissions';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -365,6 +367,7 @@ const StudentInfo = styled.div`
 
 const StudentManager = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -515,33 +518,49 @@ const StudentManager = () => {
       <Container>
         {/* Standardized Management Sub-Navigation Ribbon */}
         <SubNavRibbon>
-          <NavChip onClick={() => router.push('/admin/management')}>
-            <FaLayerGroup /> Management Hub
-          </NavChip>
+          {user?.role === 'admin' && (
+            <NavChip onClick={() => router.push('/admin/management')}>
+              <FaLayerGroup /> Management Hub
+            </NavChip>
+          )}
           <NavChip $active onClick={() => router.push('/admin/management/students')}>
             <FaUserGraduate /> Students
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/courses')}>
-            <FaBookOpen /> Courses & Batches
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/teachers')}>
-            <FaChalkboardTeacher /> Faculty
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/certificates')}>
-            <FaAward /> Certificates
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/referral')}>
-            <FaShareAlt /> Referral Program
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/users')}>
-            <FaUsers /> User Accounts
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/reports')}>
-            <FaLayerGroup /> Reports
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/management/settings')}>
-            <FaCog /> Settings
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'courses', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/courses')}>
+              <FaBookOpen /> Courses & Batches
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'teachers', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/teachers')}>
+              <FaChalkboardTeacher /> Faculty
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'certificates', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/certificates')}>
+              <FaAward /> Certificates
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'referral', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/referral')}>
+              <FaShareAlt /> Referral Program
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'users', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/users')}>
+              <FaUsers /> User Accounts
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/reports')}>
+              <FaLayerGroup /> Reports
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'settings', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/management/settings')}>
+              <FaCog /> Settings
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         <PageHeader>

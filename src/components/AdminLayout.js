@@ -592,8 +592,10 @@ export const AdminLayout = ({ children }) => {
   const isFromCounsellor = location.search.includes('from=counsellor');
   const normalizedPath = normalizeAdminPath(location.pathname);
   const currentDepartment = isFromCounsellor ? (DEPARTMENTS.find(d => d.id === 'counsellor') || { id: 'counsellor' }) : getDepartmentByPath(normalizedPath);
-  const activeDepartmentMeta = DEPARTMENTS.find((department) => department.id === (currentDepartment?.id || activeDepartment)) || DEPARTMENTS[0];
-  const navItems = getDepartmentNav(user, activeDepartmentMeta.id, badges);
+  const activeDepartmentMeta = user?.role === 'admin'
+    ? (DEPARTMENTS.find((department) => department.id === (currentDepartment?.id || activeDepartment)) || DEPARTMENTS[0])
+    : (visibleDepartments.find((d) => d.id === currentDepartment?.id) || visibleDepartments.find((d) => d.id === activeDepartment) || visibleDepartments[0] || DEPARTMENTS[1]);
+  const navItems = getDepartmentNav(user, activeDepartmentMeta?.id, badges);
   const routeMeta = isFromCounsellor 
     ? { title: 'Student Dossier', subtitle: 'View enrolled student academic, attendance, and fee profile' }
     : getDepartmentTitle(normalizedPath);
@@ -625,7 +627,13 @@ export const AdminLayout = ({ children }) => {
 
   const handleDepartmentSwitch = (department) => {
     setActiveDepartment(department.id);
-    navigate(department.path);
+    if (user?.role === 'admin') {
+      navigate(department.path);
+    } else {
+      const nav = getDepartmentNav(user, department.id);
+      const firstTarget = nav.find((item) => item.path && !item.section);
+      navigate(firstTarget?.path || department.path);
+    }
     setIsMobileMenuOpen(false);
   };
 

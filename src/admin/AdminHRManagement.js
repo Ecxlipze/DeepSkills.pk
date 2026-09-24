@@ -7,10 +7,14 @@ import AdminHRTable from '../components/hr/AdminHRTable';
 import AdminHRDrawer from '../components/hr/AdminHRDrawer';
 import AdminJDComposer from '../components/hr/AdminJDComposer';
 import AdminFinalizeHiringModal from '../components/hr/AdminFinalizeHiringModal';
+import AdminJDTemplateModal from '../components/hr/AdminJDTemplateModal';
 import {
   createJDDraft,
   fetchAdminHRApplications,
   fetchJDTemplates,
+  createJDTemplate,
+  updateJDTemplate,
+  deleteJDTemplate,
   finalizeHiring,
   rejectApplication,
   sendJD,
@@ -27,6 +31,29 @@ import { syncTeacherAccess } from '../utils/adminAccessApi';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { supabase } from '../supabaseClient';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  validateRequired,
+  validateEmail,
+  validateCnic,
+  validatePhone,
+  validateNumber,
+  validateDateRange,
+  validateForm,
+  formatCnic,
+  formatPhone
+} from '../utils/formValidation';
 import {
   FaHome,
   FaClipboardList,
@@ -58,7 +85,11 @@ import {
   FaUserPlus,
   FaPhoneAlt,
   FaEnvelope,
-  FaIdCard
+  FaIdCard,
+  FaBolt,
+  FaEdit,
+  FaTrashAlt,
+  FaMapMarkerAlt
 } from 'react-icons/fa';
 
 const Container = styled.div`
@@ -808,6 +839,12 @@ const AdminHRManagement = ({ initialView }) => {
   const [submitting, setSubmitting] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(null);
 
+  // JD Template management states
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [selectedTemplateForEdit, setSelectedTemplateForEdit] = useState(null);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
   // Teacher modal states
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
   const [addTeacherMode, setAddTeacherMode] = useState('invite');
@@ -819,11 +856,13 @@ const AdminHRManagement = ({ initialView }) => {
     phone: '',
     email: '',
     specialization: '',
+    salary_type: 'fixed',
     salary: '',
     course_id: '',
     selectedBatches: [],
     notes: ''
   });
+  const [addTeacherErrors, setAddTeacherErrors] = useState({});
 
   // Leave modals
   const [recordLeaveOpen, setRecordLeaveOpen] = useState(false);
@@ -835,10 +874,12 @@ const AdminHRManagement = ({ initialView }) => {
     reason: '',
     adminNotes: ''
   });
+  const [leaveErrors, setLeaveErrors] = useState({});
   const [reviewLeaveTarget, setReviewLeaveTarget] = useState(null);
   const [reviewAction, setReviewAction] = useState('approve');
   const [substituteTeacherId, setSubstituteTeacherId] = useState('');
   const [substituteNotes, setSubstituteNotes] = useState('');
+  const [reviewErrors, setReviewErrors] = useState({});
 
   const load = async () => {
     setLoading(true);
@@ -945,6 +986,17 @@ const AdminHRManagement = ({ initialView }) => {
     });
   }, [applicationsWithJds, jdSearch, jdStatusFilter]);
 
+  const filteredTemplates = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter((tpl) => {
+      const matchSpec = (tpl.specialization || '').toLowerCase().includes(q);
+      const matchTitle = (tpl.title_template || '').toLowerCase().includes(q);
+      const matchEmp = (tpl.employment_type || '').toLowerCase().includes(q);
+      return matchSpec || matchTitle || matchEmp;
+    });
+  }, [templates, templateSearch]);
+
   const applicationsWithSignatures = useMemo(() => applications.filter((a) => a.signature || a.profile.step >= 4), [applications]);
   const filteredSignatures = useMemo(() => {
     return applicationsWithSignatures.filter((app) => {
@@ -1029,6 +1081,61 @@ const AdminHRManagement = ({ initialView }) => {
       toast.error(error.message || 'Failed to send JD.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenAddTemplate = () => {
+    setSelectedTemplateForEdit(null);
+    setIsTemplateModalOpen(true);
+  };
+
+  const handleOpenEditTemplate = (tpl) => {
+    setSelectedTemplateForEdit(tpl);
+    setIsTemplateModalOpen(true);
+  };
+
+  const handleSaveTemplate = async (templatePayload) => {
+    if (!canMutate) {
+      toast.error('You do not have permission to manage JD templates.');
+      return;
+    }
+    setSavingTemplate(true);
+    try {
+      if (selectedTemplateForEdit?.id) {
+        await updateJDTemplate(selectedTemplateForEdit.id, templatePayload);
+        toast.success('JD Template updated successfully!');
+      } else {
+        await createJDTemplate(templatePayload);
+        toast.success('New JD Template created successfully!');
+      }
+      setIsTemplateModalOpen(false);
+      const updated = await fetchJDTemplates();
+      setTemplates(updated || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to save JD template.');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (tpl) => {
+    if (!canMutate) {
+      toast.error('You do not have permission to archive JD templates.');
+      return;
+    }
+    const tplTitle = tpl.title_template ? tpl.title_template.replace('{{specialization}}', tpl.specialization) : tpl.specialization;
+    if (!window.confirm(`Are you sure you want to archive the "${tplTitle}" template?`)) {
+      return;
+    }
+    try {
+      await deleteJDTemplate(tpl.id);
+      toast.success('Template archived.');
+      const updated = await fetchJDTemplates();
+      setTemplates(updated || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to archive template.');
     }
   };
 
@@ -1172,9 +1279,21 @@ const AdminHRManagement = ({ initialView }) => {
   // Leave Handlers
   const handleRecordLeaveSubmit = async (e) => {
     e.preventDefault();
-    if (!newLeaveForm.teacherId || !newLeaveForm.startDate || !newLeaveForm.endDate || !newLeaveForm.reason) {
-      return toast.error('Please fill all required fields');
+    const { isValid, errors: valErrors } = validateForm(newLeaveForm, {
+      teacherId: [(v) => validateRequired(v, 'Instructor')],
+      startDate: [(v) => validateRequired(v, 'Start Date')],
+      endDate: [
+        (v) => validateRequired(v, 'End Date'),
+        (v) => validateDateRange(newLeaveForm.startDate, v)
+      ],
+      reason: [(v) => validateRequired(v, 'Reason')]
+    });
+    if (!isValid) {
+      setLeaveErrors(valErrors);
+      toast.error('Please resolve the highlighted errors in the form.');
+      return;
     }
+    setLeaveErrors({});
     setSubmitting(true);
     try {
       await recordTeacherLeave({
@@ -1201,6 +1320,12 @@ const AdminHRManagement = ({ initialView }) => {
   const handleReviewLeaveSubmit = async (e) => {
     e.preventDefault();
     if (!reviewLeaveTarget) return;
+    if (reviewAction === 'reject' && !String(substituteNotes || '').trim()) {
+      setReviewErrors({ substituteNotes: 'Rejection reason is required' });
+      toast.error('Please enter a rejection reason.');
+      return;
+    }
+    setReviewErrors({});
     setSubmitting(true);
     try {
       await reviewTeacherLeave(reviewLeaveTarget.id, {
@@ -1253,10 +1378,9 @@ const AdminHRManagement = ({ initialView }) => {
   }, [teachersList, teacherSearch, teacherStatusFilter, teacherCourseFilter, batches]);
 
   const handleTeacherCnicChange = (e) => {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 5) val = val.slice(0, 5) + '-' + val.slice(5);
-    if (val.length > 13) val = val.slice(0, 13) + '-' + val.slice(13, 14);
-    setAddTeacherForm({ ...addTeacherForm, cnic: val });
+    const formatted = formatCnic(e.target.value);
+    setAddTeacherForm({ ...addTeacherForm, cnic: formatted });
+    if (addTeacherErrors.cnic) setAddTeacherErrors(prev => ({ ...prev, cnic: null }));
   };
 
   const handleAddTeacherSubmit = async (e) => {
@@ -1265,7 +1389,36 @@ const AdminHRManagement = ({ initialView }) => {
       toast.error('You do not have permission to add teachers.');
       return;
     }
+    const { isValid, errors: valErrors } = validateForm(addTeacherForm, {
+      name: [(v) => validateRequired(v, 'Full Name')],
+      cnic: [(v) => validateCnic(v)],
+      phone: [(v) => validatePhone(v, 'WhatsApp / Phone Number', true, { min: 10, max: 13 })],
+      email: [(v) => validateEmail(v, 'Official Email Address', true)],
+      salary: [(v) => {
+        if (!v) return null;
+        if (addTeacherForm.salary_type === 'percentage') {
+          return validateNumber(v, { min: 1, max: 100, fieldName: 'Revenue Share Percentage' });
+        }
+        return validateNumber(v, { min: 0, integer: true, fieldName: 'Fixed Monthly Salary' });
+      }]
+    });
+    if (!isValid) {
+      setAddTeacherErrors(valErrors);
+      toast.error('Please resolve the highlighted errors in the form.');
+      return;
+    }
+    setAddTeacherErrors({});
     setAddingTeacher(true);
+
+    const isPercentage = addTeacherForm.salary_type === 'percentage';
+    const parsedSalary = addTeacherForm.salary && !isNaN(parseFloat(addTeacherForm.salary))
+      ? parseFloat(addTeacherForm.salary)
+      : null;
+    const compensationNote = isPercentage && parsedSalary
+      ? `[Compensation: ${parsedSalary}% Revenue Share]`
+      : null;
+    const finalTeacherNotes = [compensationNote, addTeacherForm.notes].filter(Boolean).join(' | ');
+
     try {
       if (addTeacherMode === 'invite') {
         // 1. Create teacher record in 'teachers' table with status: 'Pending'
@@ -1278,7 +1431,7 @@ const AdminHRManagement = ({ initialView }) => {
             email: addTeacherForm.email,
             specialization: addTeacherForm.specialization,
             status: 'Pending',
-            notes: addTeacherForm.notes
+            notes: finalTeacherNotes || null
           }], { onConflict: 'cnic' })
           .select()
           .single();
@@ -1301,7 +1454,7 @@ const AdminHRManagement = ({ initialView }) => {
             personal_phone: addTeacherForm.phone,
             personal_email: addTeacherForm.email,
             specialization: addTeacherForm.specialization || null,
-            expected_salary: addTeacherForm.salary ? parseInt(addTeacherForm.salary, 10) : null,
+            expected_salary: parsedSalary ? Math.round(parsedSalary) : null,
             current_step: 1,
             hr_status: 'pending',
             updated_at: new Date().toISOString()
@@ -1317,12 +1470,12 @@ const AdminHRManagement = ({ initialView }) => {
           console.warn('HR profile sync notice:', hrProfileErr);
         }
 
-        // Auto-connect salary into teacher_salaries for Finance department
-        if (addTeacherForm.salary && !isNaN(parseFloat(addTeacherForm.salary))) {
+        // Auto-connect fixed salary into teacher_salaries for Finance department
+        if (!isPercentage && parsedSalary && parsedSalary > 0) {
           try {
             await supabase.from('teacher_salaries').upsert({
               teacher_id: teacherRecord.id,
-              monthly_amount: parseFloat(addTeacherForm.salary),
+              monthly_amount: parsedSalary,
               effective_from: new Date().toISOString().split('T')[0]
             }, { onConflict: 'teacher_id' });
           } catch (salErr) {
@@ -1356,7 +1509,7 @@ const AdminHRManagement = ({ initialView }) => {
             email: addTeacherForm.email,
             specialization: addTeacherForm.specialization,
             status: 'Active',
-            notes: addTeacherForm.notes
+            notes: finalTeacherNotes || null
           }])
           .select()
           .single();
@@ -1393,7 +1546,7 @@ const AdminHRManagement = ({ initialView }) => {
             personal_phone: addTeacherForm.phone,
             personal_email: addTeacherForm.email,
             specialization: addTeacherForm.specialization || null,
-            expected_salary: addTeacherForm.salary ? parseInt(addTeacherForm.salary, 10) : null,
+            expected_salary: parsedSalary ? Math.round(parsedSalary) : null,
             current_step: 5,
             hr_status: 'hired',
             hired_at: new Date().toISOString(),
@@ -1403,11 +1556,11 @@ const AdminHRManagement = ({ initialView }) => {
           console.warn('HR profile sync notice:', hrSyncErr);
         }
 
-        if (addTeacherForm.salary && !isNaN(parseFloat(addTeacherForm.salary))) {
+        if (!isPercentage && parsedSalary && parsedSalary > 0) {
           try {
             await supabase.from('teacher_salaries').upsert({
               teacher_id: newTeacher.id,
-              monthly_amount: parseFloat(addTeacherForm.salary),
+              monthly_amount: parsedSalary,
               effective_from: new Date().toISOString().split('T')[0]
             }, { onConflict: 'teacher_id' });
           } catch (salErr) {
@@ -1418,7 +1571,7 @@ const AdminHRManagement = ({ initialView }) => {
         toast.success('Teacher added & synced with HR profiles successfully!');
         setIsAddTeacherOpen(false);
         await load();
-        setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary: '', course_id: '', selectedBatches: [], notes: '' });
+        setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary_type: 'fixed', salary: '', course_id: '', selectedBatches: [], notes: '' });
       }
     } catch (err) {
       toast.error('Failed to process teacher: ' + err.message);
@@ -1940,42 +2093,136 @@ const AdminHRManagement = ({ initialView }) => {
 
                 {/* TEMPLATES LIBRARY */}
                 <CardPanel>
-                  <div className="panel-header">
-                    <h3><FaFolder /> Standard JD Templates</h3>
-                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Pre-configured role profiles</span>
+                  <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+                    <div>
+                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                        <FaFolder style={{ color: '#8B5CF6' }} /> Standard & Custom JD Templates
+                        <Badge $bg="rgba(139, 92, 246, 0.15)" $color="#c4b5fd" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
+                          {templates.length} Active
+                        </Badge>
+                      </h3>
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                        Pre-configured role profiles & custom blueprints for faculty job descriptions
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <SearchInputWrap style={{ minWidth: '220px', maxWidth: '300px' }}>
+                        <FaSearch className="search-icon" />
+                        <input
+                          placeholder="Search templates..."
+                          value={templateSearch}
+                          onChange={(e) => setTemplateSearch(e.target.value)}
+                        />
+                        {templateSearch && (
+                          <button type="button" className="clear-btn" onClick={() => setTemplateSearch('')} title="Clear search">
+                            <FaTimes />
+                          </button>
+                        )}
+                      </SearchInputWrap>
+
+                      {canMutate && (
+                        <Button $primary onClick={handleOpenAddTemplate} style={{ whiteSpace: 'nowrap' }}>
+                          <FaPlus /> Add Template
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-                    {templates.map((tpl) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                    {filteredTemplates.map((tpl) => (
                       <div
                         key={tpl.id}
                         style={{
                           background: 'rgba(255, 255, 255, 0.02)',
-                          border: '1px solid rgba(255, 255, 255, 0.06)',
-                          borderRadius: '12px',
-                          padding: '16px',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '14px',
+                          padding: '18px',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '8px'
+                          gap: '12px',
+                          transition: 'all 0.2s ease',
+                          position: 'relative'
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <strong style={{ color: '#f1f5f9', fontSize: '0.95rem' }}>{tpl.title || tpl.specialization}</strong>
-                          <Badge>{tpl.employment_type || 'Full-time'}</Badge>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                          <div>
+                            <strong style={{ color: '#f8fafc', fontSize: '1rem', display: 'block', lineHeight: 1.3 }}>
+                              {tpl.title_template ? tpl.title_template.replace('{{specialization}}', tpl.specialization) : tpl.specialization}
+                            </strong>
+                            <div style={{ fontSize: '0.8rem', color: '#a78bfa', marginTop: '2px', fontWeight: 500 }}>
+                              {tpl.specialization}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <Badge $bg="rgba(139, 92, 246, 0.12)" $color="#c4b5fd">{tpl.employment_type || 'Full-time'}</Badge>
+                            {tpl.location_mode && (
+                              <Badge $bg="rgba(59, 130, 246, 0.12)" $color="#93c5fd">{tpl.location_mode}</Badge>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                          Specialization: <span style={{ color: '#e2e8f0' }}>{tpl.specialization}</span>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.8rem', color: '#94a3b8', background: 'rgba(0, 0, 0, 0.2)', padding: '10px 12px', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Working Hours:</span>
+                            <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{tpl.working_hours || 'Batch timings'}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Reporting To:</span>
+                            <span style={{ color: '#cbd5e1' }}>{tpl.reporting_to || 'Academic Director'}</span>
+                          </div>
+                          {tpl.department && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Department:</span>
+                              <span style={{ color: '#cbd5e1' }}>{tpl.department}</span>
+                            </div>
+                          )}
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                          Working Hours: <span style={{ color: '#e2e8f0' }}>{tpl.working_hours || '40 hrs/week'}</span>
-                        </div>
+
                         {tpl.responsibilities && (
-                          <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '6px', lineHeight: 1.4 }}>
-                            {Array.isArray(tpl.responsibilities) ? tpl.responsibilities.slice(0, 2).join(', ') + '...' : String(tpl.responsibilities).slice(0, 80) + '...'}
+                          <div style={{ fontSize: '0.78rem', color: '#94a3b8', flex: 1 }}>
+                            <div style={{ fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>Key Responsibilities:</div>
+                            <ul style={{ margin: 0, paddingLeft: '16px', lineHeight: 1.45, color: '#94a3b8' }}>
+                              {(Array.isArray(tpl.responsibilities) ? tpl.responsibilities : [String(tpl.responsibilities)])
+                                .slice(0, 2)
+                                .map((resp, i) => (
+                                  <li key={i}>{resp}</li>
+                                ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {canMutate && (
+                          <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <Button
+                              style={{ flex: 1, padding: '7px 12px', fontSize: '0.78rem' }}
+                              onClick={() => handleOpenEditTemplate(tpl)}
+                            >
+                              <FaEdit /> Edit Template
+                            </Button>
+                            <Button
+                              $danger
+                              style={{ padding: '7px 12px', fontSize: '0.78rem' }}
+                              onClick={() => handleDeleteTemplate(tpl)}
+                              title="Archive template"
+                            >
+                              <FaTrashAlt />
+                            </Button>
                           </div>
                         )}
                       </div>
                     ))}
+                    {filteredTemplates.length === 0 && (
+                      <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        <FaFolder style={{ fontSize: '2rem', marginBottom: '10px', opacity: 0.5 }} />
+                        <div>{templateSearch ? 'No JD templates matching your search.' : 'No active templates available.'}</div>
+                        {canMutate && !templateSearch && (
+                          <Button $primary style={{ marginTop: '12px' }} onClick={handleOpenAddTemplate}>
+                            <FaPlus /> Create First Template
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </CardPanel>
               </>
@@ -2978,49 +3225,63 @@ const AdminHRManagement = ({ initialView }) => {
       </Container>
 
       {/* RECORD LEAVE MODAL */}
-      {recordLeaveOpen && (
-        <ModalOverlay onClick={() => setRecordLeaveOpen(false)}>
-          <ModalCard onClick={(e) => e.stopPropagation()}>
-            <h2><FaCalendarCheck /> Record Teacher Leave</h2>
-            <form onSubmit={handleRecordLeaveSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <label>
-                Instructor:
-                <select
-                  value={newLeaveForm.teacherId}
-                  onChange={(e) => setNewLeaveForm({ ...newLeaveForm, teacherId: e.target.value })}
-                  required
-                >
-                  <option value="">Select Instructor</option>
-                  {teachersList.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.specialization || 'Teacher'})</option>
-                  ))}
-                </select>
-              </label>
+      <AdminModal
+        isOpen={recordLeaveOpen}
+        onClose={() => { setRecordLeaveOpen(false); setLeaveErrors({}); }}
+        maxWidth="560px"
+      >
+        <AdminModalHeader
+          icon={FaCalendarCheck}
+          title="Record Teacher Leave"
+          subtitle="Log scheduled or emergency instructor absence and manage approvals"
+          onClose={() => { setRecordLeaveOpen(false); setLeaveErrors({}); }}
+        />
+        <AdminModalBody>
+          <form id="record-leave-form" onSubmit={handleRecordLeaveSubmit} noValidate>
+            <FormField label="Instructor" required error={leaveErrors.teacherId}>
+              <AdminSelect
+                value={newLeaveForm.teacherId}
+                onChange={(e) => {
+                  setNewLeaveForm({ ...newLeaveForm, teacherId: e.target.value });
+                  if (leaveErrors.teacherId) setLeaveErrors(prev => ({ ...prev, teacherId: null }));
+                }}
+                hasError={Boolean(leaveErrors.teacherId)}
+              >
+                <option value="">Select Instructor</option>
+                {teachersList.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.specialization || 'Teacher'})</option>
+                ))}
+              </AdminSelect>
+            </FormField>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <label>
-                  Start Date:
-                  <input
-                    type="date"
-                    value={newLeaveForm.startDate}
-                    onChange={(e) => setNewLeaveForm({ ...newLeaveForm, startDate: e.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  End Date:
-                  <input
-                    type="date"
-                    value={newLeaveForm.endDate}
-                    onChange={(e) => setNewLeaveForm({ ...newLeaveForm, endDate: e.target.value })}
-                    required
-                  />
-                </label>
-              </div>
+            <FormGrid columns="1fr 1fr" gap="12px" style={{ marginTop: '14px' }}>
+              <FormField label="Start Date" required error={leaveErrors.startDate}>
+                <AdminInput
+                  type="date"
+                  value={newLeaveForm.startDate}
+                  onChange={(e) => {
+                    setNewLeaveForm({ ...newLeaveForm, startDate: e.target.value });
+                    if (leaveErrors.startDate) setLeaveErrors(prev => ({ ...prev, startDate: null }));
+                  }}
+                  hasError={Boolean(leaveErrors.startDate)}
+                />
+              </FormField>
+              <FormField label="End Date" required error={leaveErrors.endDate}>
+                <AdminInput
+                  type="date"
+                  value={newLeaveForm.endDate}
+                  onChange={(e) => {
+                    setNewLeaveForm({ ...newLeaveForm, endDate: e.target.value });
+                    if (leaveErrors.endDate) setLeaveErrors(prev => ({ ...prev, endDate: null }));
+                  }}
+                  hasError={Boolean(leaveErrors.endDate)}
+                />
+              </FormField>
+            </FormGrid>
 
-              <label>
-                Leave Type:
-                <select
+            <div style={{ marginTop: '14px' }}>
+              <FormField label="Leave Type">
+                <AdminSelect
                   value={newLeaveForm.leaveType}
                   onChange={(e) => setNewLeaveForm({ ...newLeaveForm, leaveType: e.target.value })}
                 >
@@ -3029,59 +3290,78 @@ const AdminHRManagement = ({ initialView }) => {
                   <option value="Emergency">Emergency Leave</option>
                   <option value="Maternity/Paternity">Maternity/Paternity</option>
                   <option value="Unpaid">Unpaid Leave</option>
-                </select>
-              </label>
+                </AdminSelect>
+              </FormField>
+            </div>
 
-              <label>
-                Reason:
-                <textarea
+            <div style={{ marginTop: '14px' }}>
+              <FormField label="Reason" required error={leaveErrors.reason}>
+                <AdminTextarea
                   placeholder="State reason for absence..."
                   value={newLeaveForm.reason}
-                  onChange={(e) => setNewLeaveForm({ ...newLeaveForm, reason: e.target.value })}
-                  required
+                  onChange={(e) => {
+                    setNewLeaveForm({ ...newLeaveForm, reason: e.target.value });
+                    if (leaveErrors.reason) setLeaveErrors(prev => ({ ...prev, reason: null }));
+                  }}
+                  hasError={Boolean(leaveErrors.reason)}
+                  rows={3}
                 />
-              </label>
+              </FormField>
+            </div>
 
-              <label>
-                HR Notes (Optional):
-                <input
+            <div style={{ marginTop: '14px' }}>
+              <FormField label="HR Notes (Optional)">
+                <AdminInput
                   placeholder="Administrative notes..."
                   value={newLeaveForm.adminNotes}
                   onChange={(e) => setNewLeaveForm({ ...newLeaveForm, adminNotes: e.target.value })}
                 />
-              </label>
-
-              <div className="modal-actions">
-                <Button type="button" onClick={() => setRecordLeaveOpen(false)}>Cancel</Button>
-                <Button type="submit" $primary disabled={submitting}>
-                  {submitting ? 'Recording...' : 'Record & Approve Leave'}
-                </Button>
-              </div>
-            </form>
-          </ModalCard>
-        </ModalOverlay>
-      )}
+              </FormField>
+            </div>
+          </form>
+        </AdminModalBody>
+        <AdminModalFooter>
+          <AdminButton variant="secondary" onClick={() => { setRecordLeaveOpen(false); setLeaveErrors({}); }}>
+            Cancel
+          </AdminButton>
+          <AdminButton variant="primary" type="submit" form="record-leave-form" disabled={submitting}>
+            {submitting ? 'Recording...' : 'Record & Approve Leave'}
+          </AdminButton>
+        </AdminModalFooter>
+      </AdminModal>
 
       {/* REVIEW / APPROVE LEAVE MODAL */}
-      {reviewLeaveTarget && (
-        <ModalOverlay onClick={() => setReviewLeaveTarget(null)}>
-          <ModalCard onClick={(e) => e.stopPropagation()}>
-            <h2>
-              {reviewAction === 'approve' ? <FaCheckCircle style={{ color: '#10b981' }} /> : <FaTimesCircle style={{ color: '#ef4444' }} />}
-              {reviewAction === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
-            </h2>
-            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', fontSize: '0.88rem' }}>
-              <div><strong>Instructor:</strong> {reviewLeaveTarget.teacher?.name}</div>
-              <div><strong>Dates:</strong> {reviewLeaveTarget.start_date} → {reviewLeaveTarget.end_date}</div>
-              <div><strong>Reason:</strong> {reviewLeaveTarget.reason}</div>
-            </div>
+      <AdminModal
+        isOpen={Boolean(reviewLeaveTarget)}
+        onClose={() => { setReviewLeaveTarget(null); setReviewErrors({}); }}
+        maxWidth="560px"
+      >
+        <AdminModalHeader
+          icon={reviewAction === 'approve' ? FaCheckCircle : FaTimesCircle}
+          title={reviewAction === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
+          subtitle={`Review absence request for ${reviewLeaveTarget?.teacher?.name || 'Instructor'}`}
+          onClose={() => { setReviewLeaveTarget(null); setReviewErrors({}); }}
+        />
+        <AdminModalBody>
+          {reviewLeaveTarget && (
+            <form id="review-leave-form" onSubmit={handleReviewLeaveSubmit} noValidate>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '12px 14px',
+                borderRadius: '8px',
+                fontSize: '0.88rem',
+                marginBottom: '14px',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                <div style={{ marginBottom: '4px' }}><strong>Instructor:</strong> {reviewLeaveTarget.teacher?.name}</div>
+                <div style={{ marginBottom: '4px' }}><strong>Dates:</strong> {reviewLeaveTarget.start_date} → {reviewLeaveTarget.end_date}</div>
+                <div><strong>Reason:</strong> {reviewLeaveTarget.reason}</div>
+              </div>
 
-            <form onSubmit={handleReviewLeaveSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {reviewAction === 'approve' && (
                 <>
-                  <label>
-                    Assign Substitute Instructor (Optional):
-                    <select
+                  <FormField label="Assign Substitute Instructor (Optional)">
+                    <AdminSelect
                       value={substituteTeacherId}
                       onChange={(e) => setSubstituteTeacherId(e.target.value)}
                     >
@@ -3089,341 +3369,696 @@ const AdminHRManagement = ({ initialView }) => {
                       {teachersList.filter((t) => t.id !== reviewLeaveTarget.teacher_id).map((t) => (
                         <option key={t.id} value={t.id}>{t.name} ({t.specialization || 'Teacher'})</option>
                       ))}
-                    </select>
-                  </label>
-                  <label>
-                    Substitute Instructions / Batch Notice:
-                    <textarea
-                      placeholder="Enter instructions for classes during this period..."
-                      value={substituteNotes}
-                      onChange={(e) => setSubstituteNotes(e.target.value)}
-                    />
-                  </label>
+                    </AdminSelect>
+                  </FormField>
+                  <div style={{ marginTop: '14px' }}>
+                    <FormField label="Substitute Instructions / Batch Notice">
+                      <AdminTextarea
+                        placeholder="Enter instructions for classes during this period..."
+                        value={substituteNotes}
+                        onChange={(e) => setSubstituteNotes(e.target.value)}
+                        rows={3}
+                      />
+                    </FormField>
+                  </div>
                 </>
               )}
 
               {reviewAction === 'reject' && (
-                <label>
-                  Rejection Reason:
-                  <textarea
+                <FormField label="Rejection Reason" required error={reviewErrors.substituteNotes}>
+                  <AdminTextarea
                     placeholder="Enter reason for rejecting this leave request..."
                     value={substituteNotes}
-                    onChange={(e) => setSubstituteNotes(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      setSubstituteNotes(e.target.value);
+                      if (reviewErrors.substituteNotes) setReviewErrors(prev => ({ ...prev, substituteNotes: null }));
+                    }}
+                    hasError={Boolean(reviewErrors.substituteNotes)}
+                    rows={3}
                   />
-                </label>
+                </FormField>
               )}
-
-              <div className="modal-actions">
-                <Button type="button" onClick={() => setReviewLeaveTarget(null)}>Cancel</Button>
-                <Button
-                  type="submit"
-                  $success={reviewAction === 'approve'}
-                  $danger={reviewAction === 'reject'}
-                  disabled={submitting}
-                >
-                  {submitting ? 'Submitting...' : reviewAction === 'approve' ? 'Approve Leave' : 'Confirm Rejection'}
-                </Button>
-              </div>
             </form>
-          </ModalCard>
-        </ModalOverlay>
-      )}
+          )}
+        </AdminModalBody>
+        <AdminModalFooter>
+          <AdminButton variant="secondary" onClick={() => { setReviewLeaveTarget(null); setReviewErrors({}); }}>
+            Cancel
+          </AdminButton>
+          <AdminButton
+            variant={reviewAction === 'approve' ? 'primary' : 'danger'}
+            type="submit"
+            form="review-leave-form"
+            disabled={submitting}
+          >
+            {submitting ? 'Submitting...' : reviewAction === 'approve' ? 'Approve Leave' : 'Confirm Rejection'}
+          </AdminButton>
+        </AdminModalFooter>
+      </AdminModal>
 
       {/* ADD TEACHER MODAL */}
-      {isAddTeacherOpen && (
-        <ModalOverlay onClick={() => { setIsAddTeacherOpen(false); setInviteSuccessData(null); }}>
-          <ModalCard onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2>
-              {inviteSuccessData ? <><FaCheckCircle style={{ color: '#10b981' }} /> Faculty Invitation Ready</> : <><FaUserPlus /> Add Faculty Instructor</>}
-            </h2>
+      <AdminModal
+        isOpen={isAddTeacherOpen}
+        onClose={() => {
+          setIsAddTeacherOpen(false);
+          setInviteSuccessData(null);
+          setAddTeacherErrors({});
+        }}
+        maxWidth="680px"
+      >
+        {inviteSuccessData ? (
+          <>
+            <AdminModalHeader
+              icon={FaCheckCircle}
+              title="Faculty Invitation Ready"
+              subtitle="Instructor account initialized and invitation link generated"
+              onClose={() => {
+                setIsAddTeacherOpen(false);
+                setInviteSuccessData(null);
+                setAddTeacherErrors({});
+              }}
+            />
+            <AdminModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '18px', padding: '6px 0' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.14)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10b981',
+                  fontSize: '2rem',
+                  boxShadow: '0 0 24px rgba(16, 185, 129, 0.2)'
+                }}>
+                  <FaCheck />
+                </div>
+                <div>
+                  <h3 style={{ margin: '0 0 6px', fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>
+                    Faculty Account Provisioned
+                  </h3>
+                  <p style={{ margin: '0', fontSize: '0.88rem', color: '#94a3b8', lineHeight: '1.5', maxWidth: '480px' }}>
+                    Account registered for <strong style={{ color: '#fff' }}>{inviteSuccessData.name}</strong>. The instructor can authenticate using their CNIC with OTP, and complete digital onboarding.
+                  </p>
+                </div>
 
-            {inviteSuccessData ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px', padding: '10px 0' }}>
-                <div style={{ color: '#10b981', fontSize: '2.6rem' }}>
-                  <FaCheckCircle />
-                </div>
-                <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#fff' }}>
-                  Faculty Onboarding Link Generated
-                </div>
-                <p style={{ margin: '0', fontSize: '0.85rem', color: '#94a3b8', lineHeight: '1.5' }}>
-                  Account registered for <strong>{inviteSuccessData.name}</strong>. Instructor can log in using CNIC with OTP sent to their email, and complete their onboarding.
-                </p>
                 <div style={{
                   width: '100%',
-                  background: '#0a0a0a',
+                  background: 'rgba(0, 0, 0, 0.45)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '6px',
+                  gap: '12px',
                   textAlign: 'left',
-                  fontSize: '0.82rem'
+                  fontSize: '0.85rem'
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                    <span>Login Portal:</span>
-                    <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.loginUrl}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                    <span>Login CNIC:</span>
-                    <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.cnic}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
-                    <span>OTP Email:</span>
-                    <strong style={{ color: '#cbd5e1' }}>{inviteSuccessData.email}</strong>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', marginTop: '6px' }}>
-                  {inviteSuccessData.waUrl && (
-                    <Button
-                      as="a"
-                      href={inviteSuccessData.waUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      $whatsapp
-                      style={{ padding: '12px', justifyContent: 'center', fontWeight: '700', fontSize: '0.9rem' }}
-                    >
-                      <FaWhatsapp style={{ fontSize: '1.1rem' }} /> Send Invite via WhatsApp
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(inviteSuccessData.onboardingUrl);
-                      toast.success('Onboarding link copied!');
-                    }}
-                    style={{ padding: '12px', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.12)' }}
-                  >
-                    <FaCopy /> Copy Onboarding Link
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setIsAddTeacherOpen(false);
-                      setInviteSuccessData(null);
-                      setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary: '', course_id: '', selectedBatches: [], notes: '' });
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', padding: '8px', cursor: 'pointer' }}
-                  >
-                    Done & Close
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <ModeSelector>
-                  <ModeButton
-                    type="button"
-                    $active={addTeacherMode === 'invite'}
-                    onClick={() => setAddTeacherMode('invite')}
-                  >
-                    <FaPaperPlane /> Invite to HR Pipeline (Recommended)
-                  </ModeButton>
-                  <ModeButton
-                    type="button"
-                    $active={addTeacherMode === 'direct'}
-                    onClick={() => setAddTeacherMode('direct')}
-                  >
-                    <FaUserPlus /> Direct Staff Activation
-                  </ModeButton>
-                </ModeSelector>
-
-                {addTeacherMode === 'invite' ? (
-                  <InfoBox>
-                    <strong>Standard HR Hiring Workflow:</strong> Register candidate details and immediately send them a secure WhatsApp/Web link to fill their digital profile, credentials, documents, and acceptance letter.
-                  </InfoBox>
-                ) : (
-                  <InfoBox style={{ background: 'rgba(234, 179, 8, 0.08)', borderColor: 'rgba(234, 179, 8, 0.25)', color: '#fde047' }}>
-                    <strong>Immediate Direct Activation:</strong> Bypasses candidate self-onboarding. Instantly provisions LMS portal login, assigns batches, and synchronizes a completed record into HR Files.
-                  </InfoBox>
-                )}
-
-                <form onSubmit={handleAddTeacherSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <label>
-                      Full Name*
-                      <input
-                        required
-                        value={addTeacherForm.name}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, name: e.target.value })}
-                        placeholder="e.g. Dr. Muhammad Ahmed"
-                      />
-                    </label>
-                    <label>
-                      CNIC Number*
-                      <input
-                        required
-                        maxLength={15}
-                        value={addTeacherForm.cnic}
-                        onChange={handleTeacherCnicChange}
-                        placeholder="XXXXX-XXXXXXX-X"
-                      />
-                    </label>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <label>
-                      Phone Number*
-                      <input
-                        required
-                        value={addTeacherForm.phone}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, phone: e.target.value })}
-                        placeholder="03XXXXXXXXX"
-                      />
-                    </label>
-                    <label>
-                      Email Address*
-                      <input
-                        required
-                        type="email"
-                        value={addTeacherForm.email}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, email: e.target.value })}
-                        placeholder="instructor@deepskills.pk"
-                      />
-                    </label>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <label>
-                      Specialization / Subject Domain
-                      <input
-                        value={addTeacherForm.specialization}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, specialization: e.target.value })}
-                        placeholder="e.g. Full Stack Web Development, UI/UX"
-                      />
-                    </label>
-                    <label>
-                      {addTeacherMode === 'invite' ? 'Expected Monthly Salary (PKR)' : 'Agreed Monthly Salary (PKR)'}
-                      <input
-                        type="number"
-                        value={addTeacherForm.salary}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, salary: e.target.value })}
-                        placeholder="e.g. 80000"
-                      />
-                    </label>
-                  </div>
-
-                  {addTeacherMode === 'direct' && (
-                    <>
-                      <label>
-                        Assign Course (Filters Batches)
-                        <select
-                          value={addTeacherForm.course_id}
-                          onChange={(e) => setAddTeacherForm({ ...addTeacherForm, course_id: e.target.value })}
-                        >
-                          <option value="">Select Course</option>
-                          {courses.map((c) => (
-                            <option key={c.id} value={c.id}>{c.title}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      {addTeacherForm.course_id && (
-                        <label>
-                          Select Batches & Roles
-                          <div style={{
-                            background: '#0a0a0a',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '8px',
-                            padding: '10px',
-                            maxHeight: '140px',
-                            overflowY: 'auto'
-                          }}>
-                            {batches.filter((b) => {
-                              const selectedCourse = courses.find((c) => c.id === addTeacherForm.course_id);
-                              return b.course === selectedCourse?.title;
-                            }).map((b) => {
-                              const isSelected = addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id);
-                              return (
-                                <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={!!isSelected}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          if (!addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id)) {
-                                            setAddTeacherForm({
-                                              ...addTeacherForm,
-                                              selectedBatches: [...addTeacherForm.selectedBatches, { batch_id: b.id, role: 'Main' }]
-                                            });
-                                          }
-                                        } else {
-                                          setAddTeacherForm({
-                                            ...addTeacherForm,
-                                            selectedBatches: addTeacherForm.selectedBatches.filter((sb) => sb.batch_id !== b.id)
-                                          });
-                                        }
-                                      }}
-                                    />
-                                    {b.batch_name}
-                                  </label>
-                                  {isSelected && (
-                                    <select
-                                      style={{ width: '110px', padding: '4px 6px', fontSize: '0.78rem' }}
-                                      value={isSelected.role}
-                                      onChange={(e) => {
-                                        setAddTeacherForm({
-                                          ...addTeacherForm,
-                                          selectedBatches: addTeacherForm.selectedBatches.map((sb) => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
-                                        });
-                                      }}
-                                    >
-                                      <option value="Main">Main</option>
-                                      <option value="Assistant">Assistant</option>
-                                    </select>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </label>
-                      )}
-                    </>
-                  )}
-
-                  <label>
-                    {addTeacherMode === 'invite' ? 'Interview & Candidate Notes (Optional)' : 'Admin Notes (Optional)'}
-                    <textarea
-                      rows="2"
-                      value={addTeacherForm.notes}
-                      onChange={(e) => setAddTeacherForm({ ...addTeacherForm, notes: e.target.value })}
-                      placeholder="Notes regarding candidate interview, past experience..."
-                    />
-                  </label>
-
-                  <div className="modal-actions">
-                    <Button
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Faculty Portal</span>
+                      <strong style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>{inviteSuccessData.loginUrl}</strong>
+                    </div>
+                    <AdminButton
                       type="button"
+                      variant="ghost"
+                      style={{ padding: '6px 12px', fontSize: '0.78rem' }}
                       onClick={() => {
-                        setIsAddTeacherOpen(false);
-                        setInviteSuccessData(null);
+                        navigator.clipboard.writeText(inviteSuccessData.loginUrl);
+                        toast.success('Login portal URL copied!');
                       }}
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      $primary
-                      disabled={addingTeacher}
-                      style={{ padding: '10px 20px', fontWeight: '700' }}
-                    >
-                      {addingTeacher ? 'Processing...' : addTeacherMode === 'invite' ? 'Generate & Send Onboarding Invite' : 'Directly Activate Teacher'}
-                    </Button>
+                      <FaCopy /> Copy
+                    </AdminButton>
                   </div>
-                </form>
-              </>
-            )}
-          </ModalCard>
-        </ModalOverlay>
-      )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>National CNIC</span>
+                      <strong style={{ color: '#38bdf8', fontSize: '0.95rem', fontFamily: 'monospace' }}>{inviteSuccessData.cnic}</strong>
+                    </div>
+                    <AdminButton
+                      type="button"
+                      variant="ghost"
+                      style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(inviteSuccessData.cnic);
+                        toast.success('CNIC copied!');
+                      }}
+                    >
+                      <FaCopy /> Copy
+                    </AdminButton>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Registered OTP Email</span>
+                      <strong style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>{inviteSuccessData.email}</strong>
+                    </div>
+                    <AdminButton
+                      type="button"
+                      variant="ghost"
+                      style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(inviteSuccessData.email);
+                        toast.success('Email copied!');
+                      }}
+                    >
+                      <FaCopy /> Copy
+                    </AdminButton>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', marginTop: '6px' }}>
+                  {inviteSuccessData.waUrl && (
+                    <AdminButton
+                      type="button"
+                      variant="primary"
+                      onClick={() => window.open(inviteSuccessData.waUrl, '_blank')}
+                      style={{
+                        padding: '13px',
+                        justifyContent: 'center',
+                        fontWeight: '700',
+                        fontSize: '0.92rem',
+                        background: '#25D366',
+                        borderColor: '#25D366',
+                        color: '#fff',
+                        boxShadow: '0 4px 14px rgba(37, 211, 102, 0.25)'
+                      }}
+                    >
+                      <FaWhatsapp style={{ fontSize: '1.2rem' }} /> Dispatch Invitation on WhatsApp
+                    </AdminButton>
+                  )}
+                  <AdminButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteSuccessData.onboardingUrl);
+                      toast.success('Onboarding link copied to clipboard!');
+                    }}
+                    style={{ padding: '12px', justifyContent: 'center' }}
+                  >
+                    <FaCopy /> Copy Candidate Self-Onboarding Link
+                  </AdminButton>
+                </div>
+              </div>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsAddTeacherOpen(false);
+                  setInviteSuccessData(null);
+                  setAddTeacherErrors({});
+                  setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary_type: 'fixed', salary: '', course_id: '', selectedBatches: [], notes: '' });
+                }}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Done & Close
+              </AdminButton>
+            </AdminModalFooter>
+          </>
+        ) : (
+          <>
+            <AdminModalHeader
+              icon={FaUserPlus}
+              title="Add Faculty Instructor"
+              subtitle="Register instructors into the HR recruitment pipeline or activate them directly"
+              onClose={() => {
+                setIsAddTeacherOpen(false);
+                setInviteSuccessData(null);
+                setAddTeacherErrors({});
+              }}
+            />
+            <AdminModalBody>
+              {/* Segmented Mode Selector */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '5px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.07)',
+                marginBottom: '16px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setAddTeacherMode('invite')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '11px 14px',
+                    borderRadius: '9px',
+                    fontSize: '0.84rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    border: addTeacherMode === 'invite' ? '1px solid rgba(139, 92, 246, 0.45)' : '1px solid transparent',
+                    background: addTeacherMode === 'invite' ? 'rgba(139, 92, 246, 0.18)' : 'transparent',
+                    color: addTeacherMode === 'invite' ? '#c4b5fd' : '#94a3b8'
+                  }}
+                >
+                  <FaPaperPlane size={13} />
+                  <span>HR Invite Link</span>
+                  <span style={{
+                    fontSize: '0.68rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    background: addTeacherMode === 'invite' ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                    color: addTeacherMode === 'invite' ? '#34d399' : '#64748b',
+                    padding: '2px 7px',
+                    borderRadius: '20px',
+                    fontWeight: '800'
+                  }}>
+                    Recommended
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAddTeacherMode('direct')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '11px 14px',
+                    borderRadius: '9px',
+                    fontSize: '0.84rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    border: addTeacherMode === 'direct' ? '1px solid rgba(234, 179, 8, 0.45)' : '1px solid transparent',
+                    background: addTeacherMode === 'direct' ? 'rgba(234, 179, 8, 0.15)' : 'transparent',
+                    color: addTeacherMode === 'direct' ? '#fde047' : '#94a3b8'
+                  }}
+                >
+                  <FaBolt size={13} />
+                  <span>Direct LMS Activation</span>
+                  <span style={{
+                    fontSize: '0.68rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    background: addTeacherMode === 'direct' ? 'rgba(234, 179, 8, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                    color: addTeacherMode === 'direct' ? '#fde047' : '#64748b',
+                    padding: '2px 7px',
+                    borderRadius: '20px',
+                    fontWeight: '800'
+                  }}>
+                    Fast-Track
+                  </span>
+                </button>
+              </div>
+
+              {/* Informational Workflow Banner */}
+              {addTeacherMode === 'invite' ? (
+                <div style={{
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  border: '1px solid rgba(139, 92, 246, 0.22)',
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  fontSize: '0.82rem',
+                  color: '#ddd6fe',
+                  lineHeight: '1.5',
+                  marginBottom: '18px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px'
+                }}>
+                  <FaPaperPlane style={{ color: '#a78bfa', marginTop: '2px', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#fff' }}>Candidate Self-Onboarding:</strong> Register initial contact information. The candidate automatically receives a digital acceptance letter and onboarding portal link to verify CNIC, upload documents, and submit credentials.
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  background: 'rgba(234, 179, 8, 0.08)',
+                  border: '1px solid rgba(234, 179, 8, 0.25)',
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  fontSize: '0.82rem',
+                  color: '#fef08a',
+                  lineHeight: '1.5',
+                  marginBottom: '18px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px'
+                }}>
+                  <FaBolt style={{ color: '#facc15', marginTop: '2px', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#fff' }}>Immediate LMS Provisioning:</strong> Bypasses candidate self-service documentation. Instantly creates the instructor record, enables teaching portal login, and links them to designated cohorts.
+                  </div>
+                </div>
+              )}
+
+              <form id="add-teacher-form" onSubmit={handleAddTeacherSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <FormGrid columns="1fr 1fr" gap="14px">
+                  <FormField label="Full Name" required error={addTeacherErrors.name}>
+                    <AdminInput
+                      value={addTeacherForm.name}
+                      onChange={(e) => {
+                        setAddTeacherForm({ ...addTeacherForm, name: e.target.value });
+                        if (addTeacherErrors.name) setAddTeacherErrors(prev => ({ ...prev, name: null }));
+                      }}
+                      hasError={Boolean(addTeacherErrors.name)}
+                      placeholder="e.g. Dr. Muhammad Ahmed"
+                    />
+                  </FormField>
+
+                  <FormField label="CNIC Number" required error={addTeacherErrors.cnic} hint="13-digit format: XXXXX-XXXXXXX-X">
+                    <AdminInput
+                      maxLength={15}
+                      value={addTeacherForm.cnic}
+                      onChange={handleTeacherCnicChange}
+                      hasError={Boolean(addTeacherErrors.cnic)}
+                      placeholder="XXXXX-XXXXXXX-X"
+                    />
+                  </FormField>
+                </FormGrid>
+
+                <FormGrid columns="1fr 1fr" gap="14px">
+                  <FormField label="WhatsApp / Phone Number" required error={addTeacherErrors.phone} hint="Max 13 characters (e.g. 03001234567 or +923001234567)">
+                    <AdminInput
+                      maxLength={13}
+                      value={addTeacherForm.phone}
+                      onChange={(e) => {
+                        setAddTeacherForm({ ...addTeacherForm, phone: formatPhone(e.target.value, 13) });
+                        if (addTeacherErrors.phone) setAddTeacherErrors(prev => ({ ...prev, phone: null }));
+                      }}
+                      onBlur={(e) => {
+                        const err = validatePhone(e.target.value, 'WhatsApp / Phone Number', true, { min: 10, max: 13 });
+                        if (err) setAddTeacherErrors(prev => ({ ...prev, phone: err }));
+                      }}
+                      hasError={Boolean(addTeacherErrors.phone)}
+                      placeholder="03XXXXXXXXX or +923XXXXXXXXX"
+                    />
+                  </FormField>
+
+                  <FormField label="Official Email Address" required error={addTeacherErrors.email} hint="Required for teacher portal OTP authentication">
+                    <AdminInput
+                      type="email"
+                      value={addTeacherForm.email}
+                      onChange={(e) => {
+                        setAddTeacherForm({ ...addTeacherForm, email: e.target.value });
+                        if (addTeacherErrors.email) setAddTeacherErrors(prev => ({ ...prev, email: null }));
+                      }}
+                      onBlur={(e) => {
+                        const err = validateEmail(e.target.value, 'Official Email Address', true);
+                        if (err) setAddTeacherErrors(prev => ({ ...prev, email: err }));
+                      }}
+                      hasError={Boolean(addTeacherErrors.email)}
+                      placeholder="instructor@deepskills.pk"
+                    />
+                  </FormField>
+                </FormGrid>
+
+                <FormGrid columns="1fr 1fr" gap="14px">
+                  <FormField label="Specialization Domain" hint="Subject area or track">
+                    <AdminInput
+                      value={addTeacherForm.specialization}
+                      onChange={(e) => setAddTeacherForm({ ...addTeacherForm, specialization: e.target.value })}
+                      placeholder="e.g. Full Stack Web Development, UI/UX"
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span>{addTeacherForm.salary_type === 'percentage' ? (addTeacherMode === 'invite' ? 'Expected Share (%)' : 'Agreed Share (%)') : (addTeacherMode === 'invite' ? 'Expected Salary (PKR)' : 'Agreed Salary (PKR)')}</span>
+                        <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddTeacherForm({ ...addTeacherForm, salary_type: 'fixed', salary: '' });
+                              if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                            }}
+                            style={{
+                              border: 'none',
+                              background: addTeacherForm.salary_type === 'fixed' ? '#8b5cf6' : 'transparent',
+                              color: addTeacherForm.salary_type === 'fixed' ? '#fff' : '#94a3b8',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            Fixed (PKR)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddTeacherForm({ ...addTeacherForm, salary_type: 'percentage', salary: '' });
+                              if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                            }}
+                            style={{
+                              border: 'none',
+                              background: addTeacherForm.salary_type === 'percentage' ? '#8b5cf6' : 'transparent',
+                              color: addTeacherForm.salary_type === 'percentage' ? '#fff' : '#94a3b8',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            % Share
+                          </button>
+                        </div>
+                      </div>
+                    }
+                    error={addTeacherErrors.salary}
+                    hint={addTeacherForm.salary_type === 'percentage' ? 'Cohort revenue share percentage (1% - 100%)' : 'Gross fixed monthly compensation in PKR'}
+                  >
+                    <AdminInput
+                      type="number"
+                      min={addTeacherForm.salary_type === 'percentage' ? 1 : 0}
+                      max={addTeacherForm.salary_type === 'percentage' ? 100 : undefined}
+                      step={addTeacherForm.salary_type === 'percentage' ? '1' : '1000'}
+                      onKeyDown={(e) => {
+                        if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                          e.preventDefault();
+                        }
+                      }}
+                      value={addTeacherForm.salary}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== '') {
+                          const num = Number(val);
+                          if (num < 0) return;
+                          if (addTeacherForm.salary_type === 'percentage' && num > 100) return;
+                        }
+                        setAddTeacherForm({ ...addTeacherForm, salary: val });
+                        if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                      }}
+                      hasError={Boolean(addTeacherErrors.salary)}
+                      placeholder={addTeacherForm.salary_type === 'percentage' ? 'e.g. 30' : 'e.g. 85000'}
+                    />
+                  </FormField>
+                </FormGrid>
+
+                {addTeacherMode === 'direct' && (
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#fde047' }}>
+                        Curriculum Cohort Allocation
+                      </span>
+                    </div>
+
+                    <FormField label="Primary Teaching Course" hint="Select course to view its assigned batches">
+                      <AdminSelect
+                        value={addTeacherForm.course_id}
+                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, course_id: e.target.value })}
+                      >
+                        <option value="">Choose Course Program...</option>
+                        {courses.map((c) => (
+                          <option key={c.id} value={c.id}>{c.title}</option>
+                        ))}
+                      </AdminSelect>
+                    </FormField>
+
+                    {addTeacherForm.course_id && (
+                      <div>
+                        <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
+                          Assign Batches & Teaching Role:
+                        </span>
+                        {(() => {
+                          const selectedCourse = courses.find((c) => c.id === addTeacherForm.course_id);
+                          const matchingBatches = batches.filter((b) => b.course === selectedCourse?.title);
+
+                          if (matchingBatches.length === 0) {
+                            return (
+                              <div style={{
+                                padding: '16px',
+                                textAlign: 'center',
+                                color: '#64748b',
+                                fontSize: '0.82rem',
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                borderRadius: '8px',
+                                border: '1px dashed rgba(255, 255, 255, 0.08)'
+                              }}>
+                                No active cohort batches found for {selectedCourse?.title}.
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '8px',
+                              maxHeight: '180px',
+                              overflowY: 'auto',
+                              paddingRight: '4px'
+                            }}>
+                              {matchingBatches.map((b) => {
+                                const isSelected = addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id);
+                                return (
+                                  <div
+                                    key={b.id}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      padding: '10px 14px',
+                                      borderRadius: '8px',
+                                      background: isSelected ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                                      border: isSelected ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0, fontSize: '0.85rem', color: isSelected ? '#fff' : '#cbd5e1', fontWeight: isSelected ? '600' : '400' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={!!isSelected}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            if (!addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id)) {
+                                              setAddTeacherForm({
+                                                ...addTeacherForm,
+                                                selectedBatches: [...addTeacherForm.selectedBatches, { batch_id: b.id, role: 'Main' }]
+                                              });
+                                            }
+                                          } else {
+                                            setAddTeacherForm({
+                                              ...addTeacherForm,
+                                              selectedBatches: addTeacherForm.selectedBatches.filter((sb) => sb.batch_id !== b.id)
+                                            });
+                                          }
+                                        }}
+                                        style={{ accentColor: '#8b5cf6', width: '16px', height: '16px', cursor: 'pointer' }}
+                                      />
+                                      <span>{b.batch_name}</span>
+                                    </label>
+                                    {isSelected && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#a78bfa' }}>Role:</span>
+                                        <AdminSelect
+                                          style={{ width: '140px', padding: '5px 8px', fontSize: '0.8rem' }}
+                                          value={isSelected.role}
+                                          onChange={(e) => {
+                                            setAddTeacherForm({
+                                              ...addTeacherForm,
+                                              selectedBatches: addTeacherForm.selectedBatches.map((sb) => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
+                                            });
+                                          }}
+                                        >
+                                          <option value="Main">Lead Instructor</option>
+                                          <option value="Assistant">Assistant</option>
+                                        </AdminSelect>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <FormField label={addTeacherMode === 'invite' ? 'Candidate Interview & Assessment Notes (Optional)' : 'Administrative Onboarding Notes (Optional)'}>
+                  <AdminTextarea
+                    rows={3}
+                    value={addTeacherForm.notes}
+                    onChange={(e) => setAddTeacherForm({ ...addTeacherForm, notes: e.target.value })}
+                    placeholder="Enter interview feedback, technical ratings, availability commitments..."
+                  />
+                </FormField>
+              </form>
+            </AdminModalBody>
+            <AdminModalFooter>
+              <AdminButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsAddTeacherOpen(false);
+                  setInviteSuccessData(null);
+                  setAddTeacherErrors({});
+                }}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                type="submit"
+                variant="primary"
+                form="add-teacher-form"
+                disabled={addingTeacher}
+                style={addTeacherMode === 'direct' ? { background: '#d97706', borderColor: '#d97706' } : {}}
+              >
+                {addingTeacher
+                  ? 'Processing...'
+                  : addTeacherMode === 'invite'
+                    ? (
+                      <>
+                        <FaPaperPlane size={13} /> Generate & Send Invite
+                      </>
+                    )
+                    : (
+                      <>
+                        <FaBolt size={13} /> Directly Activate Faculty
+                      </>
+                    )}
+              </AdminButton>
+            </AdminModalFooter>
+          </>
+        )}
+      </AdminModal>
 
       {/* DRAWERS & MODALS */}
       <AdminHRDrawer
         open={drawerOpen}
         application={selectedApplication}
         onClose={() => setDrawerOpen(false)}
+        onOpenComposer={(app) => {
+          setDrawerOpen(false);
+          openComposer(app);
+        }}
+        onOpenFinalize={(app) => {
+          setDrawerOpen(false);
+          openFinalize(app);
+        }}
+        onReject={(app) => handleReject(app)}
+        onDownloadAcceptance={(app) => handleDownloadAcceptance(app)}
+        canMutate={canMutate}
       />
 
       <AdminJDComposer
@@ -3442,6 +4077,14 @@ const AdminHRManagement = ({ initialView }) => {
         onClose={() => setFinalizeOpen(false)}
         onSubmit={handleFinalize}
         loading={submitting}
+      />
+
+      <AdminJDTemplateModal
+        open={isTemplateModalOpen}
+        template={selectedTemplateForEdit}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onSave={handleSaveTemplate}
+        loading={savingTemplate}
       />
     </AdminLayout>
   );

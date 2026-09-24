@@ -387,27 +387,41 @@ export default function AcademicOverview() {
           <NavRibbonItem $active onClick={() => router.push('/admin/academic')}>
             <FaChartBar /> Overview
           </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/attendance')}>
-            <FaCalendarCheck /> Attendance
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/tasks')}>
-            <FaTasks /> Tasks & Assignments
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/results')}>
-            <FaAward /> Results & Grading
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/announcements')}>
-            <FaBullhorn /> Announcements
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/complaints')}>
-            <FaExclamationCircle /> Complaints Desk
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/chats')}>
-            <FaComments /> Group Chats
-          </NavRibbonItem>
-          <NavRibbonItem onClick={() => router.push('/admin/academic/reports')}>
-            <FaBookOpen /> Academic Reports
-          </NavRibbonItem>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/attendance')}>
+              <FaCalendarCheck /> Attendance
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/tasks')}>
+              <FaTasks /> Tasks & Assignments
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'results', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/results')}>
+              <FaAward /> Results & Grading
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/announcements')}>
+              <FaBullhorn /> Announcements
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/complaints')}>
+              <FaExclamationCircle /> Complaints Desk
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/chats')}>
+              <FaComments /> Group Chats
+            </NavRibbonItem>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavRibbonItem onClick={() => router.push('/admin/academic/reports')}>
+              <FaBookOpen /> Academic Reports
+            </NavRibbonItem>
+          )}
         </SubNavRibbon>
 
         {/* Real-Time Academic KPIs */}

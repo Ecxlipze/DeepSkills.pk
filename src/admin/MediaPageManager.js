@@ -8,6 +8,19 @@ import { requestRevalidate } from '../utils/revalidatePublic';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
+import {
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  validateRequired,
+  validateUrl,
+  validateForm
+} from '../utils/formValidation';
 
 const Container = styled.div`
   padding: 10px 0;
@@ -386,6 +399,7 @@ const MediaPageManager = () => {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(emptyFormData);
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchItems();
@@ -425,15 +439,17 @@ const MediaPageManager = () => {
       return;
     }
 
-    if (!formData.title.trim()) {
-      toast.error('Title is required.');
-      return;
-    }
+    const { isValid, errors: valErrors } = validateForm(formData, {
+      title: [(v) => validateRequired(v, 'Title')],
+      media_url: [(v) => validateRequired(v, 'Media URL'), (v) => validateUrl(v, 'Media URL')]
+    });
 
-    if (!formData.media_url.trim()) {
-      toast.error('Media URL is required.');
+    if (!isValid) {
+      setFormErrors(valErrors);
+      toast.error('Please resolve highlighted errors in the form.');
       return;
     }
+    setFormErrors({});
 
     setSubmitting(true);
     try {
@@ -460,6 +476,7 @@ const MediaPageManager = () => {
 
       toast.success(editingId ? 'Media item updated successfully.' : 'Media item added successfully.');
       setFormData(emptyFormData);
+      setFormErrors({});
       setEditingId(null);
       await requestRevalidate(['/media']);
       await fetchItems();
@@ -477,6 +494,7 @@ const MediaPageManager = () => {
       return;
     }
     setEditingId(item.id);
+    setFormErrors({});
     setFormData({
       title: item.title || '',
       description: item.description || '',
@@ -515,6 +533,7 @@ const MediaPageManager = () => {
       if (editingId === item.id) {
         setEditingId(null);
         setFormData(emptyFormData);
+        setFormErrors({});
       }
       await requestRevalidate(['/media']);
       await fetchItems();
@@ -527,6 +546,7 @@ const MediaPageManager = () => {
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData(emptyFormData);
+    setFormErrors({});
   };
 
   const groupByType = (type) => items.filter((i) => i.type === type);
@@ -555,20 +575,22 @@ const MediaPageManager = () => {
       </Header>
 
       {canMutate && (
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit} noValidate>
           <FormTitle>{editingId ? 'Edit Media Item' : 'Add New Media Item'}</FormTitle>
-          <InputGroup>
-            <Label>Title *</Label>
-            <Input
+          <FormField label="Title" required error={formErrors.title}>
+            <AdminInput
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, title: e.target.value });
+                if (formErrors.title) setFormErrors(prev => ({ ...prev, title: null }));
+              }}
+              hasError={Boolean(formErrors.title)}
               placeholder="e.g. Full Stack Student Showcase"
               required
             />
-          </InputGroup>
-          <InputGroup>
-            <Label>Category *</Label>
-            <Select
+          </FormField>
+          <FormField label="Category" required>
+            <AdminSelect
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value })}
             >
@@ -576,17 +598,22 @@ const MediaPageManager = () => {
               <option value="award">Award</option>
               <option value="stay_updated">Stay Updated Item</option>
               <option value="learn">Learn Through Video</option>
-            </Select>
-          </InputGroup>
-          <InputGroup style={{ gridColumn: '1 / -1' }}>
-            <Label>Media URL (Image, SVG, or Video from Media Library or CDN) *</Label>
-            <Input
-              value={formData.media_url}
-              onChange={(e) => setFormData({ ...formData, media_url: e.target.value })}
-              placeholder="e.g. https://.../media/sample.mp4 or https://.../image.png"
-              required
-            />
-          </InputGroup>
+            </AdminSelect>
+          </FormField>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <FormField label="Media URL" required error={formErrors.media_url} hint="Image, SVG, or Video from Media Library or CDN">
+              <AdminInput
+                value={formData.media_url}
+                onChange={(e) => {
+                  setFormData({ ...formData, media_url: e.target.value });
+                  if (formErrors.media_url) setFormErrors(prev => ({ ...prev, media_url: null }));
+                }}
+                hasError={Boolean(formErrors.media_url)}
+                placeholder="e.g. https://.../media/sample.mp4 or https://.../image.png"
+                required
+              />
+            </FormField>
+          </div>
 
           {formData.media_url && (
             <PreviewBox>
@@ -599,22 +626,29 @@ const MediaPageManager = () => {
             </PreviewBox>
           )}
 
-          <TextArea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Description or notes (optional)..."
-          />
+          <div style={{ gridColumn: '1 / -1' }}>
+            <FormField label="Description (Optional)">
+              <AdminTextarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Description or notes (optional)..."
+                rows={3}
+              />
+            </FormField>
+          </div>
 
-          <ButtonRow>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving...' : editingId ? 'Update Item' : 'Add Media Item'}
-            </Button>
-            {editingId && (
-              <Button type="button" onClick={handleCancelEdit} style={{ background: '#444' }}>
-                Cancel
-              </Button>
-            )}
-          </ButtonRow>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <ButtonRow>
+              <AdminButton variant="primary" type="submit" disabled={submitting}>
+                {submitting ? 'Saving...' : editingId ? 'Update Item' : 'Add Media Item'}
+              </AdminButton>
+              {editingId && (
+                <AdminButton variant="secondary" type="button" onClick={handleCancelEdit}>
+                  Cancel
+                </AdminButton>
+              )}
+            </ButtonRow>
+          </div>
         </Form>
       )}
 

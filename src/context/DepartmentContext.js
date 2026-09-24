@@ -26,9 +26,22 @@ export const DepartmentProvider = ({ children }) => {
     if (typeof window === 'undefined') return;
     const pathDepartment = getDepartmentByPath(window.location.pathname)?.id;
     const stored = localStorage.getItem(storageKey);
-    const next = pathDepartment || stored || visibleDepartments[0]?.id || 'all';
+    const isAllowedDept = (deptId) => visibleDepartments.some((d) => d.id === deptId);
+
+    let next = 'all';
+    if (user?.role === 'admin') {
+      next = pathDepartment || stored || 'all';
+    } else {
+      if (pathDepartment && isAllowedDept(pathDepartment)) {
+        next = pathDepartment;
+      } else if (stored && isAllowedDept(stored)) {
+        next = stored;
+      } else {
+        next = visibleDepartments[0]?.id || 'counsellor';
+      }
+    }
     setActiveDepartmentState(next);
-  }, [visibleDepartments]);
+  }, [visibleDepartments, user]);
 
   const setActiveDepartment = (departmentId) => {
     setActiveDepartmentState(departmentId);

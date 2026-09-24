@@ -8,6 +8,26 @@ import { useAuth } from '../context/AuthContext';
 import { downloadCsv } from '../utils/csvExport';
 import { canAccess, getRoleColor, getRoleLabel, MODULE_KEYS } from '../utils/permissions';
 import { bulkActivate, bulkRoleChange, bulkSuspend, createRole, createUser, deleteRole, fetchRoles, fetchUserActivity, fetchUserStats, fetchUsers, reactivateUser, suspendUser, updateRole, updateUser } from '../utils/userManagementApi';
+import {
+  AdminModal,
+  AdminModalHeader,
+  AdminModalBody,
+  AdminModalFooter,
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminCheckbox,
+  AdminButton,
+  FormGrid
+} from '../components/portal';
+import {
+  formatCnic,
+  validateRequired,
+  validateEmail,
+  validateCnic,
+  validatePhone
+} from '../utils/formValidation';
 
 const ROLE_OPTIONS = ['Admin'];
 const ICON_OPTIONS = ['👤', '👔', '💼', '📞', '📋', '🔐'];
@@ -15,13 +35,6 @@ const COLOR_OPTIONS = ['purple', 'amber', 'pink', 'gray', 'blue', 'green'];
 const emptyPermissions = MODULE_KEYS.reduce((acc, key) => ({ ...acc, [key]: 'none' }), {});
 const emptyUserForm = { fullName: '', cnic: '', phone: '', email: '', roleValue: 'Admin', customRoleId: '', status: 'active', sendWelcomeEmail: true, accountNotes: '' };
 const emptyRoleForm = { name: '', description: '', icon: '👤', color: 'gray', permissions: emptyPermissions };
-
-const formatCnic = (value) => {
-  const digits = value.replace(/\D/g, '').slice(0, 13);
-  if (digits.length <= 5) return digits;
-  if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}`;
-};
 
 const relativeTime = (value) => {
   if (!value) return 'Never';
@@ -59,35 +72,121 @@ const ActivityIcon = ({ type }) => {
   return <ActivityDot>{icons[type] || '📌'}</ActivityDot>;
 };
 
-const UserModal = ({ open, title, form, setForm, roles, editing, onClose, onSubmit }) => (
-  <AnimatePresence>
-    {open && (
-      <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-        <ModalCard initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}>
-          <ModalHeader><div><h3>{title}</h3><p>Manage staff account details, custom role assignment, and access notes.</p></div><IconButton onClick={onClose}><FaTimes /></IconButton></ModalHeader>
-          <ModalBody>
-            <FormGrid>
-              <Field><label>Full Name *</label><input value={form.fullName} onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))} /></Field>
-              <Field><label>CNIC *</label><input value={form.cnic} onChange={(e) => setForm((prev) => ({ ...prev, cnic: formatCnic(e.target.value) }))} /></Field>
-              <Field><label>Email Address</label><input value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} /></Field>
-              <Field><label>Phone Number</label><input value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} /></Field>
-              <Field>
-                <label>Role</label>
-                <select value={form.roleValue} onChange={(e) => { const value = e.target.value; setForm((prev) => ({ ...prev, roleValue: value, customRoleId: value.startsWith('custom-role:') ? value.split(':')[1] : '' })); }}>
-                  {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
-                  {roles.map((role) => <option key={role.id} value={`custom-role:${role.id}`}>{role.name}</option>)}
-                </select>
-              </Field>
-              <Field><label>Account Status</label><select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></Field>
-            </FormGrid>
-            <Field><label>Internal Notes</label><textarea rows="3" value={form.accountNotes} onChange={(e) => setForm((prev) => ({ ...prev, accountNotes: e.target.value }))} /></Field>
-            {!editing && <Checkbox><input type="checkbox" checked={form.sendWelcomeEmail} onChange={(e) => setForm((prev) => ({ ...prev, sendWelcomeEmail: e.target.checked }))} /> Send welcome login instructions email</Checkbox>}
-            <PrimaryButton onClick={onSubmit}><FaShieldAlt /> {editing ? 'Save Changes' : 'Create User'}</PrimaryButton>
-          </ModalBody>
-        </ModalCard>
-      </ModalOverlay>
-    )}
-  </AnimatePresence>
+const UserModal = ({ open, title, form, setForm, errors, setErrors, roles, editing, onClose, onSubmit }) => (
+  <AdminModal isOpen={open} onClose={onClose} maxWidth="640px">
+    <AdminModalHeader
+      title={title}
+      subtitle="Manage staff account details, custom role assignment, and access notes."
+      icon={FaShieldAlt}
+      onClose={onClose}
+    />
+    <AdminModalBody>
+      <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <FormGrid $columns={2}>
+          <FormField label="Full Name" required error={errors?.fullName}>
+            <AdminInput
+              value={form.fullName}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, fullName: e.target.value }));
+                if (errors?.fullName) setErrors?.((prev) => ({ ...prev, fullName: undefined }));
+              }}
+              placeholder="e.g. Asad Ullah"
+              $hasError={Boolean(errors?.fullName)}
+            />
+          </FormField>
+
+          <FormField label="CNIC" required error={errors?.cnic} hint="13 digits: XXXXX-XXXXXXX-X">
+            <AdminInput
+              value={form.cnic}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, cnic: formatCnic(e.target.value) }));
+                if (errors?.cnic) setErrors?.((prev) => ({ ...prev, cnic: undefined }));
+              }}
+              placeholder="35202-1234567-9"
+              maxLength={15}
+              $hasError={Boolean(errors?.cnic)}
+            />
+          </FormField>
+
+          <FormField label="Email Address" error={errors?.email}>
+            <AdminInput
+              type="email"
+              value={form.email}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, email: e.target.value }));
+                if (errors?.email) setErrors?.((prev) => ({ ...prev, email: undefined }));
+              }}
+              placeholder="staff@deepskills.pk"
+              $hasError={Boolean(errors?.email)}
+            />
+          </FormField>
+
+          <FormField label="Phone Number" error={errors?.phone}>
+            <AdminInput
+              value={form.phone}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, phone: e.target.value }));
+                if (errors?.phone) setErrors?.((prev) => ({ ...prev, phone: undefined }));
+              }}
+              placeholder="03001234567"
+              $hasError={Boolean(errors?.phone)}
+            />
+          </FormField>
+
+          <FormField label="Role">
+            <AdminSelect
+              value={form.roleValue}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  roleValue: value,
+                  customRoleId: value.startsWith('custom-role:') ? value.split(':')[1] : ''
+                }));
+              }}
+            >
+              {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
+              {roles.map((role) => <option key={role.id} value={`custom-role:${role.id}`}>{role.name}</option>)}
+            </AdminSelect>
+          </FormField>
+
+          <FormField label="Account Status">
+            <AdminSelect value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </AdminSelect>
+          </FormField>
+        </FormGrid>
+
+        <FormField label="Internal Notes">
+          <AdminTextarea
+            rows={3}
+            value={form.accountNotes}
+            onChange={(e) => setForm((prev) => ({ ...prev, accountNotes: e.target.value }))}
+            placeholder="Administrative remarks or department assignment notes..."
+          />
+        </FormField>
+
+        {!editing && (
+          <AdminCheckbox
+            label="Send welcome login instructions email"
+            description="Sends temporary credentials and LMS orientation guide"
+            checked={form.sendWelcomeEmail}
+            onChange={(e) => setForm((prev) => ({ ...prev, sendWelcomeEmail: e.target.checked }))}
+          />
+        )}
+      </form>
+    </AdminModalBody>
+    <AdminModalFooter>
+      <AdminButton $variant="secondary" type="button" onClick={onClose}>
+        Cancel
+      </AdminButton>
+      <AdminButton $variant="primary" type="button" onClick={onSubmit}>
+        <FaShieldAlt /> {editing ? 'Save Changes' : 'Create User'}
+      </AdminButton>
+    </AdminModalFooter>
+  </AdminModal>
 );
 
 const AdminUserManagement = () => {
@@ -149,11 +248,37 @@ const AdminUserManagement = () => {
 
   const exportRows = (rows) => downloadCsv(`users-${tab}-${new Date().toISOString().split('T')[0]}.csv`, ['Full Name', 'Email', 'CNIC', 'Phone', 'Role', 'Status', 'Last Login', 'Joined On'], rows.map((row) => [row.full_name, row.email || '', row.cnic, row.phone || '', getRoleLabel(row.role, row.custom_roles?.name), row.status, row.last_login || '', row.created_at || '']));
 
+  const [userErrors, setUserErrors] = useState({});
+
   const saveUser = async () => {
     if (!canMutate) {
       toast.error('You do not have permission to modify users.');
       return;
     }
+    const errors = {};
+    const nameErr = validateRequired(userForm.fullName, 'Full name');
+    if (nameErr) errors.fullName = nameErr;
+    else if (userForm.fullName.trim().length < 2) errors.fullName = 'Full name must be at least 2 characters.';
+
+    const cnicErr = validateCnic(userForm.cnic, 'CNIC', true);
+    if (cnicErr) errors.cnic = cnicErr;
+
+    if (userForm.email || userForm.sendWelcomeEmail) {
+      const emailErr = validateEmail(userForm.email, 'Email address', Boolean(userForm.sendWelcomeEmail));
+      if (emailErr) errors.email = emailErr;
+    }
+
+    if (userForm.phone) {
+      const phoneErr = validatePhone(userForm.phone, 'Phone number', false);
+      if (phoneErr) errors.phone = phoneErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setUserErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+
     try {
       if (editingUser) {
         await updateUser(editingUser.id, userForm, user);
@@ -165,6 +290,7 @@ const AdminUserManagement = () => {
       }
       setShowUserModal(false);
       setEditingUser(null);
+      setUserErrors({});
       setUserForm(emptyUserForm);
       loadPage();
     } catch (error) {
@@ -175,6 +301,10 @@ const AdminUserManagement = () => {
   const saveRole = async () => {
     if (!canMutate) {
       toast.error('You do not have permission to modify roles.');
+      return;
+    }
+    if (!roleForm.name.trim()) {
+      toast.error('Role name is required.');
       return;
     }
     try {
@@ -219,14 +349,14 @@ const AdminUserManagement = () => {
   return (
     <AdminLayout>
       <Wrap>
-        <Header><div><h1>User Management</h1><p>Manage admin-panel staff, existing roles, and permissions</p></div><Actions>{canMutate && <PrimaryButton onClick={() => { setEditingUser(null); setUserForm(emptyUserForm); setShowUserModal(true); }}><FaPlus /> Add User</PrimaryButton>}{canMutate && <SecondaryButton onClick={() => setShowRolePanel(true)}><FaShieldAlt /> Manage Roles</SecondaryButton>}<SecondaryButton onClick={() => exportRows(users)}><FaFileCsv /> Export All</SecondaryButton></Actions></Header>
+        <Header><div><h1>User Management</h1><p>Manage admin-panel staff, existing roles, and permissions</p></div><Actions>{canMutate && <PrimaryButton onClick={() => { setEditingUser(null); setUserErrors({}); setUserForm(emptyUserForm); setShowUserModal(true); }}><FaPlus /> Add User</PrimaryButton>}{canMutate && <SecondaryButton onClick={() => setShowRolePanel(true)}><FaShieldAlt /> Manage Roles</SecondaryButton>}<SecondaryButton onClick={() => exportRows(users)}><FaFileCsv /> Export All</SecondaryButton></Actions></Header>
         <StatsGrid>{[['Admin Panel Users', stats.adminPanelUsers, '#4F8EF7'], ['Admins', stats.admins, '#d1d5db'], ['Custom Roles', stats.custom, '#9ca3af']].map(([label, value, color]) => <StatCard key={label}><span>{label}</span><strong style={{ color }}>{value}</strong></StatCard>)}</StatsGrid>
         <TabRow>{[['all', `All (${stats.adminPanelUsers})`], ['admin', `Admins (${stats.admins})`], ['custom', `Custom (${stats.custom})`]].map(([key, label]) => <Tab key={key} $active={tab === key} onClick={() => { setTab(key); setPage(1); }}>{label}</Tab>)}</TabRow>
         <Panel><Filters><Field><label>Search</label><input value={filters.search} onChange={(e) => { setFilters((prev) => ({ ...prev, search: e.target.value })); setPage(1); }} placeholder="name, cnic, email, phone" /></Field>{tab === 'all' && <Field><label>Role</label><select value={filters.role} onChange={(e) => { setFilters((prev) => ({ ...prev, role: e.target.value })); setPage(1); }}><option value="all">All</option>{[...ROLE_OPTIONS.map((label) => ({ value: label.toLowerCase().replace(/\s+/g, '_'), label })), { value: 'custom', label: 'Custom' }].map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}</select></Field>}<Field><label>Status</label><select value={filters.status} onChange={(e) => { setFilters((prev) => ({ ...prev, status: e.target.value })); setPage(1); }}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></Field><Field><label>Last Active</label><select value={filters.lastActive} onChange={(e) => { setFilters((prev) => ({ ...prev, lastActive: e.target.value })); setPage(1); }}><option value="any">Any time</option><option value="today">Today</option><option value="week">This week</option><option value="month">This month</option></select></Field></Filters></Panel>
         <BulkBar><span>{selectedIds.length} selected</span><div>{canMutate && <SmallButton onClick={() => runBulk('suspend')}><FaBan /> Bulk Suspend</SmallButton>}{canMutate && <SmallButton onClick={() => runBulk('activate')}><FaCheck /> Bulk Activate</SmallButton>}<SmallButton onClick={() => runBulk('export')}><FaFileCsv /> Bulk Export</SmallButton>{canMutate && <SmallButton onClick={() => runBulk('role')}><FaUsers /> Bulk Role Change</SmallButton>}</div></BulkBar>
-        <Panel><Table><thead><tr><th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={(e) => setSelectedIds(e.target.checked ? users.map((row) => row.id) : [])} /></th><th>User</th><th>CNIC</th><th>Role</th><th>Status</th><th>Last Login</th><th>Joined On</th><th>Actions</th></tr></thead><tbody>{loading ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>Loading...</td></tr> : users.length === 0 ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>No users found.</td></tr> : users.map((row) => { const styles = getRoleColor(row.role, row.custom_roles?.color); return <tr key={row.id}><td><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id))} /></td><td><UserCell><Avatar style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{row.full_name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</Avatar><div><strong>{row.full_name}</strong><small>{row.email || 'No email'}</small></div></UserCell></td><td>{row.cnic}</td><td><Pill style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{getRoleLabel(row.role, row.custom_roles?.name)}</Pill></td><td><Status $status={row.status}>{row.status}</Status></td><td>{relativeTime(row.last_login)}</td><td>{row.created_at ? new Date(row.created_at).toLocaleDateString() : '-'}</td><td><InlineActions>{canMutate && <button onClick={() => { setEditingUser(row); setUserForm({ fullName: row.full_name || '', cnic: row.cnic || '', phone: row.phone || '', email: row.email || '', roleValue: row.custom_role_id ? `custom-role:${row.custom_role_id}` : getRoleLabel(row.role), customRoleId: row.custom_role_id || '', status: row.status || 'active', sendWelcomeEmail: false, accountNotes: row.account_notes || '' }); setShowUserModal(true); }}><FaEdit /> Edit</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); suspendUser(row.id, user).then(() => { toast.success('User suspended'); loadPage(); }); }}><FaBan /> Suspend</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); reactivateUser(row.id, user).then(() => { toast.success('Access reset'); loadPage(); }); }}><FaCheck /> Reset Access</button>}<button onClick={() => { setActivityTarget(row); setShowActivityPanel(true); }}><FaEye /> View Activity</button></InlineActions></td></tr>; })}</tbody></Table></Panel>
+        <Panel><Table><thead><tr><th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={(e) => setSelectedIds(e.target.checked ? users.map((row) => row.id) : [])} /></th><th>User</th><th>CNIC</th><th>Role</th><th>Status</th><th>Last Login</th><th>Joined On</th><th>Actions</th></tr></thead><tbody>{loading ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>Loading...</td></tr> : users.length === 0 ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>No users found.</td></tr> : users.map((row) => { const styles = getRoleColor(row.role, row.custom_roles?.color); return <tr key={row.id}><td><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id))} /></td><td><UserCell><Avatar style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{row.full_name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</Avatar><div><strong>{row.full_name}</strong><small>{row.email || 'No email'}</small></div></UserCell></td><td>{row.cnic}</td><td><Pill style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{getRoleLabel(row.role, row.custom_roles?.name)}</Pill></td><td><Status $status={row.status}>{row.status}</Status></td><td>{relativeTime(row.last_login)}</td><td>{row.created_at ? new Date(row.created_at).toLocaleDateString() : '-'}</td><td><InlineActions>{canMutate && <button onClick={() => { setEditingUser(row); setUserErrors({}); setUserForm({ fullName: row.full_name || '', cnic: row.cnic || '', phone: row.phone || '', email: row.email || '', roleValue: row.custom_role_id ? `custom-role:${row.custom_role_id}` : getRoleLabel(row.role), customRoleId: row.custom_role_id || '', status: row.status || 'active', sendWelcomeEmail: false, accountNotes: row.account_notes || '' }); setShowUserModal(true); }}><FaEdit /> Edit</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); suspendUser(row.id, user).then(() => { toast.success('User suspended'); loadPage(); }); }}><FaBan /> Suspend</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); reactivateUser(row.id, user).then(() => { toast.success('Access reset'); loadPage(); }); }}><FaCheck /> Reset Access</button>}<button onClick={() => { setActivityTarget(row); setShowActivityPanel(true); }}><FaEye /> View Activity</button></InlineActions></td></tr>; })}</tbody></Table></Panel>
         <FooterRow><span>Page {page} of {Math.max(1, Math.ceil(count / pageSize))}</span><div><SmallButton disabled={page === 1} onClick={() => setPage((prev) => prev - 1)}>Prev</SmallButton><SmallButton disabled={page >= Math.max(1, Math.ceil(count / pageSize))} onClick={() => setPage((prev) => prev + 1)}>Next</SmallButton></div></FooterRow>
-        <UserModal open={showUserModal} title={editingUser ? 'Edit User' : 'Add New User'} form={userForm} setForm={setUserForm} roles={roles} editing={Boolean(editingUser)} onClose={() => setShowUserModal(false)} onSubmit={saveUser} />
+        <UserModal open={showUserModal} title={editingUser ? 'Edit User' : 'Add New User'} form={userForm} setForm={setUserForm} errors={userErrors} setErrors={setUserErrors} roles={roles} editing={Boolean(editingUser)} onClose={() => { setShowUserModal(false); setUserErrors({}); }} onSubmit={saveUser} />
         <AnimatePresence>{showRolePanel && <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><SidePanel initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }}><ModalHeader><div><h3>Manage Roles</h3><p>Edit staff role permissions and create custom admin access roles.</p></div><IconButton onClick={() => setShowRolePanel(false)}><FaTimes /></IconButton></ModalHeader><PanelBody><PanelIntro>Create the staff roles you need and assign module permissions. Admin keeps full access by design and is not editable.</PanelIntro><RoleGrid>{roles.map((role) => <RoleCard key={role.id}><strong>{role.icon} {role.name}</strong><small>{role.description || 'No description'}</small><small>{users.filter((entry) => entry.custom_role_id === role.id).length} users</small><InlineActions>{canMutate && <button onClick={() => { setEditingRole(role); setRoleForm({ name: role.name, description: role.description || '', icon: role.icon || '👤', color: role.color || 'gray', permissions: { ...emptyPermissions, ...(role.permissions || {}) } }); }}>Edit</button>}<button disabled={!canMutate || users.some((entry) => entry.custom_role_id === role.id)} onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify roles.'); deleteRole(role.id).then(() => { toast.success('Role deleted'); loadPage(); }); }}>Delete</button></InlineActions></RoleCard>)}</RoleGrid><SectionTitle>{editingRole ? 'Edit Role' : 'Create Role'}</SectionTitle><Field><label>Role Name</label><input value={roleForm.name} onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))} /></Field><Field><label>Description</label><textarea rows="2" value={roleForm.description} onChange={(e) => setRoleForm((prev) => ({ ...prev, description: e.target.value }))} /></Field><Field><label>Icon</label><SimpleRow>{ICON_OPTIONS.map((icon) => <SmallButton key={icon} onClick={() => setRoleForm((prev) => ({ ...prev, icon }))}>{icon}</SmallButton>)}</SimpleRow></Field><Field><label>Color</label><SimpleRow>{COLOR_OPTIONS.map((color) => <SmallButton key={color} onClick={() => setRoleForm((prev) => ({ ...prev, color }))}>{color}</SmallButton>)}</SimpleRow></Field><Field><label>Permissions</label><PermissionsMatrix permissions={roleForm.permissions} onToggle={(key) => setRoleForm((prev) => ({ ...prev, permissions: { ...prev.permissions, [key]: cyclePermission(prev.permissions[key]) } }))} /></Field>{canMutate && <PrimaryButton onClick={saveRole}><FaShieldAlt /> {editingRole ? 'Update Role' : 'Create Role'}</PrimaryButton>}</PanelBody></SidePanel></ModalOverlay>}</AnimatePresence>
         <AnimatePresence>{showActivityPanel && <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><SidePanel initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }}><ModalHeader><div><h3>{activityTarget?.full_name} — Activity Log</h3><p>{activityTotal} events</p></div><IconButton onClick={() => setShowActivityPanel(false)}><FaTimes /></IconButton></ModalHeader><PanelBody>{activityLogs.map((entry) => <ActivityItem key={entry.id}><ActivityIcon type={entry.event_type} /><div><strong>{entry.event_description}</strong><small>{new Date(entry.created_at).toLocaleString()}</small><small>{entry.device_info || 'Unknown device'}</small></div></ActivityItem>)}{activityLogs.length === 0 && <small>No activity found.</small>}</PanelBody></SidePanel></ModalOverlay>}</AnimatePresence>
       </Wrap>
@@ -261,7 +391,6 @@ const ModalHeader = styled.div`display:flex;align-items:flex-start;justify-conte
 const ModalBody = styled.div`padding:24px;`;
 const SidePanel = styled(motion.div)`margin-left:auto;width:min(460px,100%);height:100%;background:#111318;border-left:1px solid rgba(255,255,255,0.08);overflow-y:auto;`;
 const PanelBody = styled.div`padding:20px 24px 28px;`;
-const FormGrid = styled.div`display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px;@media (max-width:640px){grid-template-columns:1fr;}`;
 const Checkbox = styled.label`display:flex;align-items:center;gap:10px;color:#d1d5db;margin-bottom:18px;`;
 const IconButton = styled.button`width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#fff;cursor:pointer;`;
 const RoleGrid = styled.div`display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px;@media (max-width:640px){grid-template-columns:1fr;}`;

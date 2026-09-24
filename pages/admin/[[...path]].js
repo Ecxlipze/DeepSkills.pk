@@ -11,7 +11,7 @@ import { GroupChatProvider } from '../../src/context/GroupChatContext';
 import { AnnouncementsProvider } from '../../src/context/AnnouncementsContext';
 import { DepartmentProvider } from '../../src/context/DepartmentContext';
 import { useAuth } from '../../src/context/AuthContext';
-import { getFirstAccessibleAdminPath } from '../../src/utils/permissions';
+import { canAccess, getFirstAccessibleAdminPath } from '../../src/utils/permissions';
 import {
   getDepartmentNav,
   getDepartmentRouteAccess,
@@ -111,12 +111,17 @@ function DepartmentHubRedirect({ departmentId, currentPath }) {
   );
 }
 
-function getAdminPage(path = []) {
+function getAdminPage(path = [], user = null) {
   const [section, child] = path;
   const subpath = path.slice(2).join('/');
 
   if (!section) return <AdminLogin />;
-  if (section === 'dashboard') return <AdminDashboard />;
+  if (section === 'dashboard') {
+    if (user?.role !== 'admin' && !canAccess(user?.permissions || {}, 'dashboard', 'view')) {
+      return <DepartmentHubRedirect departmentId="all" currentPath="/admin/dashboard" />;
+    }
+    return <AdminDashboard />;
+  }
   if (section === 'admissions') return <EnrollmentManager />;
   if (section === 'counsellor') {
     return <CounsellorPanel initialView={child || 'overview'} />;
@@ -154,7 +159,12 @@ function getAdminPage(path = []) {
   if (section === 'careers' || section === 'jobs') return <CareerManager />;
 
   if (section === 'academic') {
-    if (!child) return <AdminAcademicOverview />;
+    if (!child) {
+      if (user?.role !== 'admin') {
+        return <DepartmentHubRedirect departmentId="academic" currentPath="/admin/academic" />;
+      }
+      return <AdminAcademicOverview />;
+    }
     if (child === 'attendance') return subpath === 'settings' ? <AdminAttendanceSettings /> : <AdminAttendancePage />;
     if (child === 'results') return <AdminResults />;
     if (child === 'announcements') return <AdminAnnouncements />;
@@ -165,7 +175,12 @@ function getAdminPage(path = []) {
   }
 
   if (section === 'management') {
-    if (!child) return <ManagementOverview />;
+    if (!child) {
+      if (user?.role !== 'admin') {
+        return <DepartmentHubRedirect departmentId="management" currentPath="/admin/management" />;
+      }
+      return <ManagementOverview />;
+    }
     if (child === 'students') return subpath ? <StudentProfile studentId={subpath} /> : <StudentManager />;
     if (child === 'teachers') return subpath ? <TeacherProfile teacherId={subpath} /> : <TeacherManager basePath="/admin/management/teachers" />;
     if (child === 'trainers') return <TrainerManager />;
@@ -239,13 +254,14 @@ function AdminProviders({ children }) {
 
 export default function AdminPortal() {
   const router = useRouter();
+  const { user } = useAuth();
   const rawPath = Array.isArray(router.query.path) ? router.query.path : [];
   const normalized = normalizeAdminPath(`/admin/${rawPath.join('/')}`);
   const path = normalized === '/admin' ? [] : normalized.replace(/^\/admin\/?/, '').split('/').filter(Boolean);
   const access = getAdminAccess(path);
 
   if (!path[0]) {
-    return <AdminProviders>{getAdminPage(path)}</AdminProviders>;
+    return <AdminProviders>{getAdminPage(path, user)}</AdminProviders>;
   }
 
   return (
@@ -260,7 +276,7 @@ export default function AdminPortal() {
         departmentId={access?.departmentId}
         loginPath="/admin"
       >
-        {getAdminPage(path)}
+        {getAdminPage(path, user)}
       </NextPortalGuard>
     </AdminProviders>
   );

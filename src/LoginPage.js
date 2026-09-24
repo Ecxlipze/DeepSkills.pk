@@ -4,7 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaIdCard, FaArrowRight, FaMapMarkerAlt, FaCheckCircle, FaClock, FaTimesCircle, FaInfoCircle, FaEnvelope } from 'react-icons/fa';
 import { useAuth } from './context/AuthContext';
-import { getFirstAccessibleAdminPath } from './utils/permissions';
+import { canAccess, getFirstAccessibleAdminPath } from './utils/permissions';
+import {
+  getDefaultDepartmentPath,
+  getDepartmentRouteAccess,
+  canAccessDepartment
+} from './utils/departments';
 import { getTodayAttendanceLoginStatus, triggerAutoAttendance } from './utils/autoAttendance';
 
 const PageContainer = styled(motion.div)`
@@ -331,10 +336,33 @@ const LoginPage = () => {
           setAttendanceResult(attendanceStatus);
           setTimeout(finishStudentLogin, 3000);
         }
-      } else if (from && from !== '/' && from !== '/login') {
-        navigate(from, { replace: true });
       } else {
-        if (user.role === 'teacher') {
+        const isFromAccessible = Boolean(
+          from &&
+          from !== '/' &&
+          from !== '/login' &&
+          (user.role === 'admin' || (() => {
+            if (from.startsWith('/student') && user.role !== 'student') return false;
+            if (from.startsWith('/teacher') && user.role !== 'teacher') return false;
+            if (from.startsWith('/admin')) {
+              if (user.role !== 'custom') return false;
+              const routeAccess = getDepartmentRouteAccess(from);
+              if (!routeAccess) return true;
+              if (routeAccess.allowedRoles && !routeAccess.allowedRoles.includes(user.role)) return false;
+              if (routeAccess.permissionKey) {
+                return canAccess(user.permissions || {}, routeAccess.permissionKey, 'view');
+              }
+              if (routeAccess.departmentId) {
+                return canAccessDepartment(user, routeAccess.departmentId);
+              }
+            }
+            return true;
+          })())
+        );
+
+        if (isFromAccessible) {
+          navigate(from, { replace: true });
+        } else if (user.role === 'teacher') {
           if (user.status === 'Pending' || user.status === 'Onboarding') {
             navigate('/teacher/hr', { replace: true });
           } else {
@@ -343,7 +371,7 @@ const LoginPage = () => {
         } else {
           const adminPath = user.role === 'admin'
             ? '/admin/dashboard'
-            : getFirstAccessibleAdminPath(user.permissions || {});
+            : (getDefaultDepartmentPath(user) || getFirstAccessibleAdminPath(user.permissions || {}));
           navigate(adminPath, { replace: true });
         }
       }

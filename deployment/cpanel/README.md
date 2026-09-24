@@ -24,11 +24,13 @@ Open **Setup Node.js App** or **Application Manager**. The exact labels depend o
 
 Save/create the application. Do not add PHP rewrite rules. All `/api` requests must reach this Node app; old supported `.php` URLs are aliases handled inside Next.js.
 
-## 3. Configure the private environment
+## 3. Verify the private environment
 
-In File Manager, enable **Show Hidden Files**, open `deepskills-app`, and copy `.env.example` to `.env.local`. Enter your existing Supabase values and your mail provider's settings. Alternatively, enter equivalent variables in the Node application's environment settings. Set file permissions to `600` when using `.env.local`.
+This release archive already includes your pre-configured `.env.local` inside `deepskills-app/`.
 
-Required settings:
+In cPanel File Manager, enable **Show Hidden Files** (settings gear at top right) to view `.env.local` inside `deepskills-app/`. Set file permissions to `600` if not already set.
+
+If you ever need to inspect or update values, the primary settings are:
 
 - `NODE_ENV=production`
 - `NEXT_PUBLIC_SITE_URL=https://deepskills.pk`
@@ -37,8 +39,6 @@ Required settings:
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`: obtain these from the sending mailbox provider. Typically port 465 uses implicit TLS; 587 uses STARTTLS. The provider must authorize the sender in `SMTP_FROM`.
 - `CONTACT_EMAIL_TO`: where contact messages go, such as `info@deepskills.pk`.
 - `HR_EMAIL_TO`: where HR administrative notifications go, such as `info@deepskills.pk`.
-
-Uncomment the settings you use by removing their leading `#`. Placeholder values do not work. Do not paste passwords into chat or put private keys/passwords in variables beginning with `NEXT_PUBLIC_`. Those public variables are included in the browser build; rebuild after changing them.
 
 All email paths now use the same Node SMTP transport: OTP, contact, admissions/notifications, and HR. There is no PHP mail configuration to maintain.
 

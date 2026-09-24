@@ -69,7 +69,7 @@ const BarsContainer = styled.div`
 const Bar = styled(motion.div)`
   background: ${props => props.$type === 'maroon' 
     ? 'linear-gradient(90deg, #7B1F2E 0%, #a22a3d 100%)' 
-    : 'linear-gradient(90deg, #1a1a1a 0%, #333 100%)'};
+    : '#000'};
   padding: 30px 45px;
   display: flex;
   align-items: center;

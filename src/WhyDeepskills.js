@@ -81,7 +81,7 @@ const CardsContainer = styled.div`
 `;
 
 const Card = styled(motion.div)`
-  background: rgba(30, 30, 30, 0.8);
+  background: #000;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;

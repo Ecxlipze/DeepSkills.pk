@@ -1490,30 +1490,44 @@ const AdminResults = () => {
       <Container>
         {/* Navigation Ribbon */}
         <SubNavRibbon>
-          <NavChip onClick={() => router.push('/admin/academic')}>
-            <FaChartLine /> Academic Hub
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/attendance')}>
-            <FaCalendarAlt /> Attendance
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/tasks')}>
-            <FaTasks /> Tasks & Homework
-          </NavChip>
+          {user?.role === 'admin' && (
+            <NavChip onClick={() => router.push('/admin/academic')}>
+              <FaChartLine /> Academic Hub
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/attendance')}>
+              <FaCalendarAlt /> Attendance
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/tasks')}>
+              <FaTasks /> Tasks & Homework
+            </NavChip>
+          )}
           <NavChip $active onClick={() => router.push('/admin/academic/results')}>
             <FaAward /> Exams & Results
           </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/announcements')}>
-            Announcements
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/complaints')}>
-            Grievances
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/chats')}>
-            Group Chats
-          </NavChip>
-          <NavChip onClick={() => router.push('/admin/academic/reports')}>
-            Academic Reports
-          </NavChip>
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'announcements', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/announcements')}>
+              Announcements
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/complaints')}>
+              Grievances
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'tasks', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/chats')}>
+              Group Chats
+            </NavChip>
+          )}
+          {(user?.role === 'admin' || canAccess(user?.permissions || {}, 'reports', 'view')) && (
+            <NavChip onClick={() => router.push('/admin/academic/reports')}>
+              Academic Reports
+            </NavChip>
+          )}
         </SubNavRibbon>
 
         {/* Header Bar */}

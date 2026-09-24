@@ -107,7 +107,7 @@ const RolesList = styled.div`
 `;
 
 const RoleMiniCard = styled(motion.div)`
-  background: rgba(25, 25, 25, 0.8);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -118,7 +118,7 @@ const RoleMiniCard = styled(motion.div)`
 
   &:hover {
     border-color: #CD7C7C;
-    background: rgba(40, 40, 40, 0.9);
+    background: rgba(123, 31, 46, 0.08);
     transform: translateY(-5px);
     box-shadow: 0 15px 30px rgba(122, 30, 45, 0.25);
   }

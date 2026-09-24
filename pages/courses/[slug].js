@@ -6,10 +6,13 @@ import FullStackPage from '../../src/FullStackPage';
 import WordPressPage from '../../src/WordPressPage';
 import LaravelPage from '../../src/LaravelPage';
 import GraphicPage from '../../src/GraphicPage';
+import DynamicCoursePage from '../../src/DynamicCoursePage';
 import { courses, getCourseBySlug } from '../../data/siteContent';
 import { fetchPublishedPosts } from '../../lib/blog';
 import { breadcrumbSchema, courseSchema } from '../../lib/structuredData';
 import { maybeRevalidate, staticFallback } from '../../lib/rendering';
+import { getSupabaseServerClient } from '../../lib/supabaseServer';
+import { slugify } from '../../lib/careers';
 
 const courseComponents = {
   'full-stack-react': FullStackPage,
@@ -18,14 +21,14 @@ const courseComponents = {
   'graphic-design': GraphicPage
 };
 
-export default function CourseDetail({ course, relatedBlogs }) {
+export default function CourseDetail({ course, relatedBlogs = [] }) {
   const CourseComponent = courseComponents[course.slug];
 
   return (
     <PublicLayout>
       <Seo
-        title={course.title}
-        description={course.summary}
+        title={`${course.title} Course`}
+        description={course.summary || course.description}
         path={`/courses/${course.slug}`}
         image={course.image}
         jsonLd={[
@@ -37,7 +40,11 @@ export default function CourseDetail({ course, relatedBlogs }) {
           ])
         ]}
       />
-      <CourseComponent />
+      {CourseComponent ? (
+        <CourseComponent />
+      ) : (
+        <DynamicCoursePage course={course} />
+      )}
       {relatedBlogs.length > 0 ? (
         <RelatedBlogs aria-label="Related blog posts">
           <div>
@@ -59,14 +66,141 @@ export default function CourseDetail({ course, relatedBlogs }) {
 }
 
 export async function getStaticPaths() {
+  const staticPaths = courses.map((course) => ({ params: { slug: course.slug } }));
+
+  let dbPaths = [];
+  const supabase = getSupabaseServerClient();
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('courses')
+        .select('slug, title, status')
+        .eq('status', 'active');
+      if (data) {
+        dbPaths = data.map((c) => ({
+          params: { slug: c.slug || slugify(c.title) }
+        }));
+      }
+    } catch {
+      // Gracefully continue with static paths if DB is unavailable during build
+    }
+  }
+
+  const fallbackKnownPaths = [
+    { params: { slug: 'ui-ux-design' } },
+    { params: { slug: 'seo-digital-marketing' } }
+  ];
+
+  const allPaths = [...staticPaths, ...dbPaths, ...fallbackKnownPaths];
+  const uniquePaths = Array.from(new Map(allPaths.map(p => [p.params.slug, p])).values());
+
   return {
-    paths: courses.map((course) => ({ params: { slug: course.slug } })),
+    paths: uniquePaths,
     fallback: staticFallback('blocking')
   };
 }
 
 export async function getStaticProps({ params }) {
-  const course = getCourseBySlug(params.slug);
+  const { slug } = params;
+
+  // 1. Check static siteContent first (for existing bespoke courses)
+  let course = getCourseBySlug(slug);
+
+  // 2. If not found, fetch from Supabase
+  if (!course) {
+    const supabase = getSupabaseServerClient();
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('status', 'active');
+
+        if (data && data.length > 0) {
+          const match = data.find((c) => (c.slug || slugify(c.title)) === slug);
+          if (match) {
+            course = {
+              id: match.id,
+              slug: match.slug || slugify(match.title),
+              title: match.title,
+              category: match.category || 'Professional Skills',
+              summary: match.description || `Master ${match.title} with hands-on projects and industry-ready mentorship at DeepSkills.`,
+              description: match.description,
+              duration: match.duration || '3 months',
+              price: match.price,
+              image: match.image_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80',
+              outcomes: Array.isArray(match.outcomes) ? match.outcomes : [
+                'Hands-on practical industry projects',
+                'Direct mentorship from experienced practitioners',
+                'Job-ready portfolio and interview prep',
+                'DeepSkills verified certificate of completion'
+              ],
+              modules: Array.isArray(match.modules) ? match.modules : [
+                'Foundations & Setup',
+                'Core Concepts & Implementation',
+                'Advanced Real-world Projects',
+                'Portfolio Development & Career Readiness'
+              ],
+              accent_color: (match.accent_color && !match.accent_color.toLowerCase().includes('blue')) ? match.accent_color : '#7B1F2E'
+            };
+          }
+        }
+      } catch (err) {
+        console.error('[courses/[slug]] Supabase fetch error:', err.message);
+      }
+    }
+  }
+
+  // 3. Fallback for built-in catalog courses
+  if (!course) {
+    if (slug === 'ui-ux-design') {
+      course = {
+        slug: 'ui-ux-design',
+        title: 'UI/UX Design',
+        category: 'Creative Design',
+        summary: 'Master user research, wireframing, prototyping, and visual design using Figma to build human-centered digital products.',
+        duration: '3 months',
+        price: 'PKR 35,000',
+        image: 'https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?auto=format&fit=crop&w=1200&q=80',
+        outcomes: [
+          'Design thinking and user research methodologies',
+          'Wireframing, prototyping, and design systems in Figma',
+          'Usability testing and mobile-first responsive design',
+          'Comprehensive design portfolio ready for client & agency work'
+        ],
+        modules: [
+          'UX Fundamentals, Personas & User Journeys',
+          'UI Principles, Typography, Color & Layouts',
+          'Mastering Figma: Components, Auto-Layout & Variants',
+          'Interactive Prototyping, Micro-Interactions & Case Study Presentation'
+        ],
+        accent_color: '#7B1F2E'
+      };
+    } else if (slug === 'seo-digital-marketing') {
+      course = {
+        slug: 'seo-digital-marketing',
+        title: 'SEO & Digital Marketing',
+        category: 'Digital Marketing',
+        summary: 'Learn search engine optimization, content strategy, social media campaigns, and performance marketing to drive measurable business growth.',
+        duration: '3 months',
+        price: 'PKR 35,000',
+        image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
+        outcomes: [
+          'Technical and On-Page SEO optimization',
+          'Keyword research, competitor analysis, and backlink strategies',
+          'Paid advertising (Google Ads, Meta Ads) and ROI tracking',
+          'Data-driven marketing analytics and conversion rate optimization'
+        ],
+        modules: [
+          'Digital Marketing Landscape & Brand Positioning',
+          'Search Engine Optimization (On-Page, Technical & Off-Page)',
+          'Performance Marketing: Meta & Google Ads Mastery',
+          'Content Marketing, Email Automation & Google Analytics 4'
+        ],
+        accent_color: '#7B1F2E'
+      };
+    }
+  }
 
   if (!course) {
     return { notFound: true };

@@ -16,10 +16,23 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { requestRevalidate } from '../utils/revalidatePublic';
+import { slugify } from '../../lib/careers';
+import { 
+  AdminModal, 
+  AdminModalHeader, 
+  AdminModalBody, 
+  AdminModalFooter, 
+  FormField, 
+  AdminInput, 
+  AdminTextarea, 
+  AdminButton, 
+  FormGrid 
+} from '../components/portal';
+import { validateRequired, validateNumber } from '../utils/formValidation';
 
 // --- Color Map ---
 const ACCENT_COLORS = {
-  blue:   { grad: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', solid: '#3b82f6' },
+  maroon: { grad: 'linear-gradient(135deg, #7B1F2E, #9b283b)', solid: '#7B1F2E' },
   purple: { grad: 'linear-gradient(135deg, #9333ea, #6b21a8)', solid: '#9333ea' },
   green:  { grad: 'linear-gradient(135deg, #10b981, #047857)', solid: '#10b981' },
   amber:  { grad: 'linear-gradient(135deg, #f59e0b, #d97706)', solid: '#f59e0b' },
@@ -98,12 +111,13 @@ const Grid = styled.div`
 const CourseCard = styled(motion.div)`
   background:linear-gradient(180deg,#0f0f0f,#111);border-radius:16px;overflow:hidden;
   border:1px solid rgba(255,255,255,0.05);transition:all 0.3s;position:relative;
+  display:flex;flex-direction:column;
   &:hover{transform:translateY(-5px);box-shadow:0 16px 40px rgba(0,0,0,0.6);border-color:rgba(255,255,255,0.1);}
 `;
 
-const CardAccent = styled.div`height:4px;background:${p => ACCENT_COLORS[p.$c]?.grad || ACCENT_COLORS.blue.grad};`;
+const CardAccent = styled.div`height:4px;background:${p => ACCENT_COLORS[p.$c]?.grad || ACCENT_COLORS.maroon.grad};flex-shrink:0;`;
 
-const CardBody = styled.div`padding:26px;`;
+const CardBody = styled.div`padding:26px;display:flex;flex-direction:column;flex:1;`;
 
 const CardTop = styled.div`
   display:flex;align-items:flex-start;gap:16px;margin-bottom:18px;
@@ -114,15 +128,18 @@ const CardTop = styled.div`
     color:${p => p.$color || '#3b82f6'};font-size:1.2rem;
   }
   .text{flex:1;min-width:0;
-    h3{margin:0 0 5px;font-size:1.15rem;color:#fff;font-weight:600;}
+    .title-row{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;
+      h3{margin:0;font-size:1.15rem;color:#fff;font-weight:600;line-height:1.3;flex:1;min-width:0;}
+    }
     p{margin:0;color:#666;font-size:0.83rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;}
   }
 `;
 
 const StatusDot = styled.div`
-  position:absolute;top:18px;right:18px;
-  display:flex;align-items:center;gap:6px;
-  padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:600;letter-spacing:0.3px;
+  display:inline-flex;align-items:center;gap:6px;flex-shrink:0;
+  padding:3px 10px;border-radius:20px;font-size:0.7rem;font-weight:600;letter-spacing:0.3px;
+  white-space:nowrap;margin-top:2px;
   background:${p => p.$on ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)'};
   color:${p => p.$on ? '#10b981' : '#555'};
   border:1px solid ${p => p.$on ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'};
@@ -130,7 +147,7 @@ const StatusDot = styled.div`
 `;
 
 const MetaRow = styled.div`
-  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;
+  display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;flex:1;align-content:flex-start;
   span{background:rgba(255,255,255,0.04);color:#888;padding:5px 11px;border-radius:6px;font-size:0.76rem;display:flex;align-items:center;gap:5px;}
 `;
 
@@ -216,9 +233,10 @@ const CourseManager = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
   const [form, setForm] = useState({
     title:'', description:'', duration:'', price:'',
-    reenrollment_discount_pct:5, icon:'laptop', accent_color:'blue', status:'active'
+    reenrollment_discount_pct:5, icon:'laptop', accent_color:'maroon', status:'active'
   });
 
   const fetchData = useCallback(async () => {
@@ -253,7 +271,8 @@ const CourseManager = () => {
       return;
     }
     setEditingCourse(null);
-    setForm({title:'',description:'',duration:'',price:'',reenrollment_discount_pct:5,icon:'laptop',accent_color:'blue',status:'active'});
+    setFormErrors({});
+    setForm({title:'',description:'',duration:'',price:'',reenrollment_discount_pct:5,icon:'laptop',accent_color:'maroon',status:'active'});
     setIsModalOpen(true);
   };
   const openEdit = (c) => {
@@ -262,7 +281,9 @@ const CourseManager = () => {
       return;
     }
     setEditingCourse(c);
-    setForm({title:c.title||'',description:c.description||'',duration:c.duration||'',price:c.price||'',reenrollment_discount_pct:c.reenrollment_discount_pct??5,icon:c.icon||'laptop',accent_color:c.accent_color||'blue',status:c.status||'active'});
+    setFormErrors({});
+    const resolvedColor = (!c.accent_color || c.accent_color === 'blue') ? 'maroon' : c.accent_color;
+    setForm({title:c.title||'',description:c.description||'',duration:c.duration||'',price:c.price||'',reenrollment_discount_pct:c.reenrollment_discount_pct??5,icon:c.icon||'laptop',accent_color:resolvedColor,status:c.status||'active'});
     setIsModalOpen(true);
   };
 
@@ -271,18 +292,52 @@ const CourseManager = () => {
       toast.error('You have view-only access. Modifying courses is not permitted.');
       return;
     }
-    if(!form.title.trim()){toast.error('Course name is required');return;}
+    const errors = {};
+    const titleErr = validateRequired(form.title, 'Course name');
+    if (titleErr) errors.title = titleErr;
+    else if (form.title.trim().length < 3) errors.title = 'Course name must be at least 3 characters.';
+
+    const durationErr = validateRequired(form.duration, 'Duration');
+    if (durationErr) errors.duration = durationErr;
+
+    const priceErr = validateNumber(form.price, { fieldName: 'Total Fee', required: true, positive: true });
+    if (priceErr) errors.price = priceErr;
+
+    const discountErr = validateNumber(form.reenrollment_discount_pct, { fieldName: 'Discount', required: false, min: 0, max: 100 });
+    if (discountErr) errors.reenrollment_discount_pct = discountErr;
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload = {...form};
+      const slug = editingCourse?.slug || slugify(form.title);
+      let payload = { ...form, slug };
       if(editingCourse){
-        const {error}=await supabase.from('courses').update(payload).eq('id',editingCourse.id);
-        if(error)throw error; toast.success('Course updated');
+        let { error } = await supabase.from('courses').update(payload).eq('id', editingCourse.id);
+        if (error && error.message?.includes('slug')) {
+          delete payload.slug;
+          const retry = await supabase.from('courses').update(payload).eq('id', editingCourse.id);
+          if (retry.error) throw retry.error;
+        } else if (error) {
+          throw error;
+        }
+        toast.success('Course updated');
       } else {
-        const {error}=await supabase.from('courses').insert([payload]);
-        if(error)throw error; toast.success('Course created');
+        let { error } = await supabase.from('courses').insert([payload]);
+        if (error && error.message?.includes('slug')) {
+          delete payload.slug;
+          const retry = await supabase.from('courses').insert([payload]);
+          if (retry.error) throw retry.error;
+        } else if (error) {
+          throw error;
+        }
+        toast.success('Course created');
       }
-      requestRevalidate(['/', '/courses']);
+      requestRevalidate(['/', '/courses', `/courses/${slug}`]);
       setIsModalOpen(false); fetchData();
     }catch(e){toast.error('Failed: '+e.message);}
     finally{setSaving(false);}
@@ -298,7 +353,8 @@ const CourseManager = () => {
     try{
       const {error}=await supabase.from('courses').update({status:next}).eq('id',c.id);
       if(error)throw error; toast.success(`Course ${next==='inactive'?'deactivated':'reactivated'}`);
-      requestRevalidate(['/', '/courses']); fetchData();
+      const slug = c.slug || slugify(c.title);
+      requestRevalidate(['/', '/courses', `/courses/${slug}`]); fetchData();
     }catch(e){toast.error('Failed: '+e.message);}
   };
 
@@ -313,7 +369,7 @@ const CourseManager = () => {
       </PageHeader>
 
       <StatsStrip>
-        <StatChip $bg="rgba(59,130,246,0.12)"><div className="icon-box"><FaLayerGroup /></div><div className="info"><div className="val">{stats.total}</div><div className="lbl">Total Courses</div></div></StatChip>
+        <StatChip $bg="rgba(123,31,46,0.15)"><div className="icon-box" style={{ color: '#ff8597' }}><FaLayerGroup /></div><div className="info"><div className="val">{stats.total}</div><div className="lbl">Total Courses</div></div></StatChip>
         <StatChip $bg="rgba(16,185,129,0.12)"><div className="icon-box"><FaCheckCircle /></div><div className="info"><div className="val">{stats.active}</div><div className="lbl">Active Courses</div></div></StatChip>
         <StatChip $bg="rgba(147,51,234,0.12)"><div className="icon-box"><FaGraduationCap /></div><div className="info"><div className="val">{stats.batches}</div><div className="lbl">Total Batches</div></div></StatChip>
         <StatChip $bg="rgba(245,158,11,0.12)"><div className="icon-box"><FaUsers /></div><div className="info"><div className="val">{stats.students}</div><div className="lbl">Enrolled Students</div></div></StatChip>
@@ -326,17 +382,19 @@ const CourseManager = () => {
           {courses.map(course => {
             const cB=getCourseBatches(course.title), cS=getCourseStudents(course.title);
             const active=(course.status||'active')==='active';
-            const col=course.accent_color||'blue';
+            const col=(!course.accent_color || course.accent_color === 'blue') ? 'maroon' : course.accent_color;
             const IconComp=getIconComponent(course.icon);
             return (
               <CourseCard key={course.id} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.3}}>
                 <CardAccent $c={col} />
-                <StatusDot $on={active}>{active?'Active':'Inactive'}</StatusDot>
                 <CardBody>
                   <CardTop $bg={`${ACCENT_COLORS[col]?.solid}18`} $color={ACCENT_COLORS[col]?.solid}>
                     <div className="icon-circle"><IconComp /></div>
                     <div className="text">
-                      <h3>{course.title}</h3>
+                      <div className="title-row">
+                        <h3>{course.title}</h3>
+                        <StatusDot $on={active}>{active?'Active':'Inactive'}</StatusDot>
+                      </div>
                       <p>{course.description||course.category||'No description'}</p>
                     </div>
                   </CardTop>
@@ -363,51 +421,111 @@ const CourseManager = () => {
       )}
 
       {/* Add / Edit Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <Overlay initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={()=>setIsModalOpen(false)}>
-            <Modal initial={{scale:0.92,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.92,opacity:0}} onClick={e=>e.stopPropagation()}>
-              <ModalHeader><h2>{editingCourse?'Edit Course':'Add New Course'}</h2><button onClick={()=>setIsModalOpen(false)}><FaTimes /></button></ModalHeader>
-              <ModalBody>
-                <FG><label>Course Name *</label><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Web Development Bootcamp" /></FG>
-                <FG><label>Description</label><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="2-3 sentences..." /></FG>
-                <FR>
-                  <FG><label>Duration</label><input value={form.duration} onChange={e=>setForm({...form,duration:e.target.value})} placeholder="e.g. 3 months" /></FG>
-                  <FG><label>Total Fee (Rs.)</label><input type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})} placeholder="25000" /></FG>
-                </FR>
-                <FG><label>Re-enrollment Discount %</label><input type="number" value={form.reenrollment_discount_pct} onChange={e=>setForm({...form,reenrollment_discount_pct:parseInt(e.target.value)||0})} min="0" max="100" /></FG>
+      <AdminModal isOpen={isModalOpen} onClose={()=>setIsModalOpen(false)} maxWidth="580px">
+        <AdminModalHeader
+          title={editingCourse ? 'Edit Course' : 'Add New Course'}
+          subtitle={editingCourse ? 'Update syllabus details, pricing, and appearance.' : 'Create a new vocational course offering.'}
+          onClose={()=>setIsModalOpen(false)}
+        />
+        <AdminModalBody>
+          <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <FormField label="Course Name" required error={formErrors.title}>
+              <AdminInput
+                value={form.title}
+                onChange={e => {
+                  setForm({ ...form, title: e.target.value });
+                  if (formErrors.title) setFormErrors(prev => ({ ...prev, title: undefined }));
+                }}
+                placeholder="e.g. Web Development Bootcamp"
+                $hasError={Boolean(formErrors.title)}
+              />
+            </FormField>
 
-                <FG>
-                  <label>Course Icon</label>
-                  <IconGrid>
-                    {Object.entries(COURSE_ICONS).map(([key,{icon:IC,label}])=>(
-                      <IconOption key={key} $sel={form.icon===key} onClick={()=>setForm({...form,icon:key})} title={label}><IC /></IconOption>
-                    ))}
-                  </IconGrid>
-                </FG>
+            <FormField label="Description" error={formErrors.description} hint="Brief summary of skills and outcomes.">
+              <AdminTextarea
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="2-3 sentences outlining the program..."
+                rows={3}
+              />
+            </FormField>
 
-                <FG>
-                  <label>Accent Color</label>
-                  <ColorGrid>
-                    {Object.keys(ACCENT_COLORS).map(c=>(
-                      <ColorOption key={c} $c={c} $sel={form.accent_color===c} onClick={()=>setForm({...form,accent_color:c})} />
-                    ))}
-                  </ColorGrid>
-                </FG>
+            <FormGrid $columns={2}>
+              <FormField label="Duration" required error={formErrors.duration}>
+                <AdminInput
+                  value={form.duration}
+                  onChange={e => {
+                    setForm({ ...form, duration: e.target.value });
+                    if (formErrors.duration) setFormErrors(prev => ({ ...prev, duration: undefined }));
+                  }}
+                  placeholder="e.g. 3 months"
+                  $hasError={Boolean(formErrors.duration)}
+                />
+              </FormField>
 
-                <FG>
-                  <ToggleRow>
-                    <label style={{margin:0}}>Status: {form.status==='active'?'Active':'Inactive'}</label>
-                    <Toggle $on={form.status==='active'} onClick={()=>setForm({...form,status:form.status==='active'?'inactive':'active'})} />
-                  </ToggleRow>
-                </FG>
+              <FormField label="Total Fee (PKR)" required error={formErrors.price}>
+                <AdminInput
+                  type="number"
+                  value={form.price}
+                  onChange={e => {
+                    setForm({ ...form, price: e.target.value });
+                    if (formErrors.price) setFormErrors(prev => ({ ...prev, price: undefined }));
+                  }}
+                  placeholder="25000"
+                  $hasError={Boolean(formErrors.price)}
+                />
+              </FormField>
+            </FormGrid>
 
-                <SaveBtn onClick={handleSave} disabled={saving}>{saving?'Saving...':(editingCourse?'Update Course':'Create Course')}</SaveBtn>
-              </ModalBody>
-            </Modal>
-          </Overlay>
-        )}
-      </AnimatePresence>
+            <FormField label="Re-enrollment Discount %" error={formErrors.reenrollment_discount_pct} hint="Applicable to DeepSkills alumni">
+              <AdminInput
+                type="number"
+                value={form.reenrollment_discount_pct}
+                onChange={e => {
+                  setForm({ ...form, reenrollment_discount_pct: parseInt(e.target.value) || 0 });
+                  if (formErrors.reenrollment_discount_pct) setFormErrors(prev => ({ ...prev, reenrollment_discount_pct: undefined }));
+                }}
+                min="0"
+                max="100"
+                $hasError={Boolean(formErrors.reenrollment_discount_pct)}
+              />
+            </FormField>
+
+            <FormField label="Course Icon">
+              <IconGrid>
+                {Object.entries(COURSE_ICONS).map(([key,{icon:IC,label}])=>(
+                  <IconOption key={key} $sel={form.icon===key} onClick={()=>setForm({...form,icon:key})} title={label} type="button">
+                    <IC />
+                  </IconOption>
+                ))}
+              </IconGrid>
+            </FormField>
+
+            <FormField label="Accent Color">
+              <ColorGrid>
+                {Object.keys(ACCENT_COLORS).map(c=>(
+                  <ColorOption key={c} $c={c} $sel={form.accent_color===c} onClick={()=>setForm({...form,accent_color:c})} type="button" />
+                ))}
+              </ColorGrid>
+            </FormField>
+
+            <ToggleRow>
+              <label style={{margin:0, fontSize: '0.88rem', color: '#fff'}}>
+                Status: <strong>{form.status==='active'?'Active':'Inactive'}</strong>
+              </label>
+              <Toggle $on={form.status==='active'} onClick={()=>setForm({...form,status:form.status==='active'?'inactive':'active'})} />
+            </ToggleRow>
+          </form>
+        </AdminModalBody>
+        <AdminModalFooter>
+          <AdminButton $variant="secondary" type="button" onClick={()=>setIsModalOpen(false)}>
+            Cancel
+          </AdminButton>
+          <AdminButton $variant="primary" type="button" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : (editingCourse ? 'Update Course' : 'Create Course')}
+          </AdminButton>
+        </AdminModalFooter>
+      </AdminModal>
     </Container>
   );
 };

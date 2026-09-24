@@ -250,14 +250,13 @@ const Footer = () => {
           <Title>Quick Links</Title>
           <FooterLink to="/" whileHover={{ x: 5 }}>Home</FooterLink>
           <FooterLink to="/about" whileHover={{ x: 5 }}>About Us</FooterLink>
-          <FooterLink to="/blogs" whileHover={{ x: 5 }}>Blogs</FooterLink>
+          <FooterLink to="/blogs" whileHover={{ x: 5 }}>Insights</FooterLink>
           <FooterLink to="/careers" whileHover={{ x: 5 }} style={{ color: '#ffccd3', fontWeight: 600 }}>Careers</FooterLink>
-          <FooterLink to="/#testimonials" whileHover={{ x: 5 }}>Testimonials</FooterLink>
+          <FooterLink to="/verify-certificate" whileHover={{ x: 5 }}>Verify Certificate</FooterLink>
         </Column>
 
         <Column>
           <Title>Programs</Title>
-          <FooterLink to="/courses" whileHover={{ x: 5 }} style={{ color: '#fff', fontWeight: 600 }}>All Courses</FooterLink>
           <FooterLink to="/internship" whileHover={{ x: 5 }} style={{ color: '#ffccd3', fontWeight: 600 }}>Internships (Hiring)</FooterLink>
           <FooterLink to="/courses/graphic-design" whileHover={{ x: 5 }}>Graphic Design</FooterLink>
           <FooterLink to="/courses/laravel-mastery" whileHover={{ x: 5 }}>Full Stack (Laravel)</FooterLink>

@@ -12,7 +12,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import AdminLayout from '../components/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
-import { BLOG_CATEGORIES, calculateReadingTime, countWords, makeExcerpt, slugify } from '../../lib/blog';
+import { BLOG_CATEGORIES, mergeBlogCategories, calculateReadingTime, countWords, makeExcerpt, slugify } from '../../lib/blog';
 import { requestRevalidate } from '../utils/revalidatePublic';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
@@ -67,6 +67,41 @@ function BlogManager() {
   return <BlogEditor postId={mode.id} />;
 }
 
+function CategoryCreator({ onCreated }) {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const addCategory = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch('/api/blog/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...await getAuthHeaders() },
+        body: JSON.stringify({ name })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not add category.');
+      onCreated(result.category.name);
+      setName('');
+      toast.success('Category added');
+    } catch (error) {
+      toast.error(error.message || 'Could not add category.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <InlineAdd $category>
+      <input aria-label="New blog category" value={name} maxLength={60} disabled={saving}
+        onChange={(event) => setName(event.target.value)} placeholder="New category"
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCategory(); } }} />
+      <button type="button" onClick={addCategory} disabled={saving || !name.trim()}>
+        {saving ? 'Adding…' : 'Add category'}
+      </button>
+    </InlineAdd>
+  );
+}
+
 function BlogList() {
   const router = useRouter();
   const { user } = useAuth();
@@ -103,7 +138,7 @@ function BlogList() {
     }
 
     if (categoryRows?.length) {
-      setCategories(categoryRows.map((item) => item.name));
+      setCategories(mergeBlogCategories(categoryRows.map((item) => item.name)));
     }
 
     setLoading(false);
@@ -278,6 +313,14 @@ function BlogList() {
         )}
       </PageHeader>
 
+      {isAdmin && (
+        <Panel>
+          <h2>Blog categories</h2>
+          <p>Add a category to use in posts and the public blog selector.</p>
+          <CategoryCreator onCreated={(name) => setCategories((current) => mergeBlogCategories(current, [name]))} />
+        </Panel>
+      )}
+
       <StatsStrip>
         <StatCard><strong>{stats.total}</strong><span>Total Posts</span></StatCard>
         {isAdmin && <StatCard><strong>{stats.published}</strong><span>Published</span></StatCard>}
@@ -402,7 +445,6 @@ function BlogEditor({ postId }) {
   }, [canMutate, postId, router]);
   const [categories, setCategories] = useState(BLOG_CATEGORIES);
   const [courses, setCourses] = useState([]);
-  const [newCategory, setNewCategory] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [form, setForm] = useState(() => ({
     id: postId || undefined,
@@ -460,7 +502,7 @@ function BlogEditor({ postId }) {
       supabase.from('courses').select('*').order('title')
     ]);
 
-    if (categoryRows?.length) setCategories(categoryRows.map((item) => item.name));
+    if (categoryRows?.length) setCategories(mergeBlogCategories(categoryRows.map((item) => item.name)));
     if (courseRows?.length) setCourses(courseRows);
 
     if (!postId) {
@@ -481,6 +523,7 @@ function BlogEditor({ postId }) {
     }
 
     const nextForm = dbToForm(data);
+    setCategories((current) => mergeBlogCategories(current, [nextForm.category]));
     setForm(nextForm);
     editor?.commands.setContent(nextForm.content || nextForm.contentHtml || EMPTY_CONTENT);
     setLoading(false);
@@ -524,23 +567,6 @@ function BlogEditor({ postId }) {
     }
     setForm((current) => ({ ...current, tags: [...current.tags, safeTag] }));
     setTagInput('');
-  };
-
-  const addCategory = async () => {
-    const name = newCategory.trim();
-    if (!isAdmin) {
-      toast.error('Only admins can add categories.');
-      return;
-    }
-    if (!name) return;
-    const { error } = await supabase.from('blog_categories').upsert({ name, slug: slugify(name) });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setCategories((current) => Array.from(new Set([...current, name])));
-    setForm((current) => ({ ...current, category: name }));
-    setNewCategory('');
   };
 
   const validateSvgFile = async (file) => {
@@ -764,10 +790,10 @@ function BlogEditor({ postId }) {
             <select value={form.category} onChange={(event) => updateField('category', event.target.value)}>
               {categories.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <InlineAdd>
-              <input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="New category" />
-              <button type="button" onClick={addCategory} disabled={!isAdmin}><FaPlus /></button>
-            </InlineAdd>
+            {isAdmin && <CategoryCreator onCreated={(name) => {
+              setCategories((current) => mergeBlogCategories(current, [name]));
+              setForm((current) => ({ ...current, category: name }));
+            }} />}
 
             <label>Tags</label>
             <InlineAdd>
@@ -1309,7 +1335,9 @@ const UploadArea = styled.button`
 
 const InlineAdd = styled.div`
   display: grid;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: minmax(0, 1fr) ${props => props.$category ? 'auto' : '42px'};
+  input { min-width: 0; }
+  ${props => props.$category && `button { padding: 10px 14px; }`}
   gap: 8px;
 
   button {

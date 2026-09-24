@@ -3,12 +3,11 @@ import Image from "next/image";
 import styled from "styled-components";
 import { Link, useLocation, useNavigate } from "../lib/nextRouterDomCompat";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaBars, FaTimes, FaHome, FaInfoCircle, FaBook, FaUserTie, FaPlayCircle, FaUser, FaSignOutAlt, FaColumns, FaPhoneAlt, FaPenNib } from "react-icons/fa";
+import { FaBars, FaTimes, FaHome, FaInfoCircle, FaBook, FaUserTie, FaPlayCircle, FaUser, FaSignOutAlt, FaColumns, FaPhoneAlt, FaPenNib, FaBriefcase } from "react-icons/fa";
 import { FiChevronRight, FiChevronDown } from "react-icons/fi";
 import logoImg from "./logo.svg";
 import RegisterButton from "./components/RegisterButton";
 import { useAuth } from "./context/AuthContext";
-import AnnouncementBar from "./components/AnnouncementBar";
 
 const HeaderWrapper = styled.header`
   position: fixed;
@@ -353,6 +352,113 @@ const DropdownLink = styled.a`
   }
 `;
 
+const FlyoutCategoryItem = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(123, 31, 46, 0.25);
+    color: #ffccd3;
+  }
+`;
+
+const FlyoutSubmenu = styled(motion.div)`
+  position: absolute;
+  top: -6px;
+  left: 100%;
+  margin-left: 6px;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 220px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  z-index: 1002;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -10px;
+    width: 10px;
+    height: 100%;
+    background: transparent;
+  }
+`;
+
+const DropdownFooterLink = styled.a`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffccd3;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  text-decoration: none;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(123, 31, 46, 0.25);
+    color: #fff;
+  }
+`;
+
+const MobileCategoryButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 20px 12px 45px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+`;
+
+const MobileNestedContent = styled(motion.div)`
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+`;
+
+const MobileNestedLink = styled.a`
+  display: block;
+  padding: 10px 20px 10px 65px;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+`;
+
 // Mobile Menu Components
 const MobileMenuContainer = styled(motion.div)`
   position: fixed;
@@ -512,7 +618,9 @@ const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [expandedMobileItem, setExpandedMobileItem] = useState(null);
+  const [expandedMobileCategory, setExpandedMobileCategory] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [openSubmenu, setOpenSubmenu] = useState(null);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   const { user, logout } = useAuth();
@@ -531,16 +639,15 @@ const Header = () => {
   const links = React.useMemo(() => [
     { name: "Home", href: "/", isRoute: true, icon: <FaHome /> },
     {
-      name: "About",
+      name: "About Us",
       href: "/about",
       isRoute: true,
       icon: <FaInfoCircle />,
       hasDropdown: true,
       sublinks: [
-        { name: "About DeepSkills", href: "/about", isRoute: true },
-        { name: "Our Trainers", href: "/trainers", isRoute: true },
-        { name: "Founder Message", href: "/founder-message", isRoute: true },
-        { name: "Careers (We're Hiring)", href: "/careers", isRoute: true }
+        { name: "Who We Are", href: "/about", isRoute: true },
+        { name: "Expert Mentors", href: "/trainers", isRoute: true },
+        { name: "Founder Message", href: "/founder-message", isRoute: true }
       ]
     },
     {
@@ -549,24 +656,60 @@ const Header = () => {
       isRoute: true,
       icon: <FaBook />,
       hasDropdown: true,
+      groups: [
+        {
+          category: "Web Development",
+          items: [
+            { name: "Full Stack (React)", href: "/courses/full-stack-react", isRoute: true },
+            { name: "Full Stack (Laravel)", href: "/courses/laravel-mastery", isRoute: true },
+            { name: "WordPress Mastery", href: "/courses/wordpress-mastery", isRoute: true }
+          ]
+        },
+        {
+          category: "Creative Design",
+          items: [
+            { name: "Graphic Designing", href: "/courses/graphic-design", isRoute: true },
+            { name: "UI/UX Design", href: "/courses/ui-ux-design", isRoute: true }
+          ]
+        },
+        {
+          category: "Digital Marketing",
+          items: [
+            { name: "SEO & Digital Marketing", href: "/courses/seo-digital-marketing", isRoute: true }
+          ]
+        }
+      ],
+      bottomLink: { name: "View All Courses", href: "/courses", isRoute: true },
       sublinks: [
-        { name: "Graphic Designing", href: "/courses/graphic-design", isRoute: true },
-        { name: "Full Stack (Laravel)", href: "/courses/laravel-mastery", isRoute: true },
         { name: "Full Stack (React)", href: "/courses/full-stack-react", isRoute: true },
-        { name: "View All Courses", href: "/courses", isRoute: true },
+        { name: "Full Stack (Laravel)", href: "/courses/laravel-mastery", isRoute: true },
+        { name: "WordPress Mastery", href: "/courses/wordpress-mastery", isRoute: true },
+        { name: "Graphic Designing", href: "/courses/graphic-design", isRoute: true },
+        { name: "UI/UX Design", href: "/courses/ui-ux-design", isRoute: true },
+        { name: "SEO & Digital Marketing", href: "/courses/seo-digital-marketing", isRoute: true },
+        { name: "View All Courses", href: "/courses", isRoute: true }
+      ]
+    },
+    {
+      name: "Careers",
+      href: "/careers",
+      isRoute: true,
+      icon: <FaBriefcase />,
+      hasDropdown: true,
+      sublinks: [
+        { name: "Job Openings", href: "/careers", isRoute: true },
         { name: "Internship Program", href: "/internship", isRoute: true }
       ]
     },
-    { name: "Media", href: "/media", isRoute: true, icon: <FaPlayCircle /> },
-    { name: "Blogs", href: "/blogs", isRoute: true, icon: <FaPenNib /> },
     {
-      name: "Certificate",
-      href: "/verify-certificate",
+      name: "Insights",
+      href: "/blogs",
       isRoute: true,
-      icon: <FaBook />,
+      icon: <FaPenNib />,
       hasDropdown: true,
       sublinks: [
-        { name: "Verify Certificate", href: "/verify-certificate", isRoute: true },
+        { name: "Blogs", href: "/blogs", isRoute: true },
+        { name: "Media", href: "/media", isRoute: true }
       ]
     },
     { name: "Contact Us", href: "/contact", isRoute: true, icon: <FaPhoneAlt /> },
@@ -582,13 +725,13 @@ const Header = () => {
     } else {
       links.forEach(link => {
         // Match main links
-        if (link.isRoute && link.href === currentPath) {
+        if (link.isRoute && (link.href === currentPath || (link.href !== "/" && currentPath.startsWith(link.href + "/")))) {
           active = link.name.toUpperCase();
         }
         // Match sublinks
         if (link.hasDropdown) {
           link.sublinks.forEach(sub => {
-            if (sub.isRoute && sub.href === currentPath) {
+            if (sub.isRoute && (sub.href === currentPath || (sub.href !== "/" && currentPath.startsWith(sub.href + "/")))) {
               active = link.name.toUpperCase();
             }
           });
@@ -600,6 +743,8 @@ const Header = () => {
   }, [location.pathname, links]);
 
   const handleLinkClick = (e, link) => {
+    setOpenSubmenu(null);
+    setExpandedMobileCategory(null);
     if (link.isRoute) {
       setMobileMenuOpen(false);
       // setActiveLink will be handled by useEffect on route change
@@ -630,7 +775,6 @@ const Header = () => {
   return (
     <>
       <HeaderWrapper>
-        <AnnouncementBar />
         <Nav
           $scrolled={scrolled}
           initial={{ y: -100 }}
@@ -652,7 +796,12 @@ const Header = () => {
               <NavPillContainer
                 key={link.name}
                 onMouseEnter={() => link.hasDropdown && setOpenDropdown(link.name)}
-                onMouseLeave={() => link.hasDropdown && setOpenDropdown(null)}
+                onMouseLeave={() => {
+                  if (link.hasDropdown) {
+                    setOpenDropdown(null);
+                    setOpenSubmenu(null);
+                  }
+                }}
               >
                 <NavLink
                   as={link.isRoute ? Link : "a"}
@@ -674,18 +823,68 @@ const Header = () => {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
                       transition={{ duration: 0.2 }}
+                      style={link.groups ? { minWidth: "220px" } : undefined}
                     >
-                      {link.sublinks.map((sub) => (
-                        <DropdownLink
-                          key={sub.name}
-                          as={sub.isRoute ? Link : "a"}
-                          to={sub.isRoute ? sub.href : undefined}
-                          href={sub.isRoute ? undefined : sub.href}
-                          onClick={(e) => handleLinkClick(e, sub)}
-                        >
-                          {sub.name}
-                        </DropdownLink>
-                      ))}
+                      {link.groups ? (
+                        <>
+                          {link.groups.map((grp) => (
+                            <FlyoutCategoryItem
+                              key={grp.category}
+                              onMouseEnter={() => setOpenSubmenu(grp.category)}
+                              onMouseLeave={() => setOpenSubmenu(null)}
+                            >
+                              <span>{grp.category}</span>
+                              <FiChevronRight style={{ fontSize: "0.85rem", opacity: 0.7 }} />
+
+                              <AnimatePresence>
+                                {openSubmenu === grp.category && (
+                                  <FlyoutSubmenu
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -8 }}
+                                    transition={{ duration: 0.15 }}
+                                  >
+                                    {grp.items.map((item) => (
+                                      <DropdownLink
+                                        key={item.name}
+                                        as={item.isRoute ? Link : "a"}
+                                        to={item.isRoute ? item.href : undefined}
+                                        href={item.isRoute ? undefined : item.href}
+                                        onClick={(e) => handleLinkClick(e, item)}
+                                      >
+                                        {item.name}
+                                      </DropdownLink>
+                                    ))}
+                                  </FlyoutSubmenu>
+                                )}
+                              </AnimatePresence>
+                            </FlyoutCategoryItem>
+                          ))}
+                          {link.bottomLink && (
+                            <DropdownFooterLink
+                              as={link.bottomLink.isRoute ? Link : "a"}
+                              to={link.bottomLink.isRoute ? link.bottomLink.href : undefined}
+                              href={link.bottomLink.isRoute ? undefined : link.bottomLink.href}
+                              onClick={(e) => handleLinkClick(e, link.bottomLink)}
+                            >
+                              <span>{link.bottomLink.name}</span>
+                              <FiChevronRight />
+                            </DropdownFooterLink>
+                          )}
+                        </>
+                      ) : (
+                        link.sublinks.map((sub) => (
+                          <DropdownLink
+                            key={sub.name}
+                            as={sub.isRoute ? Link : "a"}
+                            to={sub.isRoute ? sub.href : undefined}
+                            href={sub.isRoute ? undefined : sub.href}
+                            onClick={(e) => handleLinkClick(e, sub)}
+                          >
+                            {sub.name}
+                          </DropdownLink>
+                        ))
+                      )}
                     </DesktopDropdown>
                   )}
                 </AnimatePresence>
@@ -874,16 +1073,69 @@ const Header = () => {
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.3, ease: "easeInOut" }}
                         >
-                          {link.sublinks.map((sub, idx) => (
-                            <SubLink
-                              key={sub.name}
-                              as={Link}
-                              to={sub.href}
-                              onClick={(e) => handleLinkClick(e, sub)}
-                            >
-                              {sub.name}
-                            </SubLink>
-                          ))}
+                          {link.groups ? (
+                            <>
+                              {link.groups.map((grp) => (
+                                <div key={grp.category}>
+                                  <MobileCategoryButton
+                                    type="button"
+                                    onClick={() => setExpandedMobileCategory(expandedMobileCategory === grp.category ? null : grp.category)}
+                                  >
+                                    <span>{grp.category}</span>
+                                    <motion.div
+                                      animate={{ rotate: expandedMobileCategory === grp.category ? 90 : 0 }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <FiChevronRight />
+                                    </motion.div>
+                                  </MobileCategoryButton>
+
+                                  <AnimatePresence>
+                                    {expandedMobileCategory === grp.category && (
+                                      <MobileNestedContent
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                                      >
+                                        {grp.items.map((item) => (
+                                          <MobileNestedLink
+                                            key={item.name}
+                                            as={Link}
+                                            to={item.href}
+                                            onClick={(e) => handleLinkClick(e, item)}
+                                          >
+                                            {item.name}
+                                          </MobileNestedLink>
+                                        ))}
+                                      </MobileNestedContent>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              ))}
+                              {link.bottomLink && (
+                                <SubLink
+                                  as={Link}
+                                  to={link.bottomLink.href}
+                                  onClick={(e) => handleLinkClick(e, link.bottomLink)}
+                                  style={{ fontWeight: 600, color: "#ffccd3" }}
+                                >
+                                  {link.bottomLink.name} &rarr;
+                                </SubLink>
+                              )}
+                            </>
+                          ) : (
+                            link.sublinks.map((sub, idx) => (
+                              <SubLink
+                                key={sub.name}
+                                as={Link}
+                                to={sub.href}
+                                onClick={(e) => handleLinkClick(e, sub)}
+                              >
+                                {sub.name}
+                              </SubLink>
+                            ))
+                          )}
                         </DropdownContent>
                       )}
                     </AnimatePresence>

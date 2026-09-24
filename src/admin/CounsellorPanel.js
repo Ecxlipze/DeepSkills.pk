@@ -17,6 +17,14 @@ import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { EMAIL_EVENTS, sendAdmissionEmail } from '../utils/emailNotifications';
 import { createNotification } from '../utils/notifications';
+import {
+  FormField,
+  AdminInput,
+  AdminSelect,
+  AdminTextarea,
+  AdminButton
+} from '../components/portal';
+import { validateRequired, validatePhone, validateEmail, validateForm, formatPhone } from '../utils/formValidation';
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'New' },
@@ -285,6 +293,7 @@ const CounsellorPanel = ({ initialView }) => {
     note: '',
     followUpDate: ''
   });
+  const [leadErrors, setLeadErrors] = useState({});
   const [enrollmentOpen, setEnrollmentOpen] = useState(false);
   const [enrollment, setEnrollment] = useState(emptyEnrollment);
   const [errors, setErrors] = useState({});
@@ -793,6 +802,27 @@ const CounsellorPanel = ({ initialView }) => {
       toast.error('You have view-only access. Creating leads is not permitted.');
       return;
     }
+    const { isValid, errors: validationErrors } = validateForm(newLeadForm, {
+      name: [(v) => validateRequired(v, 'Full Name')],
+      phone: [(v) => {
+        if (!v && !newLeadForm.email) return 'At least phone or email is required';
+        if (v) return validatePhone(v);
+        return null;
+      }],
+      email: [(v) => {
+        if (!v && !newLeadForm.phone) return 'At least phone or email is required';
+        if (v) return validateEmail(v);
+        return null;
+      }]
+    });
+
+    if (!isValid) {
+      setLeadErrors(validationErrors);
+      toast.error('Please resolve the highlighted errors in the form.');
+      return;
+    }
+    setLeadErrors({});
+
     const name = String(newLeadForm.name || '').trim();
     const phone = String(newLeadForm.phone || '').trim();
     const email = String(newLeadForm.email || '').trim();
@@ -801,17 +831,6 @@ const CounsellorPanel = ({ initialView }) => {
     const source = newLeadForm.source || 'Walk-in';
     const noteText = String(newLeadForm.note || '').trim();
     const followUpDate = newLeadForm.followUpDate || '';
-
-    if (!name) {
-      return toast.error('Lead name is required');
-    }
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (!phone && !email) {
-      return toast.error('At least phone or email is required');
-    }
-    if (phone && phoneDigits.length < 10) {
-      return toast.error('Please enter a valid phone number (at least 10 digits)');
-    }
 
     const notesArr = [];
     if (noteText || followUpDate) {
@@ -863,6 +882,7 @@ const CounsellorPanel = ({ initialView }) => {
 
     toast.success('New lead captured successfully!');
     setNewLeadOpen(false);
+    setLeadErrors({});
     setNewLeadForm({
       name: '',
       phone: '',
@@ -2612,52 +2632,54 @@ const CounsellorPanel = ({ initialView }) => {
           </Modal>
         )}
         {newLeadOpen && (
-          <Modal onClose={() => setNewLeadOpen(false)} title="Capture New Lead / Walk-in Inquiry" wide>
+          <Modal onClose={() => { setNewLeadOpen(false); setLeadErrors({}); }} title="Capture New Lead / Walk-in Inquiry" wide>
             <form onSubmit={handleCreateLead} noValidate>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '14px',
-                marginBottom: '14px'
-              }}>
-                <Field>
-                  <label>Full Name <span className="req" style={{ color: '#ef4444' }}>*</span></label>
-                  <input
+              <FormGrid columns="repeat(auto-fit, minmax(240px, 1fr))" gap="14px" style={{ marginBottom: '14px' }}>
+                <FormField label="Full Name" required error={leadErrors.name}>
+                  <AdminInput
                     placeholder="e.g. Ali Ahmed"
                     value={newLeadForm.name}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, name: e.target.value })}
+                    onChange={(e) => {
+                      setNewLeadForm({ ...newLeadForm, name: e.target.value });
+                      if (leadErrors.name) setLeadErrors(prev => ({ ...prev, name: null }));
+                    }}
+                    hasError={Boolean(leadErrors.name)}
                     required
                   />
-                </Field>
-                <Field>
-                  <label>Contact Phone / WhatsApp <span className="req" style={{ color: '#ef4444' }}>*</span></label>
-                  <input
+                </FormField>
+                <FormField label="Contact Phone / WhatsApp" required error={leadErrors.phone}>
+                  <AdminInput
                     placeholder="03001234567"
                     value={newLeadForm.phone}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, phone: e.target.value })}
+                    onChange={(e) => {
+                      setNewLeadForm({ ...newLeadForm, phone: formatPhone(e.target.value) });
+                      if (leadErrors.phone) setLeadErrors(prev => ({ ...prev, phone: null }));
+                    }}
+                    hasError={Boolean(leadErrors.phone)}
                     required
                   />
-                </Field>
-                <Field>
-                  <label>Email Address (Optional)</label>
-                  <input
+                </FormField>
+                <FormField label="Email Address (Optional)" error={leadErrors.email}>
+                  <AdminInput
                     type="email"
                     placeholder="ali@example.com"
                     value={newLeadForm.email}
-                    onChange={(e) => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
+                    onChange={(e) => {
+                      setNewLeadForm({ ...newLeadForm, email: e.target.value });
+                      if (leadErrors.email) setLeadErrors(prev => ({ ...prev, email: null }));
+                    }}
+                    hasError={Boolean(leadErrors.email)}
                   />
-                </Field>
-                <Field>
-                  <label>City / Location</label>
-                  <input
+                </FormField>
+                <FormField label="City / Location">
+                  <AdminInput
                     placeholder="e.g. Lahore"
                     value={newLeadForm.city}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, city: e.target.value })}
                   />
-                </Field>
-                <Field>
-                  <label>Course of Interest</label>
-                  <select
+                </FormField>
+                <FormField label="Course of Interest">
+                  <AdminSelect
                     value={newLeadForm.course}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, course: e.target.value })}
                   >
@@ -2665,11 +2687,10 @@ const CounsellorPanel = ({ initialView }) => {
                     {courseTitles.map((title) => (
                       <option key={title} value={title}>{title}</option>
                     ))}
-                  </select>
-                </Field>
-                <Field>
-                  <label>Lead Source</label>
-                  <select
+                  </AdminSelect>
+                </FormField>
+                <FormField label="Lead Source">
+                  <AdminSelect
                     value={newLeadForm.source}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, source: e.target.value })}
                   >
@@ -2681,11 +2702,10 @@ const CounsellorPanel = ({ initialView }) => {
                     <option value="Referral">Referral</option>
                     <option value="Google">Google Search</option>
                     <option value="Other">Other</option>
-                  </select>
-                </Field>
-                <Field>
-                  <label>Next Follow-Up Date</label>
-                  <input
+                  </AdminSelect>
+                </FormField>
+                <FormField label="Next Follow-Up Date">
+                  <AdminInput
                     ref={leadFollowUpRef}
                     type="date"
                     min={todayDateStr}
@@ -2693,39 +2713,31 @@ const CounsellorPanel = ({ initialView }) => {
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, followUpDate: e.target.value })}
                     onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
                   />
-                </Field>
+                </FormField>
+              </FormGrid>
+
+              <div style={{ marginBottom: '18px' }}>
+                <FormField label="Initial Discussion & Counsellor Notes">
+                  <AdminTextarea
+                    placeholder="Record what the candidate asked, current qualification, preferred shift, or scheduled visit..."
+                    value={newLeadForm.note}
+                    onChange={(e) => setNewLeadForm({ ...newLeadForm, note: e.target.value })}
+                    rows={3}
+                  />
+                </FormField>
               </div>
 
-              <Field style={{ marginBottom: '18px' }}>
-                <label>Initial Discussion & Counsellor Notes</label>
-                <textarea
-                  placeholder="Record what the candidate asked, current qualification, preferred shift, or scheduled visit..."
-                  value={newLeadForm.note}
-                  onChange={(e) => setNewLeadForm({ ...newLeadForm, note: e.target.value })}
-                  rows={3}
-                />
-              </Field>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
+                <AdminButton
                   type="button"
-                  onClick={() => setNewLeadOpen(false)}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#cbd5e1',
-                    borderRadius: '8px',
-                    padding: '9px 16px',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
+                  variant="secondary"
+                  onClick={() => { setNewLeadOpen(false); setLeadErrors({}); }}
                 >
                   Cancel
-                </button>
-                <Primary type="submit">
+                </AdminButton>
+                <AdminButton variant="primary" type="submit">
                   <FaPlus /> Save & Add Lead
-                </Primary>
+                </AdminButton>
               </div>
             </form>
           </Modal>

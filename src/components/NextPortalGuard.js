@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { canAccess, getFirstAccessibleAdminPath } from '../utils/permissions';
-import { canAccessDepartment } from '../utils/departments';
+import { canAccessDepartment, getDefaultDepartmentPath } from '../utils/departments';
 
 const loadingStyle = {
   height: '100vh',
@@ -25,7 +25,7 @@ const getRedirectPath = (user, fallback = '/login') => {
   }
   if (user.role === 'student') return '/student/dashboard';
   if (user.role === 'admin') return '/admin/dashboard';
-  return getFirstAccessibleAdminPath(user.permissions || {});
+  return getDefaultDepartmentPath(user) || getFirstAccessibleAdminPath(user.permissions || {});
 };
 
 const NextPortalGuard = ({
