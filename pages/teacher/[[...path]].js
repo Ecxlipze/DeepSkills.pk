@@ -20,11 +20,13 @@ const ViewTasks = dynamic(() => import('../../src/teacher/ViewTasks'), { ssr: fa
 const ReferralPage = dynamic(() => import('../../src/components/ReferralPage'), { ssr: false });
 const TeacherStudents = dynamic(() => import('../../src/teacher/TeacherStudents'), { ssr: false });
 const TeacherAttendance = dynamic(() => import('../../src/teacher/TeacherAttendance'), { ssr: false });
+const TeacherTimeTrackerPage = dynamic(() => import('../../src/teacher/TeacherTimeTrackerPage'), { ssr: false });
 
 function getTeacherPage(path = []) {
   const [section, child] = path;
 
   if (!section || section === 'dashboard') return <TeacherDashboard />;
+  if (section === 'time-tracker') return <TeacherTimeTrackerPage />;
   if (section === 'students') return <TeacherStudents />;
   if (section === 'attendance') return <TeacherAttendance />;
   if (section === 'complaints') return <TeacherComplaints />;

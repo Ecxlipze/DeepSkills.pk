@@ -116,7 +116,7 @@ const AdminJDComposer = ({
               <option value="">Select Template</option>
               {templates.map((template) => (
                 <option key={template.id} value={template.id}>
-                  {template.specialization} - {template.employment_type}
+                  {template.title_template ? `${template.title_template} (${template.employment_type})` : `${template.specialization} - ${template.employment_type}`}
                 </option>
               ))}
             </Select>
@@ -159,7 +159,7 @@ const AdminJDComposer = ({
         </Grid>
         <Actions>
           <Button type="button" onClick={onClose}>Close</Button>
-          <Button type="button" $primary onClick={() => onSend(draft)} disabled={loading}>Send JD to Teacher</Button>
+          <Button type="button" $primary onClick={() => onSend(draft)} disabled={loading}>Send JD to Candidate</Button>
         </Actions>
       </Modal>
     </Overlay>

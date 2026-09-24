@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTasks } from '../context/TasksContext';
 import { supabase } from '../supabaseClient';
 import { FaTimes, FaEdit, FaTrash, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import DatePicker from '../components/DatePicker';
 
 const Container = styled.div`
   max-width: 1000px;
@@ -575,11 +576,11 @@ const ViewTasks = () => {
                     </FormGroup>
                     <FormGroup style={{ flex: 1 }}>
                       <label>Due Date</label>
-                      <input 
-                        type="date" 
+                      <DatePicker 
                         required 
                         value={editFormData.dueDate}
                         onChange={e => setEditFormData({...editFormData, dueDate: e.target.value})}
+                        aria-label="Due Date"
                       />
                     </FormGroup>
                   </div>

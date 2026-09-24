@@ -28,6 +28,7 @@ import {
   createExperienceCertificatePdf
 } from '../utils/hrPdf';
 import { syncTeacherAccess } from '../utils/adminAccessApi';
+import { createUser, fetchRoles } from '../utils/userManagementApi';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { supabase } from '../supabaseClient';
@@ -41,8 +42,10 @@ import {
   AdminSelect,
   AdminTextarea,
   AdminButton,
-  FormGrid
+  FormGrid,
+  DepartmentWelcomeBanner
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import {
   validateRequired,
   validateEmail,
@@ -89,7 +92,8 @@ import {
   FaBolt,
   FaEdit,
   FaTrashAlt,
-  FaMapMarkerAlt
+  FaMapMarkerAlt,
+  FaBriefcase
 } from 'react-icons/fa';
 
 const Container = styled.div`
@@ -140,6 +144,7 @@ const Header = styled.div`
 
 const NavTabs = styled.div`
   display: flex;
+  align-items: center;
   gap: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 12px;
@@ -147,9 +152,16 @@ const NavTabs = styled.div`
   max-width: 100%;
   width: 100%;
   box-sizing: border-box;
-  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+
   &::-webkit-scrollbar {
-    display: none;
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
   }
 `;
 
@@ -158,14 +170,15 @@ const TabButton = styled.button`
   color: ${p => p.$active ? '#a78bfa' : '#94a3b8'};
   border: 1px solid ${p => p.$active ? 'rgba(139, 92, 246, 0.4)' : 'rgba(255, 255, 255, 0.06)'};
   border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 0.88rem;
+  padding: 8px 14px;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s;
 
   &:hover {
@@ -179,7 +192,7 @@ const TabButton = styled.button`
     color: #fff;
     font-size: 0.72rem;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 1px 6px;
     border-radius: 999px;
   }
 `;
@@ -780,10 +793,21 @@ const getTeacherWhatsAppUrl = (phone, text) => {
 };
 
 const findTemplateForApplication = (templates, application, employmentType) => {
-  const specialization = application.profile.specialization || application.teacher?.specialization || 'Generic';
+  const target = (
+    application.profile.designation ||
+    application.profile.department ||
+    application.profile.specialization ||
+    application.teacher?.specialization ||
+    ''
+  ).toLowerCase();
+
   return (
-    templates.find((template) => template.specialization === specialization && template.employment_type === employmentType) ||
-    templates.find((template) => template.specialization === specialization) ||
+    templates.find((t) => (t.title_template && target.includes(t.title_template.toLowerCase())) && t.employment_type === employmentType) ||
+    templates.find((t) => (t.specialization && target.includes(t.specialization.toLowerCase())) && t.employment_type === employmentType) ||
+    templates.find((t) => (t.title_template && target.includes(t.title_template.toLowerCase()))) ||
+    templates.find((t) => (t.specialization && target.includes(t.specialization.toLowerCase()))) ||
+    templates.find((t) => (t.specialization || '').toLowerCase() === (application.profile.specialization || '').toLowerCase() && t.employment_type === employmentType) ||
+    templates.find((t) => (t.specialization || '').toLowerCase() === (application.profile.specialization || '').toLowerCase()) ||
     templates.find((template) => /generic/i.test(template.specialization)) ||
     templates[0] ||
     null
@@ -814,11 +838,13 @@ const AdminHRManagement = ({ initialView }) => {
   const [templates, setTemplates] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [teachersList, setTeachersList] = useState([]);
+  const [rolesList, setRolesList] = useState([]);
   const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [candidateTypeFilter, setCandidateTypeFilter] = useState('all');
   const [jdSearch, setJdSearch] = useState('');
   const [jdStatusFilter, setJdStatusFilter] = useState('all');
   const [sigSearch, setSigSearch] = useState('');
@@ -845,17 +871,21 @@ const AdminHRManagement = ({ initialView }) => {
   const [templateSearch, setTemplateSearch] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
 
-  // Teacher modal states
+  // Teacher / Staff modal states
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
   const [addTeacherMode, setAddTeacherMode] = useState('invite');
   const [inviteSuccessData, setInviteSuccessData] = useState(null);
   const [addingTeacher, setAddingTeacher] = useState(false);
   const [addTeacherForm, setAddTeacherForm] = useState({
+    employee_type: 'faculty',
     name: '',
     cnic: '',
     phone: '',
     email: '',
     specialization: '',
+    department: 'Admissions',
+    role_id: '',
+    custom_role_name: '',
     salary_type: 'fixed',
     salary: '',
     course_id: '',
@@ -884,18 +914,20 @@ const AdminHRManagement = ({ initialView }) => {
   const load = async () => {
     setLoading(true);
     try {
-      const [apps, jdTemplates, leavesData, teachersRes, coursesRes, batchesRes, assignmentsRes] = await Promise.all([
+      const [apps, jdTemplates, leavesData, teachersRes, coursesRes, batchesRes, assignmentsRes, rolesData] = await Promise.all([
         fetchAdminHRApplications(),
         fetchJDTemplates(),
         fetchTeacherLeaves(),
         supabase.from('teachers').select('*').order('name'),
         supabase.from('courses').select('*'),
         supabase.from('batches').select('*'),
-        supabase.from('teacher_batches').select('*, batches(batch_name, course)')
+        supabase.from('teacher_batches').select('*, batches(batch_name, course)'),
+        fetchRoles().catch(() => [])
       ]);
       setApplications(apps || []);
       setTemplates(jdTemplates || []);
       setLeaves(leavesData || []);
+      setRolesList(rolesData || []);
 
       const teacherList = (teachersRes.data || []).map(t => ({
         ...t,
@@ -917,6 +949,8 @@ const AdminHRManagement = ({ initialView }) => {
 
   const stats = useMemo(() => {
     const total = applications.length;
+    const facultyCount = applications.filter((a) => !a.isStaff).length;
+    const staffCount = applications.filter((a) => a.isStaff).length;
     const pending = applications.filter((a) => a.profile.hr_status === 'pending').length;
     const jdSent = applications.filter((a) => a.profile.hr_status === 'jd_sent').length;
     const jdApproved = applications.filter((a) => a.jd?.teacher_status === 'approved').length;
@@ -933,6 +967,8 @@ const AdminHRManagement = ({ initialView }) => {
 
     return {
       total,
+      facultyCount,
+      staffCount,
       pending,
       jdSent,
       jdApproved,
@@ -961,11 +997,13 @@ const AdminHRManagement = ({ initialView }) => {
   }, [leaves]);
 
   const filteredApplications = useMemo(() => applications.filter((application) => {
-    const haystack = `${application.teacher?.name || ''} ${application.profile.full_name || ''} ${application.profile.cnic || ''} ${application.profile.specialization || ''} ${application.profile.email || ''}`.toLowerCase();
+    const haystack = `${application.teacher?.name || ''} ${application.profile.full_name || ''} ${application.profile.cnic || ''} ${application.profile.specialization || ''} ${application.profile.designation || ''} ${application.profile.department || ''} ${application.profile.email || ''}`.toLowerCase();
     const matchesSearch = !search || haystack.includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || application.profile.hr_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }), [applications, search, statusFilter]);
+    const matchesType = candidateTypeFilter === 'all' ||
+      (candidateTypeFilter === 'staff' ? application.isStaff : !application.isStaff);
+    return matchesSearch && matchesStatus && matchesType;
+  }), [applications, search, statusFilter, candidateTypeFilter]);
 
   const applicationsWithJds = useMemo(() => applications.filter((a) => a.jd || a.profile.step >= 3), [applications]);
   const filteredJds = useMemo(() => {
@@ -1420,6 +1458,124 @@ const AdminHRManagement = ({ initialView }) => {
     const finalTeacherNotes = [compensationNote, addTeacherForm.notes].filter(Boolean).join(' | ');
 
     try {
+      if (addTeacherForm.employee_type === 'staff') {
+        const selectedRole = rolesList.find(r => r.id === addTeacherForm.role_id);
+        const roleName = selectedRole?.name || addTeacherForm.custom_role_name || addTeacherForm.department || 'Administrative Staff';
+
+        if (addTeacherMode === 'invite') {
+          // 1. Create staff user with status 'onboarding' (which syncs to allowed_cnics)
+          const userPayload = {
+            fullName: addTeacherForm.name,
+            cnic: addTeacherForm.cnic,
+            phone: addTeacherForm.phone,
+            email: addTeacherForm.email,
+            roleValue: selectedRole ? `custom-role:${selectedRole.id}` : 'custom',
+            customRoleId: selectedRole ? selectedRole.id : null,
+            status: 'onboarding',
+            accountNotes: [addTeacherForm.department ? `Department: ${addTeacherForm.department}` : '', addTeacherForm.notes].filter(Boolean).join(' | ')
+          };
+
+          const newUser = await createUser(userPayload, user);
+
+          // 2. Upsert into hr_profiles with department & designation
+          try {
+            await supabase.from('hr_profiles').upsert({
+              user_id: newUser.id,
+              employee_type: 'staff',
+              full_name: addTeacherForm.name,
+              cnic: addTeacherForm.cnic,
+              personal_phone: addTeacherForm.phone,
+              personal_email: addTeacherForm.email,
+              department: addTeacherForm.department || 'General Administration',
+              designation: roleName,
+              specialization: roleName,
+              expected_salary: parsedSalary ? Math.round(parsedSalary) : null,
+              current_step: 1,
+              hr_status: 'pending',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          } catch (hrErr) {
+            console.warn('HR profile sync notice:', hrErr);
+          }
+
+          const loginUrl = `${window.location.origin}/login`;
+          const onboardingUrl = `${window.location.origin}/staff/onboarding`;
+          const waText = `Assalam-o-Alaikum ${addTeacherForm.name},\n\nWelcome to DeepSkills! Your administrative staff onboarding account is ready.\n\nPosition: ${roleName} (${addTeacherForm.department || 'Administration'})\n\nLogin Instructions:\n1. Open portal: ${loginUrl}\n2. Enter your CNIC: ${addTeacherForm.cnic}\n3. Enter the 6-digit OTP sent to your email (${addTeacherForm.email})\n4. Complete your verification and profile submission at ${onboardingUrl}.\n\nOnce reviewed and approved by HR, your administrative portal access and permissions will unlock automatically.\n\nDeepSkills HR & Administration`;
+          const waUrl = getTeacherWhatsAppUrl(addTeacherForm.phone, waText);
+
+          setInviteSuccessData({
+            name: addTeacherForm.name,
+            phone: addTeacherForm.phone,
+            cnic: addTeacherForm.cnic,
+            email: addTeacherForm.email,
+            roleName,
+            isStaff: true,
+            loginUrl,
+            onboardingUrl,
+            waUrl
+          });
+
+          toast.success('Staff candidate registered! Login authorized via CNIC & Email OTP.');
+          await load();
+        } else {
+          // Direct staff creation & activation
+          const userPayload = {
+            fullName: addTeacherForm.name,
+            cnic: addTeacherForm.cnic,
+            phone: addTeacherForm.phone,
+            email: addTeacherForm.email,
+            roleValue: selectedRole ? `custom-role:${selectedRole.id}` : 'custom',
+            customRoleId: selectedRole ? selectedRole.id : null,
+            status: 'active',
+            accountNotes: [addTeacherForm.department ? `Department: ${addTeacherForm.department}` : '', addTeacherForm.notes].filter(Boolean).join(' | ')
+          };
+
+          const newUser = await createUser(userPayload, user);
+
+          try {
+            await supabase.from('hr_profiles').upsert({
+              user_id: newUser.id,
+              employee_type: 'staff',
+              full_name: addTeacherForm.name,
+              cnic: addTeacherForm.cnic,
+              personal_phone: addTeacherForm.phone,
+              personal_email: addTeacherForm.email,
+              department: addTeacherForm.department || 'General Administration',
+              designation: roleName,
+              specialization: roleName,
+              expected_salary: parsedSalary ? Math.round(parsedSalary) : null,
+              current_step: 5,
+              hr_status: 'hired',
+              hired_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          } catch (hrSyncErr) {
+            console.warn('HR profile sync notice:', hrSyncErr);
+          }
+
+          toast.success('Staff member created and activated with administrative permissions!');
+          setIsAddTeacherOpen(false);
+          await load();
+          setAddTeacherForm({
+            employee_type: 'faculty',
+            name: '',
+            cnic: '',
+            phone: '',
+            email: '',
+            specialization: '',
+            department: 'Admissions',
+            role_id: '',
+            custom_role_name: '',
+            salary_type: 'fixed',
+            salary: '',
+            course_id: '',
+            selectedBatches: [],
+            notes: ''
+          });
+        }
+        return;
+      }
+
       if (addTeacherMode === 'invite') {
         // 1. Create teacher record in 'teachers' table with status: 'Pending'
         const { data: teacherRecord, error: tErr } = await supabase
@@ -1571,7 +1727,22 @@ const AdminHRManagement = ({ initialView }) => {
         toast.success('Teacher added & synced with HR profiles successfully!');
         setIsAddTeacherOpen(false);
         await load();
-        setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary_type: 'fixed', salary: '', course_id: '', selectedBatches: [], notes: '' });
+        setAddTeacherForm({
+          employee_type: 'faculty',
+          name: '',
+          cnic: '',
+          phone: '',
+          email: '',
+          specialization: '',
+          department: 'Admissions',
+          role_id: '',
+          custom_role_name: '',
+          salary_type: 'fixed',
+          salary: '',
+          course_id: '',
+          selectedBatches: [],
+          notes: ''
+        });
       }
     } catch (err) {
       toast.error('Failed to process teacher: ' + err.message);
@@ -1597,10 +1768,33 @@ const AdminHRManagement = ({ initialView }) => {
         <Header>
           <div className="title-block">
             <h1>
-              <FaUsers /> HR & Teacher Hiring Portal
+              <FaUsers /> HR & Unified Hiring Portal
             </h1>
-            <p>Onboard faculty, manage contracts, track leave absence, and issue verified teacher dossiers.</p>
+            <p>Onboard faculty & administrative staff, manage contracts, track leave absence, and issue verified dossiers.</p>
           </div>
+          {canMutate && (
+            <AdminButton
+              variant="primary"
+              onClick={() => {
+                setIsAddTeacherOpen(true);
+                setInviteSuccessData(null);
+              }}
+              style={{
+                padding: '10px 18px',
+                fontWeight: '700',
+                fontSize: '0.88rem',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                boxShadow: '0 4px 14px rgba(139, 92, 246, 0.35)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <FaUserPlus /> Invite / Add Candidate
+            </AdminButton>
+          )}
         </Header>
 
         {/* TOP VIEW TABS */}
@@ -1633,6 +1827,67 @@ const AdminHRManagement = ({ initialView }) => {
             {/* VIEW 1: OVERVIEW DASHBOARD */}
             {activeView === 'overview' && (
               <>
+                <DepartmentWelcomeBanner
+                  user={user}
+                  departmentLabel="HR & Faculty Workstation"
+                  subtitle="Unified staff and faculty talent pipeline, automated contract signatures, credentials, and daily attendance leaves."
+                  color="#8B5CF6"
+                  metrics={[
+                    {
+                      label: "Pending Applications",
+                      value: stats.pending,
+                      alert: stats.pending > 0,
+                      badge: stats.pending > 0 ? "Review Needed" : "All Clear",
+                      sub: stats.pending > 0 ? "Awaiting initial dossier action" : "All candidate files screened",
+                      onClick: () => navigate('/admin/hr/applications')
+                    },
+                    {
+                      label: "Signed Contracts Ready",
+                      value: stats.signed,
+                      alert: stats.signed > 0,
+                      badge: stats.signed > 0 ? "Ready to Hire" : "In Pipeline",
+                      sub: stats.signed > 0 ? "Awaiting final onboarding activation" : "No pending activations",
+                      onClick: () => navigate('/admin/hr/signatures')
+                    },
+                    {
+                      label: "Staff On Leave Today",
+                      value: leaveStats.onLeaveToday,
+                      alert: leaveStats.onLeaveToday > 0,
+                      badge: leaveStats.onLeaveToday > 0 ? "Coverage Active" : "Full Attendance",
+                      sub: leaveStats.onLeaveToday > 0 ? "Faculty leaves logged today" : "All teachers present",
+                      onClick: () => navigate('/admin/hr/leaves')
+                    },
+                    {
+                      label: "Active Hired Staff",
+                      value: stats.hired,
+                      alert: false,
+                      badge: "Active Roster",
+                      sub: "Onboarded faculty and staff",
+                      onClick: () => navigate('/admin/hr/teachers')
+                    }
+                  ]}
+                  quickActions={[
+                    ...(canMutate ? [{
+                      label: "Add Faculty / Staff",
+                      icon: <FaPlus />,
+                      primary: true,
+                      onClick: () => { setAddTeacherMode('invite'); setIsAddTeacherOpen(true); }
+                    }] : []),
+                    {
+                      label: "Candidate Applications",
+                      icon: <FaUsers />,
+                      primary: false,
+                      onClick: () => navigate('/admin/hr/applications')
+                    },
+                    ...(canMutate ? [{
+                      label: "JD Templates",
+                      icon: <FaFileAlt />,
+                      primary: false,
+                      onClick: () => navigate('/admin/hr/jds')
+                    }] : [])
+                  ]}
+                />
+
                 <StatsGrid>
                   <StatCard $color="#8B5CF6">
                     <span className="label">Total Applicants</span>
@@ -1863,7 +2118,7 @@ const AdminHRManagement = ({ initialView }) => {
                     <SearchInputWrap>
                       <FaSearch className="search-icon" />
                       <input
-                        placeholder="Search applicant by name, CNIC, specialization..."
+                        placeholder="Search candidate by name, CNIC, specialization, designation..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                       />
@@ -1873,6 +2128,11 @@ const AdminHRManagement = ({ initialView }) => {
                         </button>
                       )}
                     </SearchInputWrap>
+                    <Select value={candidateTypeFilter} onChange={(e) => setCandidateTypeFilter(e.target.value)}>
+                      <option value="all">All Employee Types ({applications.length})</option>
+                      <option value="faculty">Faculty / Teachers ({stats.facultyCount})</option>
+                      <option value="staff">Administrative Staff ({stats.staffCount})</option>
+                    </Select>
                     <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                       <option value="all">All Statuses ({applications.length})</option>
                       <option value="pending">Pending ({stats.pending})</option>
@@ -1888,11 +2148,11 @@ const AdminHRManagement = ({ initialView }) => {
                     <span className="counter">
                       Showing {filteredApplications.length} of {applications.length} Candidates
                     </span>
-                    {(search || statusFilter !== 'all') && (
+                    {(search || statusFilter !== 'all' || candidateTypeFilter !== 'all') && (
                       <button
                         type="button"
                         className="reset-link"
-                        onClick={() => { setSearch(''); setStatusFilter('all'); }}
+                        onClick={() => { setSearch(''); setStatusFilter('all'); setCandidateTypeFilter('all'); }}
                       >
                         Reset filters
                       </button>
@@ -3256,25 +3516,27 @@ const AdminHRManagement = ({ initialView }) => {
 
             <FormGrid columns="1fr 1fr" gap="12px" style={{ marginTop: '14px' }}>
               <FormField label="Start Date" required error={leaveErrors.startDate}>
-                <AdminInput
-                  type="date"
+                <DatePicker
                   value={newLeaveForm.startDate}
+                  max={newLeaveForm.endDate || undefined}
                   onChange={(e) => {
                     setNewLeaveForm({ ...newLeaveForm, startDate: e.target.value });
                     if (leaveErrors.startDate) setLeaveErrors(prev => ({ ...prev, startDate: null }));
                   }}
                   hasError={Boolean(leaveErrors.startDate)}
+                  aria-label="Leave Start Date"
                 />
               </FormField>
               <FormField label="End Date" required error={leaveErrors.endDate}>
-                <AdminInput
-                  type="date"
+                <DatePicker
                   value={newLeaveForm.endDate}
+                  min={newLeaveForm.startDate || undefined}
                   onChange={(e) => {
                     setNewLeaveForm({ ...newLeaveForm, endDate: e.target.value });
                     if (leaveErrors.endDate) setLeaveErrors(prev => ({ ...prev, endDate: null }));
                   }}
                   hasError={Boolean(leaveErrors.endDate)}
+                  aria-label="Leave End Date"
                 />
               </FormField>
             </FormGrid>
@@ -3430,8 +3692,8 @@ const AdminHRManagement = ({ initialView }) => {
           <>
             <AdminModalHeader
               icon={FaCheckCircle}
-              title="Faculty Invitation Ready"
-              subtitle="Instructor account initialized and invitation link generated"
+              title={inviteSuccessData.isStaff ? "Staff Invitation Ready" : "Faculty Invitation Ready"}
+              subtitle={inviteSuccessData.isStaff ? "Staff onboarding account initialized and verification link generated" : "Instructor account initialized and invitation link generated"}
               onClose={() => {
                 setIsAddTeacherOpen(false);
                 setInviteSuccessData(null);
@@ -3457,10 +3719,10 @@ const AdminHRManagement = ({ initialView }) => {
                 </div>
                 <div>
                   <h3 style={{ margin: '0 0 6px', fontSize: '1.25rem', color: '#fff', fontWeight: '700' }}>
-                    Faculty Account Provisioned
+                    {inviteSuccessData.isStaff ? "Administrative Staff Account Provisioned" : "Faculty Account Provisioned"}
                   </h3>
                   <p style={{ margin: '0', fontSize: '0.88rem', color: '#94a3b8', lineHeight: '1.5', maxWidth: '480px' }}>
-                    Account registered for <strong style={{ color: '#fff' }}>{inviteSuccessData.name}</strong>. The instructor can authenticate using their CNIC with OTP, and complete digital onboarding.
+                    Account registered for <strong style={{ color: '#fff' }}>{inviteSuccessData.name}</strong> ({inviteSuccessData.roleName || (inviteSuccessData.isStaff ? 'Staff' : 'Faculty')}). The candidate can authenticate using their CNIC with OTP, and complete digital onboarding.
                   </p>
                 </div>
 
@@ -3478,16 +3740,16 @@ const AdminHRManagement = ({ initialView }) => {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
                     <div>
-                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Faculty Portal</span>
-                      <strong style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>{inviteSuccessData.loginUrl}</strong>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Candidate Onboarding Portal</span>
+                      <strong style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>{inviteSuccessData.onboardingUrl}</strong>
                     </div>
                     <AdminButton
                       type="button"
                       variant="ghost"
                       style={{ padding: '6px 12px', fontSize: '0.78rem' }}
                       onClick={() => {
-                        navigator.clipboard.writeText(inviteSuccessData.loginUrl);
-                        toast.success('Login portal URL copied!');
+                        navigator.clipboard.writeText(inviteSuccessData.onboardingUrl);
+                        toast.success('Onboarding portal URL copied!');
                       }}
                     >
                       <FaCopy /> Copy
@@ -3573,7 +3835,22 @@ const AdminHRManagement = ({ initialView }) => {
                   setIsAddTeacherOpen(false);
                   setInviteSuccessData(null);
                   setAddTeacherErrors({});
-                  setAddTeacherForm({ name: '', cnic: '', phone: '', email: '', specialization: '', salary_type: 'fixed', salary: '', course_id: '', selectedBatches: [], notes: '' });
+                  setAddTeacherForm({
+                    employee_type: 'faculty',
+                    name: '',
+                    cnic: '',
+                    phone: '',
+                    email: '',
+                    specialization: '',
+                    department: 'Admissions',
+                    role_id: '',
+                    custom_role_name: '',
+                    salary_type: 'fixed',
+                    salary: '',
+                    course_id: '',
+                    selectedBatches: [],
+                    notes: ''
+                  });
                 }}
                 style={{ width: '100%', justifyContent: 'center' }}
               >
@@ -3585,8 +3862,8 @@ const AdminHRManagement = ({ initialView }) => {
           <>
             <AdminModalHeader
               icon={FaUserPlus}
-              title="Add Faculty Instructor"
-              subtitle="Register instructors into the HR recruitment pipeline or activate them directly"
+              title={addTeacherForm.employee_type === 'staff' ? "Add Administrative Staff" : "Add Faculty Instructor"}
+              subtitle={addTeacherForm.employee_type === 'staff' ? "Register staff candidates into the HR recruitment pipeline or activate them directly" : "Register instructors into the HR recruitment pipeline or activate them directly"}
               onClose={() => {
                 setIsAddTeacherOpen(false);
                 setInviteSuccessData(null);
@@ -3594,6 +3871,64 @@ const AdminHRManagement = ({ initialView }) => {
               }}
             />
             <AdminModalBody>
+              {/* Employee Type Selector: Faculty vs Staff */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                padding: '5px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.09)',
+                marginBottom: '14px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setAddTeacherForm(prev => ({ ...prev, employee_type: 'faculty' }))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.84rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    border: addTeacherForm.employee_type === 'faculty' ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid transparent',
+                    background: addTeacherForm.employee_type === 'faculty' ? 'rgba(139, 92, 246, 0.22)' : 'transparent',
+                    color: addTeacherForm.employee_type === 'faculty' ? '#c4b5fd' : '#94a3b8'
+                  }}
+                >
+                  <FaUsers size={14} />
+                  <span>Faculty (Teaching)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAddTeacherForm(prev => ({ ...prev, employee_type: 'staff', salary_type: 'fixed' }))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.84rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    border: addTeacherForm.employee_type === 'staff' ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid transparent',
+                    background: addTeacherForm.employee_type === 'staff' ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
+                    color: addTeacherForm.employee_type === 'staff' ? '#38bdf8' : '#94a3b8'
+                  }}
+                >
+                  <FaBriefcase size={14} />
+                  <span>Administrative Staff</span>
+                </button>
+              </div>
+
               {/* Segmented Mode Selector */}
               <div style={{
                 display: 'grid',
@@ -3693,7 +4028,7 @@ const AdminHRManagement = ({ initialView }) => {
                 }}>
                   <FaPaperPlane style={{ color: '#a78bfa', marginTop: '2px', flexShrink: 0 }} />
                   <div>
-                    <strong style={{ color: '#fff' }}>Candidate Self-Onboarding:</strong> Register initial contact information. The candidate automatically receives a digital acceptance letter and onboarding portal link to verify CNIC, upload documents, and submit credentials.
+                    <strong style={{ color: '#fff' }}>Candidate Self-Onboarding:</strong> Register initial contact information. The candidate automatically receives a digital acceptance letter and onboarding portal link to verify CNIC, upload documents, and submit credentials at {addTeacherForm.employee_type === 'staff' ? '/staff/onboarding' : '/teacher/hr'}.
                   </div>
                 </div>
               ) : (
@@ -3712,7 +4047,7 @@ const AdminHRManagement = ({ initialView }) => {
                 }}>
                   <FaBolt style={{ color: '#facc15', marginTop: '2px', flexShrink: 0 }} />
                   <div>
-                    <strong style={{ color: '#fff' }}>Immediate LMS Provisioning:</strong> Bypasses candidate self-service documentation. Instantly creates the instructor record, enables teaching portal login, and links them to designated cohorts.
+                    <strong style={{ color: '#fff' }}>Immediate Provisioning:</strong> {addTeacherForm.employee_type === 'staff' ? 'Bypasses candidate self-service documentation. Instantly creates the staff account and unlocks administrative portal permissions.' : 'Bypasses candidate self-service documentation. Instantly creates the instructor record, enables teaching portal login, and links them to designated cohorts.'}
                   </div>
                 </div>
               )}
@@ -3727,7 +4062,7 @@ const AdminHRManagement = ({ initialView }) => {
                         if (addTeacherErrors.name) setAddTeacherErrors(prev => ({ ...prev, name: null }));
                       }}
                       hasError={Boolean(addTeacherErrors.name)}
-                      placeholder="e.g. Dr. Muhammad Ahmed"
+                      placeholder="e.g. Muhammad Ahmed"
                     />
                   </FormField>
 
@@ -3760,7 +4095,7 @@ const AdminHRManagement = ({ initialView }) => {
                     />
                   </FormField>
 
-                  <FormField label="Official Email Address" required error={addTeacherErrors.email} hint="Required for teacher portal OTP authentication">
+                  <FormField label="Official Email Address" required error={addTeacherErrors.email} hint="Required for OTP authentication">
                     <AdminInput
                       type="email"
                       value={addTeacherForm.email}
@@ -3773,226 +4108,285 @@ const AdminHRManagement = ({ initialView }) => {
                         if (err) setAddTeacherErrors(prev => ({ ...prev, email: err }));
                       }}
                       hasError={Boolean(addTeacherErrors.email)}
-                      placeholder="instructor@deepskills.pk"
+                      placeholder="user@deepskills.pk"
                     />
                   </FormField>
                 </FormGrid>
 
-                <FormGrid columns="1fr 1fr" gap="14px">
-                  <FormField label="Specialization Domain" hint="Subject area or track">
-                    <AdminInput
-                      value={addTeacherForm.specialization}
-                      onChange={(e) => setAddTeacherForm({ ...addTeacherForm, specialization: e.target.value })}
-                      placeholder="e.g. Full Stack Web Development, UI/UX"
-                    />
-                  </FormField>
+                {addTeacherForm.employee_type === 'staff' ? (
+                  <>
+                    <FormGrid columns="1fr 1fr" gap="14px">
+                      <FormField label="Department" required>
+                        <AdminSelect
+                          value={addTeacherForm.department}
+                          onChange={(e) => setAddTeacherForm({ ...addTeacherForm, department: e.target.value })}
+                        >
+                          <option value="Admissions">Admissions & Outreach</option>
+                          <option value="Finance">Finance & Accounts</option>
+                          <option value="Academics">Academic Coordination</option>
+                          <option value="Human Resources">Human Resources & Faculty</option>
+                          <option value="Marketing">Marketing & Media</option>
+                          <option value="Quality Assurance">Quality Assurance / Audit</option>
+                          <option value="Operations">Operations & Campus</option>
+                        </AdminSelect>
+                      </FormField>
 
-                  <FormField
-                    label={
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <span>{addTeacherForm.salary_type === 'percentage' ? (addTeacherMode === 'invite' ? 'Expected Share (%)' : 'Agreed Share (%)') : (addTeacherMode === 'invite' ? 'Expected Salary (PKR)' : 'Agreed Salary (PKR)')}</span>
-                        <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddTeacherForm({ ...addTeacherForm, salary_type: 'fixed', salary: '' });
-                              if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
-                            }}
-                            style={{
-                              border: 'none',
-                              background: addTeacherForm.salary_type === 'fixed' ? '#8b5cf6' : 'transparent',
-                              color: addTeacherForm.salary_type === 'fixed' ? '#fff' : '#94a3b8',
-                              fontSize: '0.72rem',
-                              fontWeight: '700',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            Fixed (PKR)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddTeacherForm({ ...addTeacherForm, salary_type: 'percentage', salary: '' });
-                              if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
-                            }}
-                            style={{
-                              border: 'none',
-                              background: addTeacherForm.salary_type === 'percentage' ? '#8b5cf6' : 'transparent',
-                              color: addTeacherForm.salary_type === 'percentage' ? '#fff' : '#94a3b8',
-                              fontSize: '0.72rem',
-                              fontWeight: '700',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            % Share
-                          </button>
-                        </div>
-                      </div>
-                    }
-                    error={addTeacherErrors.salary}
-                    hint={addTeacherForm.salary_type === 'percentage' ? 'Cohort revenue share percentage (1% - 100%)' : 'Gross fixed monthly compensation in PKR'}
-                  >
-                    <AdminInput
-                      type="number"
-                      min={addTeacherForm.salary_type === 'percentage' ? 1 : 0}
-                      max={addTeacherForm.salary_type === 'percentage' ? 100 : undefined}
-                      step={addTeacherForm.salary_type === 'percentage' ? '1' : '1000'}
-                      onKeyDown={(e) => {
-                        if (e.key === '-' || e.key === 'e' || e.key === 'E') {
-                          e.preventDefault();
-                        }
-                      }}
-                      value={addTeacherForm.salary}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val !== '') {
-                          const num = Number(val);
-                          if (num < 0) return;
-                          if (addTeacherForm.salary_type === 'percentage' && num > 100) return;
-                        }
-                        setAddTeacherForm({ ...addTeacherForm, salary: val });
-                        if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
-                      }}
-                      hasError={Boolean(addTeacherErrors.salary)}
-                      placeholder={addTeacherForm.salary_type === 'percentage' ? 'e.g. 30' : 'e.g. 85000'}
-                    />
-                  </FormField>
-                </FormGrid>
+                      <FormField label="Staff Role / Designation" required hint="Determines admin portal module access">
+                        <AdminSelect
+                          value={addTeacherForm.role_id}
+                          onChange={(e) => setAddTeacherForm({ ...addTeacherForm, role_id: e.target.value })}
+                        >
+                          <option value="">Select Role / Designation...</option>
+                          {rolesList.filter(r => !['student', 'teacher'].includes(r.name?.toLowerCase())).map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </AdminSelect>
+                      </FormField>
+                    </FormGrid>
 
-                {addTeacherMode === 'direct' && (
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '12px',
-                    padding: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '14px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#fde047' }}>
-                        Curriculum Cohort Allocation
-                      </span>
-                    </div>
-
-                    <FormField label="Primary Teaching Course" hint="Select course to view its assigned batches">
-                      <AdminSelect
-                        value={addTeacherForm.course_id}
-                        onChange={(e) => setAddTeacherForm({ ...addTeacherForm, course_id: e.target.value })}
-                      >
-                        <option value="">Choose Course Program...</option>
-                        {courses.map((c) => (
-                          <option key={c.id} value={c.id}>{c.title}</option>
-                        ))}
-                      </AdminSelect>
+                    <FormField
+                      label={addTeacherMode === 'invite' ? 'Expected Monthly Salary (PKR)' : 'Agreed Monthly Salary (PKR)'}
+                      error={addTeacherErrors.salary}
+                      hint="Gross fixed monthly compensation in PKR"
+                    >
+                      <AdminInput
+                        type="number"
+                        min={0}
+                        step="1000"
+                        onKeyDown={(e) => {
+                          if (e.key === '-' || e.key === 'e' || e.key === 'E') e.preventDefault();
+                        }}
+                        value={addTeacherForm.salary}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val !== '' && Number(val) < 0) return;
+                          setAddTeacherForm({ ...addTeacherForm, salary: val });
+                          if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                        }}
+                        hasError={Boolean(addTeacherErrors.salary)}
+                        placeholder="e.g. 75000"
+                      />
                     </FormField>
+                  </>
+                ) : (
+                  <>
+                    <FormGrid columns="1fr 1fr" gap="14px">
+                      <FormField label="Specialization Domain" hint="Subject area or track">
+                        <AdminInput
+                          value={addTeacherForm.specialization}
+                          onChange={(e) => setAddTeacherForm({ ...addTeacherForm, specialization: e.target.value })}
+                          placeholder="e.g. Full Stack Web Development, UI/UX"
+                        />
+                      </FormField>
 
-                    {addTeacherForm.course_id && (
-                      <div>
-                        <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
-                          Assign Batches & Teaching Role:
-                        </span>
-                        {(() => {
-                          const selectedCourse = courses.find((c) => c.id === addTeacherForm.course_id);
-                          const matchingBatches = batches.filter((b) => b.course === selectedCourse?.title);
+                      <FormField
+                        label={
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <span>{addTeacherForm.salary_type === 'percentage' ? (addTeacherMode === 'invite' ? 'Expected Share (%)' : 'Agreed Share (%)') : (addTeacherMode === 'invite' ? 'Expected Salary (PKR)' : 'Agreed Salary (PKR)')}</span>
+                            <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAddTeacherForm({ ...addTeacherForm, salary_type: 'fixed', salary: '' });
+                                  if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: addTeacherForm.salary_type === 'fixed' ? '#8b5cf6' : 'transparent',
+                                  color: addTeacherForm.salary_type === 'fixed' ? '#fff' : '#94a3b8',
+                                  fontSize: '0.72rem',
+                                  fontWeight: '700',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                Fixed (PKR)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAddTeacherForm({ ...addTeacherForm, salary_type: 'percentage', salary: '' });
+                                  if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: addTeacherForm.salary_type === 'percentage' ? '#8b5cf6' : 'transparent',
+                                  color: addTeacherForm.salary_type === 'percentage' ? '#fff' : '#94a3b8',
+                                  fontSize: '0.72rem',
+                                  fontWeight: '700',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                % Share
+                              </button>
+                            </div>
+                          </div>
+                        }
+                        error={addTeacherErrors.salary}
+                        hint={addTeacherForm.salary_type === 'percentage' ? 'Cohort revenue share percentage (1% - 100%)' : 'Gross fixed monthly compensation in PKR'}
+                      >
+                        <AdminInput
+                          type="number"
+                          min={addTeacherForm.salary_type === 'percentage' ? 1 : 0}
+                          max={addTeacherForm.salary_type === 'percentage' ? 100 : undefined}
+                          step={addTeacherForm.salary_type === 'percentage' ? '1' : '1000'}
+                          onKeyDown={(e) => {
+                            if (e.key === '-' || e.key === 'e' || e.key === 'E') {
+                              e.preventDefault();
+                            }
+                          }}
+                          value={addTeacherForm.salary}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val !== '') {
+                              const num = Number(val);
+                              if (num < 0) return;
+                              if (addTeacherForm.salary_type === 'percentage' && num > 100) return;
+                            }
+                            setAddTeacherForm({ ...addTeacherForm, salary: val });
+                            if (addTeacherErrors.salary) setAddTeacherErrors(prev => ({ ...prev, salary: null }));
+                          }}
+                          hasError={Boolean(addTeacherErrors.salary)}
+                          placeholder={addTeacherForm.salary_type === 'percentage' ? 'e.g. 30' : 'e.g. 85000'}
+                        />
+                      </FormField>
+                    </FormGrid>
 
-                          if (matchingBatches.length === 0) {
-                            return (
-                              <div style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: '#64748b',
-                                fontSize: '0.82rem',
-                                background: 'rgba(255, 255, 255, 0.02)',
-                                borderRadius: '8px',
-                                border: '1px dashed rgba(255, 255, 255, 0.08)'
-                              }}>
-                                No active cohort batches found for {selectedCourse?.title}.
-                              </div>
-                            );
-                          }
+                    {addTeacherMode === 'direct' && (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '14px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#fde047' }}>
+                            Curriculum Cohort Allocation
+                          </span>
+                        </div>
 
-                          return (
-                            <div style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '8px',
-                              maxHeight: '180px',
-                              overflowY: 'auto',
-                              paddingRight: '4px'
-                            }}>
-                              {matchingBatches.map((b) => {
-                                const isSelected = addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id);
+                        <FormField label="Primary Teaching Course" hint="Select course to view its assigned batches">
+                          <AdminSelect
+                            value={addTeacherForm.course_id}
+                            onChange={(e) => setAddTeacherForm({ ...addTeacherForm, course_id: e.target.value })}
+                          >
+                            <option value="">Choose Course Program...</option>
+                            {courses.map((c) => (
+                              <option key={c.id} value={c.id}>{c.title}</option>
+                            ))}
+                          </AdminSelect>
+                        </FormField>
+
+                        {addTeacherForm.course_id && (
+                          <div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
+                              Assign Batches & Teaching Role:
+                            </span>
+                            {(() => {
+                              const selectedCourse = courses.find((c) => c.id === addTeacherForm.course_id);
+                              const matchingBatches = batches.filter((b) => b.course === selectedCourse?.title);
+
+                              if (matchingBatches.length === 0) {
                                 return (
-                                  <div
-                                    key={b.id}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      padding: '10px 14px',
-                                      borderRadius: '8px',
-                                      background: isSelected ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255, 255, 255, 0.03)',
-                                      border: isSelected ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
-                                      transition: 'all 0.15s ease'
-                                    }}
-                                  >
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0, fontSize: '0.85rem', color: isSelected ? '#fff' : '#cbd5e1', fontWeight: isSelected ? '600' : '400' }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={!!isSelected}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            if (!addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id)) {
-                                              setAddTeacherForm({
-                                                ...addTeacherForm,
-                                                selectedBatches: [...addTeacherForm.selectedBatches, { batch_id: b.id, role: 'Main' }]
-                                              });
-                                            }
-                                          } else {
-                                            setAddTeacherForm({
-                                              ...addTeacherForm,
-                                              selectedBatches: addTeacherForm.selectedBatches.filter((sb) => sb.batch_id !== b.id)
-                                            });
-                                          }
-                                        }}
-                                        style={{ accentColor: '#8b5cf6', width: '16px', height: '16px', cursor: 'pointer' }}
-                                      />
-                                      <span>{b.batch_name}</span>
-                                    </label>
-                                    {isSelected && (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <span style={{ fontSize: '0.75rem', color: '#a78bfa' }}>Role:</span>
-                                        <AdminSelect
-                                          style={{ width: '140px', padding: '5px 8px', fontSize: '0.8rem' }}
-                                          value={isSelected.role}
-                                          onChange={(e) => {
-                                            setAddTeacherForm({
-                                              ...addTeacherForm,
-                                              selectedBatches: addTeacherForm.selectedBatches.map((sb) => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
-                                            });
-                                          }}
-                                        >
-                                          <option value="Main">Lead Instructor</option>
-                                          <option value="Assistant">Assistant</option>
-                                        </AdminSelect>
-                                      </div>
-                                    )}
+                                  <div style={{
+                                    padding: '16px',
+                                    textAlign: 'center',
+                                    color: '#64748b',
+                                    fontSize: '0.82rem',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    borderRadius: '8px',
+                                    border: '1px dashed rgba(255, 255, 255, 0.08)'
+                                  }}>
+                                    No active cohort batches found for {selectedCourse?.title}.
                                   </div>
                                 );
-                              })}
-                            </div>
-                          );
-                        })()}
+                              }
+
+                              return (
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '8px',
+                                  maxHeight: '180px',
+                                  overflowY: 'auto',
+                                  paddingRight: '4px'
+                                }}>
+                                  {matchingBatches.map((b) => {
+                                    const isSelected = addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id);
+                                    return (
+                                      <div
+                                        key={b.id}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          padding: '10px 14px',
+                                          borderRadius: '8px',
+                                          background: isSelected ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                                          border: isSelected ? '1px solid rgba(139, 92, 246, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0, fontSize: '0.85rem', color: isSelected ? '#fff' : '#cbd5e1', fontWeight: isSelected ? '600' : '400' }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={!!isSelected}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                if (!addTeacherForm.selectedBatches.find((sb) => sb.batch_id === b.id)) {
+                                                  setAddTeacherForm({
+                                                    ...addTeacherForm,
+                                                    selectedBatches: [...addTeacherForm.selectedBatches, { batch_id: b.id, role: 'Main' }]
+                                                  });
+                                                }
+                                              } else {
+                                                setAddTeacherForm({
+                                                  ...addTeacherForm,
+                                                  selectedBatches: addTeacherForm.selectedBatches.filter((sb) => sb.batch_id !== b.id)
+                                                });
+                                              }
+                                            }}
+                                            style={{ accentColor: '#8b5cf6', width: '16px', height: '16px', cursor: 'pointer' }}
+                                          />
+                                          <span>{b.batch_name}</span>
+                                        </label>
+                                        {isSelected && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ fontSize: '0.75rem', color: '#a78bfa' }}>Role:</span>
+                                            <AdminSelect
+                                              style={{ width: '140px', padding: '5px 8px', fontSize: '0.8rem' }}
+                                              value={isSelected.role}
+                                              onChange={(e) => {
+                                                setAddTeacherForm({
+                                                  ...addTeacherForm,
+                                                  selectedBatches: addTeacherForm.selectedBatches.map((sb) => sb.batch_id === b.id ? { ...sb, role: e.target.value } : sb)
+                                                });
+                                              }}
+                                            >
+                                              <option value="Main">Lead Instructor</option>
+                                              <option value="Assistant">Assistant</option>
+                                            </AdminSelect>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
 
                 <FormField label={addTeacherMode === 'invite' ? 'Candidate Interview & Assessment Notes (Optional)' : 'Administrative Onboarding Notes (Optional)'}>
@@ -4034,7 +4428,7 @@ const AdminHRManagement = ({ initialView }) => {
                     )
                     : (
                       <>
-                        <FaBolt size={13} /> Directly Activate Faculty
+                        <FaBolt size={13} /> {addTeacherForm.employee_type === 'staff' ? 'Directly Activate Staff' : 'Directly Activate Faculty'}
                       </>
                     )}
               </AdminButton>

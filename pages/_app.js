@@ -14,6 +14,7 @@ export default function App({ Component, pageProps }) {
   const isDashboardRoute =
     router.asPath.startsWith('/student') ||
     router.asPath.startsWith('/teacher') ||
+    router.asPath.startsWith('/staff') ||
     router.asPath.startsWith('/admin');
 
   useEffect(() => {

@@ -14,7 +14,10 @@ import {
   FaClock,
   FaFilePdf,
   FaFileImage,
+  FaFileWord,
+  FaFileArchive,
   FaFileAlt,
+  FaLink,
   FaExternalLinkAlt,
   FaDownload,
   FaPaperPlane,
@@ -648,13 +651,14 @@ const AdminHRDrawer = ({
 
   if (!open || !application) return null;
 
-  const { teacher, profile = {}, documents = [], jd, signature, files = [] } = application;
+  const { teacher, profile = {}, documents = [], jd, signature, files = [], isStaff, employeeType } = application;
   const stage = getCandidateStage(application);
-  const fullName = teacher?.name || profile.full_name || 'Faculty Candidate';
+  const isCandidateStaff = Boolean(isStaff || employeeType === 'staff' || profile.employee_type === 'staff' || profile.user_id);
+  const fullName = teacher?.name || profile.full_name || (isCandidateStaff ? 'Staff Candidate' : 'Faculty Candidate');
   const cnic = profile.cnic || teacher?.cnic || '';
   const phone = profile.personal_phone || teacher?.phone || '';
   const email = profile.personal_email || teacher?.email || '';
-  const specialization = profile.specialization || teacher?.specialization || 'Academic Faculty';
+  const specialization = profile.designation || profile.specialization || teacher?.specialization || (isCandidateStaff ? 'Administrative Staff' : 'Academic Faculty');
   const hrStatus = profile.hr_status || (stage === 5 ? 'hired' : 'pending');
 
   const initials = fullName
@@ -672,7 +676,7 @@ const AdminHRDrawer = ({
 
   const cleanPhone = phone.replace(/\D/g, '');
   const waUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone.startsWith('92') ? cleanPhone : '92' + cleanPhone.replace(/^0/, '')}?text=${encodeURIComponent(`Assalam-o-Alaikum ${fullName}, DeepSkills HR here regarding your faculty application.`)}`
+    ? `https://wa.me/${cleanPhone.startsWith('92') ? cleanPhone : '92' + cleanPhone.replace(/^0/, '')}?text=${encodeURIComponent(`Assalam-o-Alaikum ${fullName}, DeepSkills HR here regarding your ${isCandidateStaff ? 'administrative staff' : 'faculty'} application.`)}`
     : null;
 
   return (
@@ -699,7 +703,23 @@ const AdminHRDrawer = ({
                   <ProfileMeta>
                     <h2>{fullName}</h2>
                     <div className="meta-sub">
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: isCandidateStaff ? 'rgba(56, 189, 248, 0.14)' : 'rgba(139, 92, 246, 0.14)',
+                        color: isCandidateStaff ? '#38bdf8' : '#c4b5fd',
+                        border: isCandidateStaff ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(139, 92, 246, 0.3)',
+                        borderRadius: '4px',
+                        padding: '1px 7px',
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase'
+                      }}>
+                        {isCandidateStaff ? 'Staff' : 'Faculty'}
+                      </span>
                       <span>{specialization}</span>
+                      {profile.department && <span>• {profile.department}</span>}
                       <span>•</span>
                       <StatusPill $status={hrStatus}>
                         {hrStatus === 'hired' && <FaCheckCircle size={11} />}
@@ -719,6 +739,18 @@ const AdminHRDrawer = ({
 
               {/* QUICK ACTIONS BAR */}
               <QuickActionBar>
+                <ActionChip
+                  as="button"
+                  type="button"
+                  className="copy"
+                  onClick={() => copyToClipboard(
+                    `${typeof window !== 'undefined' ? window.location.origin : ''}${isCandidateStaff ? '/staff/onboarding' : '/teacher/hr'}`,
+                    'Onboarding Link'
+                  )}
+                  title="Copy candidate onboarding portal link"
+                >
+                  <FaFolderOpen /> Onboarding Link <FaCopy size={10} style={{ opacity: 0.6 }} />
+                </ActionChip>
                 {cnic && (
                   <ActionChip
                     as="button"
@@ -851,22 +883,28 @@ const AdminHRDrawer = ({
                         </span>
                       </DataItem>
                       <DataItem>
-                        <label>Teaching Mode Availability</label>
-                        <span className="val">{profile.teaching_mode || 'On-Campus / Hybrid'}</span>
+                        <label>{isCandidateStaff ? 'Work Mode Availability' : 'Teaching Mode Availability'}</label>
+                        <span className="val">{profile.teaching_mode || (isCandidateStaff ? 'On-Campus' : 'On-Campus / Hybrid')}</span>
                       </DataItem>
                     </DataGrid>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <h3><FaGraduationCap /> Professional Experience & Compensation</h3>
-                      <span className="pill">Faculty Qualification</span>
+                      <h3><FaGraduationCap /> {isCandidateStaff ? 'Designation & Compensation' : 'Professional Experience & Compensation'}</h3>
+                      <span className="pill">{isCandidateStaff ? 'Staff Dossier' : 'Faculty Qualification'}</span>
                     </CardHeader>
                     <DataGrid>
                       <DataItem>
-                        <label>Specialization Domain</label>
+                        <label>{isCandidateStaff ? 'Role / Designation' : 'Specialization Domain'}</label>
                         <span className="val">{specialization}</span>
                       </DataItem>
+                      {isCandidateStaff && profile.department && (
+                        <DataItem>
+                          <label>Department</label>
+                          <span className="val">{profile.department}</span>
+                        </DataItem>
+                      )}
                       <DataItem>
                         <label>Industry Experience</label>
                         <span className="val">{profile.years_experience ? `${profile.years_experience} Years` : '-'}</span>
@@ -904,6 +942,33 @@ const AdminHRDrawer = ({
                       </DataItem>
                     </DataGrid>
                   </Card>
+
+                  {(profile.bank_name || profile.account_number || profile.iban || profile.account_title) && (
+                    <Card>
+                      <CardHeader>
+                        <h3><FaMoneyBillWave /> Bank & Payroll Details</h3>
+                        <span className="pill">Disbursement</span>
+                      </CardHeader>
+                      <DataGrid>
+                        <DataItem>
+                          <label>Bank Name</label>
+                          <span className="val">{profile.bank_name || '-'}</span>
+                        </DataItem>
+                        <DataItem>
+                          <label>Account Title</label>
+                          <span className="val">{profile.account_title || '-'}</span>
+                        </DataItem>
+                        <DataItem>
+                          <label>Account Number</label>
+                          <span className="val mono">{profile.account_number || '-'}</span>
+                        </DataItem>
+                        <DataItem>
+                          <label>IBAN</label>
+                          <span className="val mono">{profile.iban || '-'}</span>
+                        </DataItem>
+                      </DataGrid>
+                    </Card>
+                  )}
 
                   <Card>
                     <CardHeader>
@@ -945,7 +1010,7 @@ const AdminHRDrawer = ({
                         <FaFileAlt size={36} style={{ color: '#475569', marginBottom: '12px' }} />
                         <p style={{ margin: '0 0 6px', color: '#e2e8f0', fontWeight: '600' }}>No credentials uploaded yet.</p>
                         <p style={{ margin: 0, fontSize: '0.8rem' }}>
-                          The instructor can upload their CNIC copies, CV, and degree certificates via the candidate self-onboarding portal at <code>/teacher/hr</code>.
+                          The candidate can upload their CNIC copies, CV, and degree certificates via the candidate self-onboarding portal at <code>{isCandidateStaff ? '/staff/onboarding' : '/teacher/hr'}</code>.
                         </p>
                       </div>
                     ) : (
@@ -953,13 +1018,28 @@ const AdminHRDrawer = ({
                         {documents.map((doc) => {
                           const isPdf = doc.file_name?.toLowerCase().endsWith('.pdf') || doc.mime_type?.includes('pdf');
                           const isImg = doc.file_name?.match(/\.(png|jpg|jpeg|webp)$/i) || doc.mime_type?.includes('image');
+                          const isWord = doc.file_name?.match(/\.(docx|doc)$/i) || doc.mime_type?.includes('word');
+                          const isZip = doc.file_name?.match(/\.zip$/i) || doc.mime_type?.includes('zip');
+                          const isLink = Boolean(doc.link_url);
                           const fileUrl = doc.file_url || doc.link_url;
 
                           return (
                             <DocCard key={doc.id || doc.file_name}>
                               <div className="doc-left">
                                 <div className="doc-icon">
-                                  {isPdf ? <FaFilePdf style={{ color: '#f87171' }} /> : isImg ? <FaFileImage style={{ color: '#38bdf8' }} /> : <FaFileAlt />}
+                                  {isPdf ? (
+                                    <FaFilePdf style={{ color: '#f87171' }} />
+                                  ) : isImg ? (
+                                    <FaFileImage style={{ color: '#38bdf8' }} />
+                                  ) : isWord ? (
+                                    <FaFileWord style={{ color: '#60a5fa' }} />
+                                  ) : isZip ? (
+                                    <FaFileArchive style={{ color: '#f59e0b' }} />
+                                  ) : isLink ? (
+                                    <FaLink style={{ color: '#a78bfa' }} />
+                                  ) : (
+                                    <FaFileAlt style={{ color: '#94a3b8' }} />
+                                  )}
                                 </div>
                                 <div className="doc-info">
                                   <strong>{doc.doc_type || doc.category || 'Uploaded File'}</strong>
@@ -970,11 +1050,13 @@ const AdminHRDrawer = ({
                                 {fileUrl && (
                                   <>
                                     <MiniButton href={fileUrl} target="_blank" rel="noreferrer">
-                                      <FaExternalLinkAlt size={11} /> View
+                                      <FaExternalLinkAlt size={11} /> {isLink ? 'Open Link' : 'View'}
                                     </MiniButton>
-                                    <MiniButton href={fileUrl} download={doc.file_name} className="download">
-                                      <FaDownload size={11} />
-                                    </MiniButton>
+                                    {!isLink && doc.file_name && (
+                                      <MiniButton href={fileUrl} download={doc.file_name} className="download">
+                                        <FaDownload size={11} />
+                                      </MiniButton>
+                                    )}
                                   </>
                                 )}
                               </div>

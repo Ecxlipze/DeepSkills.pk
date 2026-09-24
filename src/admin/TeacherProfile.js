@@ -200,8 +200,10 @@ const InfoGrid = styled.div`
 const InfoRow = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   font-size: 0.84rem;
+  line-height: 1.45;
 
   .label {
     display: flex;
@@ -209,6 +211,8 @@ const InfoRow = styled.div`
     gap: 8px;
     color: #64748b;
     font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .value {
@@ -216,7 +220,8 @@ const InfoRow = styled.div`
     font-weight: 600;
     text-align: right;
     word-break: break-word;
-    max-width: 170px;
+    flex: 1;
+    min-width: 0;
   }
 `;
 

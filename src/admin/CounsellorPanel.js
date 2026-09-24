@@ -22,7 +22,8 @@ import {
   AdminInput,
   AdminSelect,
   AdminTextarea,
-  AdminButton
+  AdminButton,
+  DepartmentWelcomeBanner
 } from '../components/portal';
 import { validateRequired, validatePhone, validateEmail, validateForm, formatPhone } from '../utils/formValidation';
 
@@ -1635,6 +1636,7 @@ const CounsellorPanel = ({ initialView }) => {
             onUpdateStatus={(inq) => { setStatusTarget(inq); setStatusForm({ status: inq.status || 'contacted', note: '', followUpDate: getNextFollowUpDate(inq) || '' }); }}
             getLinkedStudent={getLinkedStudent}
             dueTodayCount={dueTodayCount}
+            user={user}
           />
         ) : resolvedView === 'performance' ? (
           <PerformanceContent
@@ -3807,17 +3809,77 @@ function OverviewContent({
   navigate,
   openEnroll,
   canMutate,
-  activeBatches,
+  activeBatches = [],
   studentCountByBatch,
   recentInquiries,
   sourcesBreakdown,
   onSelectInquiry,
   onUpdateStatus,
   getLinkedStudent,
-  dueTodayCount = 0
+  dueTodayCount = 0,
+  user
 }) {
   return (
     <>
+      <DepartmentWelcomeBanner
+        user={user}
+        departmentLabel="Admissions Workstation"
+        subtitle="Manage prospective student inquiries, track conversion velocity, and monitor upcoming follow-ups."
+        color="#378ADD"
+        metrics={[
+          {
+            label: "Today's Unhandled Inquiries",
+            value: stats.new,
+            alert: stats.new > 0,
+            badge: stats.new > 0 ? "Needs Action" : "All Clear",
+            sub: stats.new > 0 ? "Pending initial contact" : "All leads contacted",
+            onClick: () => navigate('/admin/counsellor/inquiries')
+          },
+          {
+            label: "Follow-ups Due Today",
+            value: dueTodayCount,
+            alert: dueTodayCount > 0,
+            badge: dueTodayCount > 0 ? "Scheduled" : "Up to date",
+            sub: dueTodayCount > 0 ? "Calls & appointments pending" : "No overdue tasks",
+            onClick: () => navigate('/admin/counsellor/inquiries')
+          },
+          {
+            label: "Admissions Conversion Rate",
+            value: `${conversionRate}%`,
+            alert: false,
+            badge: `${stats.enrolled} Enrolled`,
+            sub: "Overall inquiry-to-admission ratio"
+          },
+          {
+            label: "Active Running Batches",
+            value: Array.isArray(activeBatches) ? activeBatches.length : 0,
+            alert: false,
+            badge: "Intake Open",
+            sub: "Live cohort capacity tracking"
+          }
+        ]}
+        quickActions={[
+          ...(canMutate ? [{
+            label: "New Inquiry",
+            icon: <FaPlus />,
+            primary: true,
+            onClick: () => navigate('/admin/counsellor/inquiries?action=new')
+          }] : []),
+          ...(canMutate && openEnroll ? [{
+            label: "Enroll Student",
+            icon: <FaUserGraduate />,
+            primary: false,
+            onClick: () => openEnroll()
+          }] : []),
+          {
+            label: "Inquiry Pipeline",
+            icon: <FaArrowRight />,
+            primary: false,
+            onClick: () => navigate('/admin/counsellor/inquiries')
+          }
+        ]}
+      />
+
       <OverviewGrid>
         <OverviewStatCard $highlight>
           <span className="label">Total Leads</span>

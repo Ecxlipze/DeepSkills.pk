@@ -15,6 +15,7 @@ import {
   FormGrid,
   FormSection
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import { validateRequired, validateCnic, validateForm, formatCnic } from '../utils/formValidation';
 
 const Container = styled.div`
@@ -361,14 +362,15 @@ const CertificateManager = () => {
             required
             error={formErrors.issue_date}
           >
-            <AdminInput 
-              type="date" 
+            <DatePicker 
               value={formData.issue_date}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => {
                 setFormData({...formData, issue_date: e.target.value});
                 if (formErrors.issue_date) setFormErrors(p => ({ ...p, issue_date: null }));
               }}
               hasError={!!formErrors.issue_date}
+              aria-label="Issue Date"
             />
           </FormField>
         </FormGrid>

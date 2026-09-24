@@ -15,8 +15,11 @@ import { canAccess, getFirstAccessibleAdminPath } from '../../src/utils/permissi
 import {
   getDepartmentNav,
   getDepartmentRouteAccess,
-  normalizeAdminPath
+  normalizeAdminPath,
+  getDepartmentPortalBranding,
+  getVisibleDepartments
 } from '../../src/utils/departments';
+import { mapAdminPathToStaffPath } from '../../lib/staffRouting';
 
 const AdminLogin = dynamic(() => import('../../src/admin/Login'), { ssr: false });
 const AdminDashboard = dynamic(() => import('../../src/admin/Dashboard'), { ssr: false });
@@ -56,6 +59,9 @@ const AdminAcademicOverview = dynamic(() => import('../../src/admin/AcademicOver
 const ManagementOverview = dynamic(() => import('../../src/admin/ManagementOverview'), { ssr: false });
 const TrainerManager = dynamic(() => import('../../src/admin/TrainerManager'), { ssr: false });
 const ProgramManager = dynamic(() => import('../../src/admin/ProgramManager'), { ssr: false });
+const StaffTimeTrackerPage = dynamic(() => import('../../src/admin/StaffTimeTrackerPage'), { ssr: false });
+const AdminStaffTimeReports = dynamic(() => import('../../src/admin/AdminStaffTimeReports'), { ssr: false });
+const AdminStaffJiraPage = dynamic(() => import('../../src/admin/AdminStaffJiraPage'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -85,7 +91,11 @@ const ADMIN_ROUTE_ACCESS = {
   chats: { allowedRoles: ['admin', 'custom'], permissionKey: 'tasks' },
   programs: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   'announcement-bar': { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
-  settings: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' }
+  settings: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  'time-tracker': { allowedRoles: ['admin', 'custom'] },
+  'time-reports': { allowedRoles: ['admin', 'custom'] },
+  'staff-tasks': { allowedRoles: ['admin', 'custom'] },
+  'jira-tasks': { allowedRoles: ['admin', 'custom'] }
 };
 
 function DepartmentHubRedirect({ departmentId, currentPath }) {
@@ -122,6 +132,9 @@ function getAdminPage(path = [], user = null) {
     }
     return <AdminDashboard />;
   }
+  if (section === 'time-tracker') return <StaffTimeTrackerPage />;
+  if (section === 'time-reports') return <AdminStaffTimeReports />;
+  if (section === 'staff-tasks' || section === 'jira-tasks') return <AdminStaffJiraPage />;
   if (section === 'admissions') return <EnrollmentManager />;
   if (section === 'counsellor') {
     return <CounsellorPanel initialView={child || 'overview'} />;
@@ -136,6 +149,9 @@ function getAdminPage(path = [], user = null) {
   if (section === 'chats') return <AdminGroupChatsPage />;
   if (section === 'certificates') return <CertificateManager />;
   if (section === 'hr') {
+    if (child === 'time-tracker') return <StaffTimeTrackerPage />;
+    if (child === 'time-reports') return <AdminStaffTimeReports />;
+    if (child === 'tasks' || child === 'jira') return <AdminStaffJiraPage />;
     if (child === 'teachers' && subpath) return <TeacherProfile teacherId={subpath} />;
     return <AdminHRManagement initialView={child || 'overview'} />;
   }
@@ -194,6 +210,8 @@ function getAdminPage(path = [], user = null) {
     if (child === 'careers' || child === 'jobs') return <CareerManager />;
     if (child === 'media') return <MediaLibrary />;
     if (child === 'users') return subpath === 'activity' ? <AdminActivityLogsPage /> : <AdminUserManagement />;
+    if (child === 'time-tracker') return <StaffTimeTrackerPage />;
+    if (child === 'time-reports') return <AdminStaffTimeReports />;
     if (child === 'reports') return <ReportsSystem mode="master" />;
     if (child === 'settings') return <ContentManager />;
   }
@@ -260,14 +278,28 @@ export default function AdminPortal() {
   const path = normalized === '/admin' ? [] : normalized.replace(/^\/admin\/?/, '').split('/').filter(Boolean);
   const access = getAdminAccess(path);
 
+  useEffect(() => {
+    if (user?.role === 'custom') {
+      const targetStaffPath = mapAdminPathToStaffPath(router.asPath || normalized);
+      router.replace(targetStaffPath);
+    }
+  }, [user, router, normalized]);
+
+  if (user?.role === 'custom') {
+    return null;
+  }
+
   if (!path[0]) {
     return <AdminProviders>{getAdminPage(path, user)}</AdminProviders>;
   }
 
+  const visibleDepts = getVisibleDepartments(user);
+  const portalBranding = getDepartmentPortalBranding(user, access?.departmentId || path[0] || 'all', visibleDepts);
+
   return (
     <AdminProviders>
       <Head>
-        <title>Admin Portal | DeepSkills</title>
+        <title>{portalBranding.shortName} | DeepSkills</title>
         <meta name="robots" content="noindex,nofollow" />
       </Head>
       <NextPortalGuard

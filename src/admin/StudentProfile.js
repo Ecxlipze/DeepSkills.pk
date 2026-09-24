@@ -25,18 +25,27 @@ const BackLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #888;
+  color: #94a3b8;
   text-decoration: none;
-  font-size: 0.9rem;
-  margin-bottom: 25px;
-  transition: color 0.2s;
-  &:hover { color: #fff; }
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin-bottom: 20px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  transition: all 0.2s;
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
 `;
 
 const Layout = styled.div`
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 30px;
+  grid-template-columns: 340px 1fr;
+  gap: 28px;
 
   @media (max-width: 1100px) {
     grid-template-columns: 1fr;
@@ -48,10 +57,12 @@ const SidebarCard = styled.div`
   background: #111318;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 30px;
+  padding: 26px 22px;
   height: fit-content;
   position: sticky;
-  top: 100px;
+  top: 90px;
+  box-sizing: border-box;
+  width: 100%;
 `;
 
 const ProfileHeader = styled.div`
@@ -113,21 +124,36 @@ const StatusBadge = styled.div`
 const InfoGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  margin-bottom: 30px;
-  padding: 20px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 13px;
+  margin-bottom: 24px;
+  padding: 18px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 `;
 
 const InfoRow = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   font-size: 0.85rem;
+  line-height: 1.45;
 
-  .label { color: #666; }
-  .value { color: #fff; font-weight: 500; }
+  .label {
+    color: #94a3b8;
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .value {
+    color: #f8fafc;
+    font-weight: 600;
+    text-align: right;
+    word-break: break-word;
+    flex: 1;
+    min-width: 0;
+  }
 `;
 
 const ActionButtons = styled.div`
@@ -860,12 +886,20 @@ const StudentProfile = ({ studentId }) => {
     );
   }
 
+  const isStaffPath = (location?.pathname || '').startsWith('/staff');
+  const backTarget = isStaffPath
+    ? (fromCounsellor ? '/staff/inquiries' : '/staff/students')
+    : (fromCounsellor ? '/admin/counsellor/students' : '/admin/management/students');
+  const backLabel = fromCounsellor
+    ? (isStaffPath ? 'Back to Inquiries & Leads' : 'Back to Counsellor Panel')
+    : 'Back to Student Directory';
+
   if (!student) {
     return (
       <AdminLayout>
         <Container style={{ textAlign: 'center', paddingTop: '100px' }}>
-          <BackLink to={fromCounsellor ? "/admin/counsellor/students" : "/admin/management/students"}>
-            <FaArrowLeft /> {fromCounsellor ? 'Back to Counsellor Panel' : 'Back to Students'}
+          <BackLink to={backTarget}>
+            <FaArrowLeft /> {backLabel}
           </BackLink>
           <div style={{ color: '#888' }}>Student not found.</div>
         </Container>
@@ -881,8 +915,8 @@ const StudentProfile = ({ studentId }) => {
   return (
     <AdminLayout>
       <Container>
-        <BackLink to={fromCounsellor ? "/admin/counsellor/students" : "/admin/management/students"}>
-          <FaArrowLeft /> {fromCounsellor ? 'Back to Counsellor Panel' : 'Back to Students'}
+        <BackLink to={backTarget}>
+          <FaArrowLeft /> {backLabel}
         </BackLink>
         
         {/* TOP ALERT IF INACTIVE */}
@@ -910,16 +944,40 @@ const StudentProfile = ({ studentId }) => {
             <InfoGrid>
               <InfoRow>
                 <span className="label">Course</span>
-                <span className="value" style={{ maxWidth: '160px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {student.course}
+                <span className="value" title={student.course}>
+                  {student.course || '—'}
                 </span>
               </InfoRow>
-              <InfoRow><span className="label">Batch</span><span className="value">{student.batch || 'Unassigned'}</span></InfoRow>
-              <InfoRow><span className="label">Timing</span><span className="value">{student.batch_timing || '—'}</span></InfoRow>
-              <InfoRow><span className="label">Phone</span><span className="value">{student.phone}</span></InfoRow>
-              <InfoRow><span className="label">Email</span><span className="value" style={{ fontSize: '0.75rem' }}>{student.email}</span></InfoRow>
-              <InfoRow><span className="label">Education</span><span className="value">{student.education || '—'}</span></InfoRow>
-              <InfoRow><span className="label">Enrolled</span><span className="value">{new Date(student.submitted_at).toLocaleDateString()}</span></InfoRow>
+              <InfoRow>
+                <span className="label">Batch</span>
+                <span className="value" title={student.batch || 'Unassigned'}>
+                  {student.batch || 'Unassigned'}
+                </span>
+              </InfoRow>
+              <InfoRow>
+                <span className="label">Timing</span>
+                <span className="value" title={student.batch_timing || '—'}>
+                  {student.batch_timing || '—'}
+                </span>
+              </InfoRow>
+              <InfoRow>
+                <span className="label">Phone</span>
+                <span className="value">{student.phone || '—'}</span>
+              </InfoRow>
+              <InfoRow>
+                <span className="label">Email</span>
+                <span className="value" style={{ fontSize: '0.8rem', wordBreak: 'break-all' }} title={student.email}>
+                  {student.email || '—'}
+                </span>
+              </InfoRow>
+              <InfoRow>
+                <span className="label">Education</span>
+                <span className="value">{student.education || '—'}</span>
+              </InfoRow>
+              <InfoRow>
+                <span className="label">Enrolled</span>
+                <span className="value">{student.submitted_at ? new Date(student.submitted_at).toLocaleDateString() : '—'}</span>
+              </InfoRow>
             </InfoGrid>
 
             {canMutate ? (

@@ -10,6 +10,7 @@ import {
   getDepartmentRouteAccess,
   canAccessDepartment
 } from './utils/departments';
+import { mapAdminPathToStaffPath } from '../lib/staffRouting';
 import { getTodayAttendanceLoginStatus, triggerAutoAttendance } from './utils/autoAttendance';
 
 const PageContainer = styled(motion.div)`
@@ -337,42 +338,35 @@ const LoginPage = () => {
           setTimeout(finishStudentLogin, 3000);
         }
       } else {
-        const isFromAccessible = Boolean(
-          from &&
-          from !== '/' &&
-          from !== '/login' &&
-          (user.role === 'admin' || (() => {
-            if (from.startsWith('/student') && user.role !== 'student') return false;
-            if (from.startsWith('/teacher') && user.role !== 'teacher') return false;
-            if (from.startsWith('/admin')) {
-              if (user.role !== 'custom') return false;
-              const routeAccess = getDepartmentRouteAccess(from);
-              if (!routeAccess) return true;
-              if (routeAccess.allowedRoles && !routeAccess.allowedRoles.includes(user.role)) return false;
-              if (routeAccess.permissionKey) {
-                return canAccess(user.permissions || {}, routeAccess.permissionKey, 'view');
-              }
-              if (routeAccess.departmentId) {
-                return canAccessDepartment(user, routeAccess.departmentId);
-              }
-            }
-            return true;
-          })())
-        );
-
-        if (isFromAccessible) {
-          navigate(from, { replace: true });
-        } else if (user.role === 'teacher') {
+        if (user.role === 'teacher') {
           if (user.status === 'Pending' || user.status === 'Onboarding') {
             navigate('/teacher/hr', { replace: true });
           } else {
             navigate('/teacher/dashboard', { replace: true });
           }
+        } else if (user.role === 'custom') {
+          const isPendingStaff = ['onboarding', 'pending'].includes(String(user.status || '').toLowerCase());
+          if (isPendingStaff) {
+            navigate('/staff/onboarding', { replace: true });
+          } else if (from && from.startsWith('/staff')) {
+            navigate(from, { replace: true });
+          } else if (from && from.startsWith('/admin')) {
+            navigate(mapAdminPathToStaffPath(from), { replace: true });
+          } else {
+            navigate('/staff/dashboard', { replace: true });
+          }
+        } else if (user.role === 'admin') {
+          if (from && from !== '/' && from !== '/login' && !from.startsWith('/staff')) {
+            navigate(from, { replace: true });
+          } else {
+            navigate('/admin/dashboard', { replace: true });
+          }
         } else {
-          const adminPath = user.role === 'admin'
-            ? '/admin/dashboard'
-            : (getDefaultDepartmentPath(user) || getFirstAccessibleAdminPath(user.permissions || {}));
-          navigate(adminPath, { replace: true });
+          if (from && from !== '/' && from !== '/login' && from.startsWith('/student')) {
+            navigate(from, { replace: true });
+          } else {
+            navigate('/student/dashboard', { replace: true });
+          }
         }
       }
     } catch (err) {

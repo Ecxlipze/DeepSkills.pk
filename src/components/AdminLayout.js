@@ -7,7 +7,7 @@ import {
   FaHome, FaGraduationCap, FaUserTie, FaMoneyBillWave, FaBook, FaBuilding,
   FaClipboardList, FaPlus, FaUsers, FaChartBar, FaFileAlt, FaSignature,
   FaFolder, FaCog, FaCalendarCheck, FaTasks, FaAward, FaBullhorn, FaComments,
-  FaLink, FaNewspaper
+  FaLink, FaNewspaper, FaClock
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useComplaints } from '../context/ComplaintsContext';
@@ -17,10 +17,12 @@ import {
   getDepartmentByPath,
   getDepartmentNav,
   getDepartmentTitle,
-  normalizeAdminPath
+  normalizeAdminPath,
+  getDepartmentPortalBranding
 } from '../utils/departments';
 import NotificationBell from './NotificationBell';
 import { portalTheme } from './portal/PortalTheme';
+import StaffLayout from './StaffLayout';
 import logoImg from '../logo.svg';
 
 const LayoutWrapper = styled.div`
@@ -68,16 +70,32 @@ const Sidebar = styled.aside`
 `;
 
 const SidebarHeader = styled.div`
-  padding: 20px 22px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid ${portalTheme.colors.borderSubtle};
 
   img {
-    height: 36px;
+    height: 34px;
     filter: drop-shadow(0 2px 8px rgba(123, 31, 46, 0.3));
   }
+`;
+
+const SidebarBrand = styled(Link)`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-decoration: none;
+`;
+
+const SidebarPortalTag = styled.span`
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: ${props => props.$color || '#9ca3af'};
+  display: inline-block;
 `;
 
 const CloseButton = styled.button`
@@ -328,10 +346,10 @@ const Topbar = styled.header`
   flex-shrink: 0;
   z-index: 10;
   gap: 16px;
-  flex-wrap: wrap;
 
   @media (max-width: 768px) {
     padding: 10px 16px;
+    flex-wrap: wrap;
   }
 `;
 
@@ -339,6 +357,8 @@ const TopbarLeft = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
+  min-width: 0;
 `;
 
 const MenuToggle = styled.button`
@@ -371,11 +391,63 @@ const BreadcrumbArea = styled.div`
 `;
 
 const Breadcrumbs = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.72rem;
   color: ${portalTheme.colors.textMuted};
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   font-weight: 600;
+  flex-wrap: wrap;
+
+  .sep {
+    color: rgba(255, 255, 255, 0.25);
+    margin: 0 1px;
+  }
+
+  .crumb-text {
+    color: ${portalTheme.colors.textMuted};
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+`;
+
+const PortalHeaderTag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: ${props => props.$color || '#9ca3af'};
+  background: ${props => `${props.$color || '#9ca3af'}18`};
+  border: 1px solid ${props => `${props.$color || '#9ca3af'}35`};
+  padding: 2px 8px;
+  border-radius: ${portalTheme.radii.pill};
+`;
+
+const DedicatedWorkstationBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: ${portalTheme.radii.pill};
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: ${props => props.$color || '#378ADD'};
+  background: ${props => `${props.$color || '#378ADD'}18`};
+  border: 1px solid ${props => `${props.$color || '#378ADD'}40`};
+  box-shadow: 0 0 12px ${props => `${props.$color || '#378ADD'}20`};
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${props => props.$color || '#378ADD'};
+    box-shadow: 0 0 8px ${props => props.$color || '#378ADD'};
+  }
 `;
 
 const PageTitle = styled.div`
@@ -395,6 +467,8 @@ const DepartmentSelector = styled.div`
   border: 1px solid ${portalTheme.colors.borderSubtle};
   overflow-x: auto;
   max-width: 100%;
+  flex-shrink: 1;
+  scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
@@ -411,12 +485,13 @@ const DeptPill = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 11px;
   border-radius: ${portalTheme.radii.pill};
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: ${portalTheme.transitions.default};
   border: 1px solid ${props => props.$active ? `${props.$color}60` : 'transparent'};
   background: ${props => props.$active ? `${props.$color}25` : 'transparent'};
@@ -440,6 +515,8 @@ const TopbarRight = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
 `;
 
 const LogoutBtn = styled.button`
@@ -539,7 +616,13 @@ const renderNavItemIcon = (item) => {
     case 'Attendance':
     case 'Leaves & Absence':
       return <FaCalendarCheck />;
+    case 'Time Tracker':
+    case 'Time & Attendance':
+      return <FaClock />;
+    case 'Staff Time Reports':
+      return <FaChartBar />;
     case 'Tasks':
+    case 'Staff Jira Tasks':
       return <FaTasks />;
     case 'Results':
     case 'Certificates':
@@ -564,9 +647,14 @@ const renderNavItemIcon = (item) => {
 
 export const AdminLayout = ({ children }) => {
   const { user, logout } = useAuth();
-  const { visibleDepartments, activeDepartment, setActiveDepartment } = useDepartment();
-  const { complaints } = useComplaints();
   const location = useLocation();
+
+  if (user?.role === 'custom' || (location?.pathname && location.pathname.startsWith('/staff'))) {
+    return <StaffLayout>{children}</StaffLayout>;
+  }
+
+  const { visibleDepartments = [], activeDepartment = 'all', setActiveDepartment = () => {} } = useDepartment() || {};
+  const { complaints = [] } = useComplaints() || {};
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openMenus, setOpenMenus] = useState({
@@ -595,10 +683,11 @@ export const AdminLayout = ({ children }) => {
   const activeDepartmentMeta = user?.role === 'admin'
     ? (DEPARTMENTS.find((department) => department.id === (currentDepartment?.id || activeDepartment)) || DEPARTMENTS[0])
     : (visibleDepartments.find((d) => d.id === currentDepartment?.id) || visibleDepartments.find((d) => d.id === activeDepartment) || visibleDepartments[0] || DEPARTMENTS[1]);
+  const portalBranding = getDepartmentPortalBranding(user, activeDepartmentMeta?.id, visibleDepartments);
   const navItems = getDepartmentNav(user, activeDepartmentMeta?.id, badges);
   const routeMeta = isFromCounsellor 
-    ? { title: 'Student Dossier', subtitle: 'View enrolled student academic, attendance, and fee profile' }
-    : getDepartmentTitle(normalizedPath);
+    ? { title: 'Student Dossier', subtitle: 'View enrolled student academic, attendance, and fee profile', breadcrumbs: `${portalBranding.shortName} / Student Dossier` }
+    : getDepartmentTitle(normalizedPath, { branding: portalBranding, user, visibleDepartments });
 
   const allNavPaths = navItems
     .flatMap((item) => {
@@ -661,9 +750,12 @@ export const AdminLayout = ({ children }) => {
 
       <Sidebar $isOpen={isMobileMenuOpen}>
         <SidebarHeader>
-          <Link to="/">
-            <img src={logoImg} alt="DeepSkills Admin" />
-          </Link>
+          <SidebarBrand to="/">
+            <img src={logoImg} alt={portalBranding.portalName} />
+            <SidebarPortalTag $color={portalBranding.color}>
+              {portalBranding.shortName}
+            </SidebarPortalTag>
+          </SidebarBrand>
           <CloseButton onClick={() => setIsMobileMenuOpen(false)}>
             <FaTimes />
           </CloseButton>
@@ -763,29 +855,50 @@ export const AdminLayout = ({ children }) => {
               <FaBars />
             </MenuToggle>
             <BreadcrumbArea>
-              <Breadcrumbs>{routeMeta.breadcrumbs || 'Admin / Portal'}</Breadcrumbs>
+              <Breadcrumbs>
+                <PortalHeaderTag $color={portalBranding.color}>
+                  {portalBranding.headerTitle}
+                </PortalHeaderTag>
+                {routeMeta.breadcrumbs && (
+                  <span className="crumb-text">
+                    <span className="sep">/</span>
+                    <span>{portalBranding.isDedicated ? (routeMeta.title || 'Dashboard') : routeMeta.breadcrumbs}</span>
+                  </span>
+                )}
+              </Breadcrumbs>
               <PageTitle>{routeMeta.title || 'Dashboard'}</PageTitle>
             </BreadcrumbArea>
           </TopbarLeft>
 
           <DepartmentSelector>
-            {visibleDepartments.map((department) => {
-              const isActive = activeDepartmentMeta.id === department.id;
-              return (
-                <DeptPill
-                  key={department.id}
-                  type="button"
-                  $active={isActive}
-                  $color={department.color}
-                  onClick={() => handleDepartmentSwitch(department)}
-                >
-                  <span className="dot" />
-                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>{renderDepartmentIcon(department.id)}</span>
-                  <span>{department.shortLabel || department.label}</span>
-                </DeptPill>
-              );
-            })}
+            {visibleDepartments.length <= 1 ? (
+              <DedicatedWorkstationBadge $color={portalBranding.color}>
+                <span className="dot" />
+                <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>
+                  {renderDepartmentIcon(activeDepartmentMeta.id)}
+                </span>
+                <span>{portalBranding.workstationLabel}</span>
+              </DedicatedWorkstationBadge>
+            ) : (
+              visibleDepartments.map((department) => {
+                const isActive = activeDepartmentMeta.id === department.id;
+                return (
+                  <DeptPill
+                    key={department.id}
+                    type="button"
+                    $active={isActive}
+                    $color={department.color}
+                    onClick={() => handleDepartmentSwitch(department)}
+                  >
+                    <span className="dot" />
+                    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '0.85rem' }}>{renderDepartmentIcon(department.id)}</span>
+                    <span>{department.shortLabel || department.label}</span>
+                  </DeptPill>
+                );
+              })
+            )}
           </DepartmentSelector>
+
 
           <TopbarRight>
             <NotificationBell />

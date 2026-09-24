@@ -22,6 +22,7 @@ import {
   FaArrowRight,
   FaSpinner
 } from 'react-icons/fa';
+import DatePicker from '../DatePicker';
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -631,17 +632,14 @@ const HRProfileForm = ({ profile, teacher, onSubmit, loading }) => {
             <Label>
               Date of Birth <span className="req">*</span>
             </Label>
-            <InputWrapper>
-              <FaCalendarAlt className="field-icon" />
-              <Input
-                $hasIcon
-                type="date"
-                name="date_of_birth"
-                value={formData.date_of_birth}
-                onChange={handleChange}
-                required
-              />
-            </InputWrapper>
+            <DatePicker
+              name="date_of_birth"
+              value={formData.date_of_birth}
+              onChange={handleChange}
+              max={new Date().toISOString().split('T')[0]}
+              required
+              aria-label="Date of Birth"
+            />
           </Field>
 
           <Field>
@@ -865,17 +863,14 @@ const HRProfileForm = ({ profile, teacher, onSubmit, loading }) => {
             <Label>
               Available to Join Date <span className="req">*</span>
             </Label>
-            <InputWrapper>
-              <FaCalendarAlt className="field-icon" />
-              <Input
-                $hasIcon
-                type="date"
-                name="available_to_join"
-                value={formData.available_to_join}
-                onChange={handleChange}
-                required
-              />
-            </InputWrapper>
+            <DatePicker
+              name="available_to_join"
+              value={formData.available_to_join}
+              onChange={handleChange}
+              min={new Date().toISOString().split('T')[0]}
+              required
+              aria-label="Available to Join Date"
+            />
           </Field>
 
           <Field $fullWidth>

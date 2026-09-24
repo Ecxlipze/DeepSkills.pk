@@ -13,6 +13,7 @@ import {
 import { toast } from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { SkeletonCard } from '../components/Skeleton';
+import { DepartmentWelcomeBanner } from '../components/portal';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
 import { supabase } from '../supabaseClient';
@@ -423,6 +424,66 @@ export default function AcademicOverview() {
             </NavRibbonItem>
           )}
         </SubNavRibbon>
+
+        {/* Customized Welcome Briefing */}
+        <DepartmentWelcomeBanner
+          user={user}
+          departmentLabel="Academic Coordination Hub"
+          subtitle="Real-time cohort telemetry, class attendance health, student complaints desk, and syllabus progression."
+          color="#F59E0B"
+          metrics={[
+            {
+              label: "Active Running Batches",
+              value: kpis.activeBatchesCount || 0,
+              alert: false,
+              badge: `${kpis.totalBatchesCount || 0} Total Batches`,
+              sub: `${kpis.activeStudentsCount || 0} active enrolled students`
+            },
+            {
+              label: "Overall Attendance Health",
+              value: `${kpis.overallAttendanceRate || 85}%`,
+              alert: (kpis.overallAttendanceRate || 85) < 75,
+              badge: (kpis.overallAttendanceRate || 85) >= 80 ? "Healthy" : "Needs Review",
+              sub: "Campus-wide cohort average",
+              onClick: () => router.push('/admin/academic/attendance')
+            },
+            {
+              label: "Open Student Complaints",
+              value: kpis.openComplaintsCount || 0,
+              alert: (kpis.openComplaintsCount || 0) > 0,
+              badge: (kpis.openComplaintsCount || 0) > 0 ? "Requires Review" : "All Resolved",
+              sub: (kpis.openComplaintsCount || 0) > 0 ? "Pending grievance tickets" : "Clean desk",
+              onClick: () => router.push('/admin/academic/complaints')
+            },
+            {
+              label: "Active Teaching Faculty",
+              value: kpis.activeTeachersCount || 0,
+              alert: false,
+              badge: "Faculty On Duty",
+              sub: `${kpis.totalTasksCount || 0} course tasks & assignments`
+            }
+          ]}
+          quickActions={[
+            ...(user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'view') ? [{
+              label: "Batch Attendance",
+              icon: <FaCalendarCheck />,
+              primary: true,
+              onClick: () => router.push('/admin/academic/attendance')
+            }] : []),
+            ...(canMutate ? [{
+              label: "Broadcast Alert",
+              icon: <FaBullhorn />,
+              primary: false,
+              onClick: () => setShowBroadcastModal(true)
+            }] : []),
+            ...(user?.role === 'admin' || canAccess(user?.permissions || {}, 'complaints', 'view') ? [{
+              label: "Complaints Desk",
+              icon: <FaExclamationCircle />,
+              primary: false,
+              onClick: () => router.push('/admin/academic/complaints')
+            }] : [])
+          ]}
+        />
 
         {/* Real-Time Academic KPIs */}
         <KpisGrid>

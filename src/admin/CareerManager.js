@@ -24,6 +24,7 @@ import {
   AdminButton,
   FormGrid
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import {
   validateRequired,
   validateForm
@@ -1327,10 +1328,11 @@ export default function CareerManager() {
                 </AdminSelect>
               </FormField>
               <FormField label="Application Deadline (Optional)">
-                <AdminInput
-                  type="date"
+                <DatePicker
                   value={editingJob?.deadline || ''}
+                  min={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setEditingJob((prev) => ({ ...prev, deadline: e.target.value }))}
+                  aria-label="Application Deadline"
                 />
               </FormField>
             </FormGrid>

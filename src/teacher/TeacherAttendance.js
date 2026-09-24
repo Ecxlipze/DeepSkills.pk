@@ -9,6 +9,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 import { getAssignedTeacherBatches, getTeacherByCnic } from '../utils/teacherUtils';
+import DatePicker from '../components/DatePicker';
 
 const Container = styled.div`
   color: #fff;
@@ -445,10 +446,11 @@ export default function TeacherAttendance() {
           <ControlGroup>
             <div>
               <label>Select Date</label>
-              <input 
-                type="date" 
+              <DatePicker 
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)} 
+                max={new Date().toISOString().split('T')[0]}
+                aria-label="Select Date"
               />
             </div>
             {batches.length > 0 && (

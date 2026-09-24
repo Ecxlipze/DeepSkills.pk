@@ -31,6 +31,9 @@ export const DEPARTMENT_NAV = {
     { label: 'Hiring Files', icon: '', path: '/admin/hr/files', permissionKey: 'hr' },
     { label: 'Leaves & Absence', icon: '', path: '/admin/hr/leaves', permissionKey: 'hr' },
     { label: 'All Teachers', icon: '', path: '/admin/hr/teachers', permissionKey: 'hr' },
+    { label: 'Time Tracker', icon: '', path: '/admin/time-tracker' },
+    { label: 'Time & Attendance', icon: '', path: '/admin/time-reports', permissionKey: 'hr' },
+    { label: 'Staff Jira Tasks', icon: '', path: '/admin/staff-tasks' },
     { section: 'SETTINGS' },
     { label: 'HR Settings', icon: '', path: '/admin/hr/settings', permissionKey: 'hr' }
   ],
@@ -73,6 +76,9 @@ export const DEPARTMENT_NAV = {
     { label: 'Media Library', icon: '', path: '/admin/management/media', permissionKey: 'settings' },
     { label: 'Media Showcase', icon: '', path: '/admin/management/media-page', permissionKey: 'settings' },
     { section: 'SYSTEM' },
+    { label: 'Time Tracker', icon: '', path: '/admin/time-tracker' },
+    { label: 'Staff Time Reports', icon: '', path: '/admin/time-reports', permissionKey: 'reports' },
+    { label: 'Staff Jira Tasks', icon: '', path: '/admin/staff-tasks' },
     { label: 'User Management', icon: '', path: '/admin/management/users', permissionKey: 'users' },
     { label: 'Reports', icon: '', path: '/admin/management/reports', permissionKey: 'reports' },
     { label: 'Settings', icon: '', path: '/admin/management/settings', permissionKey: 'settings' }
@@ -112,7 +118,11 @@ export const ADMIN_ROUTE_ALIASES = {
   '/admin/tasks': '/admin/academic/tasks',
   '/admin/chats': '/admin/academic/chats',
   '/admin/settings/attendance': '/admin/academic/attendance/settings',
-  '/admin/attendance/settings': '/admin/academic/attendance/settings'
+  '/admin/attendance/settings': '/admin/academic/attendance/settings',
+  '/admin/time-tracker': '/admin/time-tracker',
+  '/admin/time-reports': '/admin/time-reports',
+  '/admin/staff-tasks': '/admin/staff-tasks',
+  '/admin/jira-tasks': '/admin/staff-tasks'
 };
 
 export const normalizeAdminPath = (pathname = '') => {
@@ -231,17 +241,109 @@ export const getDepartmentNav = (user, departmentId, badges = {}) => {
   return result;
 };
 
-export const getDepartmentTitle = (pathname = '') => {
+export const getDepartmentPortalBranding = (user, activeDepartmentId, visibleDepartments = []) => {
+  const isDedicated = Boolean(
+    user &&
+    user.role !== 'admin' &&
+    Array.isArray(visibleDepartments) &&
+    visibleDepartments.length === 1
+  );
+
+  const effectiveDeptId = isDedicated ? visibleDepartments[0]?.id : activeDepartmentId;
+
+  switch (effectiveDeptId) {
+    case 'counsellor':
+      return {
+        id: 'counsellor',
+        portalName: 'DeepSkills Admissions Portal',
+        shortName: 'Admissions Portal',
+        sidebarSubtitle: 'Admissions & Counselling',
+        workstationLabel: 'Admissions Workstation',
+        headerTitle: isDedicated ? 'DeepSkills Admissions Portal' : 'Admissions & Counselling Portal',
+        color: '#378ADD',
+        isDedicated
+      };
+    case 'finance':
+      return {
+        id: 'finance',
+        portalName: 'DeepSkills Finance Portal',
+        shortName: 'Finance Portal',
+        sidebarSubtitle: 'Finance & Accounts',
+        workstationLabel: 'Finance Workstation',
+        headerTitle: isDedicated ? 'DeepSkills Finance Portal' : 'Finance & Accounts Portal',
+        color: '#10B981',
+        isDedicated
+      };
+    case 'hr':
+      return {
+        id: 'hr',
+        portalName: 'DeepSkills HR Portal',
+        shortName: 'HR & Staff Portal',
+        sidebarSubtitle: 'HR & Faculty Onboarding',
+        workstationLabel: 'HR Workstation',
+        headerTitle: isDedicated ? 'DeepSkills HR Portal' : 'HR & Faculty Portal',
+        color: '#8B5CF6',
+        isDedicated
+      };
+    case 'academic':
+      return {
+        id: 'academic',
+        portalName: 'DeepSkills Academic Portal',
+        shortName: 'Academic Portal',
+        sidebarSubtitle: 'Academic Coordination',
+        workstationLabel: 'Academic Workstation',
+        headerTitle: isDedicated ? 'DeepSkills Academic Portal' : 'Academic Coordination Portal',
+        color: '#F59E0B',
+        isDedicated
+      };
+    case 'management':
+      return {
+        id: 'management',
+        portalName: 'DeepSkills Management Portal',
+        shortName: 'Management Portal',
+        sidebarSubtitle: 'Campus Management',
+        workstationLabel: 'Management Workstation',
+        headerTitle: isDedicated ? 'DeepSkills Management Portal' : 'Campus Management Portal',
+        color: '#EF4444',
+        isDedicated
+      };
+    default:
+      return {
+        id: 'all',
+        portalName: 'DeepSkills Admin Portal',
+        shortName: 'Admin Portal',
+        sidebarSubtitle: 'Super Admin Portal',
+        workstationLabel: 'Super Admin Portal',
+        headerTitle: 'DeepSkills Admin Portal',
+        color: '#9ca3af',
+        isDedicated: false
+      };
+  }
+};
+
+export const getDepartmentTitle = (pathname = '', options = {}) => {
   const normalized = normalizeAdminPath(pathname);
   const department = getDepartmentByPath(normalized);
   const navItems = DEPARTMENT_NAV[department.id] || DEPARTMENT_NAV.all;
   const direct = navItems.find((item) => item.path === normalized);
-  if (direct) return { title: direct.label, breadcrumbs: ['Admin', department.label, direct.label].join(' / ') };
-  if (normalized.includes('/attendance/settings')) return { title: 'Attendance Settings', breadcrumbs: `Admin / ${department.label} / Attendance Settings` };
-  if (normalized.includes('/students/')) return { title: 'Student Profile', breadcrumbs: `Admin / ${department.label} / Student Profile` };
-  if (normalized.includes('/teachers/')) return { title: 'Teacher Profile', breadcrumbs: `Admin / ${department.label} / Teacher Profile` };
-  if (normalized.includes('/courses/')) return { title: 'Course Details', breadcrumbs: `Admin / ${department.label} / Course Details` };
-  if (normalized.includes('/blog/new')) return { title: 'New Blog Post', breadcrumbs: `Admin / ${department.label} / Blog / New` };
-  if (normalized.includes('/blog/edit')) return { title: 'Edit Blog Post', breadcrumbs: `Admin / ${department.label} / Blog / Edit` };
-  return { title: department.label, breadcrumbs: ['Admin', department.label].join(' / ') };
+  const branding = options.branding || (options.user ? getDepartmentPortalBranding(options.user, department.id, options.visibleDepartments) : null);
+  const rootLabel = branding?.isDedicated ? branding.shortName : 'Admin';
+  const deptLabel = branding?.isDedicated ? null : department.label;
+
+  const buildCrumbs = (leaf) => {
+    if (branding?.isDedicated) {
+      return [branding.shortName, leaf].filter(Boolean).join(' / ');
+    }
+    return [rootLabel, deptLabel, leaf].filter(Boolean).join(' / ');
+  };
+
+  if (direct) return { title: direct.label, breadcrumbs: buildCrumbs(direct.label) };
+  if (normalized.includes('/attendance/settings')) return { title: 'Attendance Settings', breadcrumbs: buildCrumbs('Attendance Settings') };
+  if (normalized.includes('/students/')) return { title: 'Student Profile', breadcrumbs: buildCrumbs('Student Profile') };
+  if (normalized.includes('/teachers/')) return { title: 'Teacher Profile', breadcrumbs: buildCrumbs('Teacher Profile') };
+  if (normalized.includes('/courses/')) return { title: 'Course Details', breadcrumbs: buildCrumbs('Course Details') };
+  if (normalized.includes('/blog/new')) return { title: 'New Blog Post', breadcrumbs: buildCrumbs('New Blog Post') };
+  if (normalized.includes('/blog/edit')) return { title: 'Edit Blog Post', breadcrumbs: buildCrumbs('Edit Blog Post') };
+  return { title: department.label, breadcrumbs: buildCrumbs(department.label) };
 };
+

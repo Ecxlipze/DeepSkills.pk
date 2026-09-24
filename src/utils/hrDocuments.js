@@ -1,3 +1,65 @@
+export const MAX_HR_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit
+export const ALLOWED_HR_EXTENSIONS_RAW = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'docx', 'doc', 'zip'];
+export const ALLOWED_HR_FILE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.docx', '.doc', '.zip'];
+export const ALLOWED_HR_FILE_ACCEPTS = '.jpg,.jpeg,.png,.webp,.pdf,.docx,.doc,.zip,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/zip,application/x-zip-compressed';
+export const ALLOWED_HR_IMAGE_ACCEPTS = '.jpg,.jpeg,.png,.webp,image/*';
+
+export const validateHrFile = (file, { isPhotoOnly = false } = {}) => {
+  if (!file) {
+    return { valid: false, error: 'No file selected.' };
+  }
+  if (file.size > MAX_HR_FILE_SIZE_BYTES) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    return {
+      valid: false,
+      error: `"${file.name}" exceeds the 10 MB limit (${sizeMb} MB). Please upload files under 10 MB.`
+    };
+  }
+  const ext = (file.name || '').split('.').pop().toLowerCase();
+  if (isPhotoOnly) {
+    const photoExts = ['jpg', 'jpeg', 'png', 'webp'];
+    if (!photoExts.includes(ext)) {
+      return {
+        valid: false,
+        error: `"${file.name}" is not an accepted photo format. Allowed: JPG, PNG, WebP.`
+      };
+    }
+    return { valid: true };
+  }
+  if (!ALLOWED_HR_EXTENSIONS_RAW.includes(ext)) {
+    return {
+      valid: false,
+      error: `"${file.name}" has an unsupported format (.${ext}). Allowed: Images (JPG, PNG, WebP), PDF, DOCX, and ZIP only.`
+    };
+  }
+  return { valid: true };
+};
+
+export const normalizeHrUrl = (url = '') => {
+  const trimmed = String(url || '').trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+export const validateHrLink = (url = '') => {
+  const normalized = normalizeHrUrl(url);
+  if (!normalized) {
+    return { valid: false, error: 'Link URL cannot be empty.' };
+  }
+  try {
+    const parsed = new URL(normalized);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { valid: false, error: 'Link must start with http:// or https://' };
+    }
+    if (!parsed.hostname || !parsed.hostname.includes('.')) {
+      return { valid: false, error: 'Please enter a valid website link.' };
+    }
+    return { valid: true, normalizedUrl: normalized };
+  } catch (_) {
+    return { valid: false, error: 'Invalid URL format.' };
+  }
+};
+
 export const HR_DOCUMENTS = [
   {
     category: 'educational',
@@ -5,7 +67,7 @@ export const HR_DOCUMENTS = [
     label: 'CNIC Copy (Front)',
     required: true,
     multiple: false,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -14,7 +76,7 @@ export const HR_DOCUMENTS = [
     label: 'CNIC Copy (Back)',
     required: true,
     multiple: false,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -22,8 +84,8 @@ export const HR_DOCUMENTS = [
     docType: 'highest_degree',
     label: 'Highest Degree Certificate',
     required: true,
-    multiple: false,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    multiple: true,
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -31,8 +93,8 @@ export const HR_DOCUMENTS = [
     docType: 'transcripts',
     label: 'Transcripts / Mark Sheets',
     required: false,
-    multiple: false,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    multiple: true,
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -41,7 +103,7 @@ export const HR_DOCUMENTS = [
     label: 'Additional Certifications',
     required: false,
     multiple: true,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -50,7 +112,7 @@ export const HR_DOCUMENTS = [
     label: 'Previous Employment Letters',
     required: false,
     multiple: true,
-    accepts: '.pdf',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -59,7 +121,7 @@ export const HR_DOCUMENTS = [
     label: 'Experience Certificates',
     required: false,
     multiple: true,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
@@ -67,16 +129,16 @@ export const HR_DOCUMENTS = [
     docType: 'portfolio_file',
     label: 'Portfolio / Work Samples',
     required: false,
-    multiple: false,
-    accepts: '.pdf,.zip',
+    multiple: true,
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   },
   {
     category: 'work',
     docType: 'portfolio_link',
-    label: 'Portfolio Link',
+    label: 'Portfolio / Profile Links',
     required: false,
-    multiple: false,
+    multiple: true,
     accepts: 'link',
     preview: 'link'
   },
@@ -86,16 +148,16 @@ export const HR_DOCUMENTS = [
     label: 'Passport-size Photograph',
     required: true,
     multiple: false,
-    accepts: '.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_IMAGE_ACCEPTS,
     preview: 'image'
   },
   {
     category: 'other',
     docType: 'other_document',
-    label: 'Other Relevant Document',
+    label: 'Other Relevant Documents',
     required: false,
     multiple: true,
-    accepts: '.pdf,.jpg,.jpeg,.png',
+    accepts: ALLOWED_HR_FILE_ACCEPTS,
     preview: 'file'
   }
 ];

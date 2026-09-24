@@ -29,8 +29,10 @@ import {
   AdminInput,
   AdminSelect,
   AdminButton,
-  FormGrid
+  FormGrid,
+  DepartmentWelcomeBanner
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import { validateRequired, validateNumber, validateForm } from '../utils/formValidation';
 
 const normalizeTab = (raw) => {
@@ -752,6 +754,65 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
 
         {activeTab === 'overview' && (
           <OverviewSection>
+            <DepartmentWelcomeBanner
+              user={user}
+              departmentLabel="Finance & Accounts Workstation"
+              subtitle="Track student tuition receipts, faculty payroll disbursements, ledger audits, and net operating cash flow."
+              color="#10B981"
+              metrics={[
+                {
+                  label: "Overdue Student Dues",
+                  value: overdueCount,
+                  alert: overdueCount > 0,
+                  badge: overdueCount > 0 ? "Action Required" : "All Settled",
+                  sub: overdueCount > 0 ? `Rs. ${stats.outstandingFees.toLocaleString()} outstanding` : "All accounts up to date",
+                  onClick: () => handleTabClick('students')
+                },
+                {
+                  label: "Monthly Payroll Progress",
+                  value: `${teachersPaidThisMonth}/${teacherSalaries.length}`,
+                  alert: teacherSalaries.length > teachersPaidThisMonth,
+                  badge: teacherSalaries.length > 0 ? `${Math.round((teachersPaidThisMonth / teacherSalaries.length) * 100)}% Paid` : "No Payroll",
+                  sub: `${teacherSalaries.length - teachersPaidThisMonth} faculty pending disbursement`,
+                  onClick: () => handleTabClick('teachers')
+                },
+                {
+                  label: "Tuition Collection Rate",
+                  value: `${collectionRate}%`,
+                  alert: false,
+                  badge: "Receivables Health",
+                  sub: `Rs. ${stats.totalRevenue.toLocaleString()} collected so far`
+                },
+                {
+                  label: "Net Operating Balance",
+                  value: `Rs. ${stats.netBalance.toLocaleString()}`,
+                  alert: stats.netBalance < 0,
+                  badge: stats.netBalance >= 0 ? "Surplus" : "Deficit",
+                  sub: "Tuition Inflow vs Payroll Outflow"
+                }
+              ]}
+              quickActions={[
+                {
+                  label: "Student Fees & Invoices",
+                  icon: <FaUserGraduate />,
+                  primary: true,
+                  onClick: () => handleTabClick('students')
+                },
+                {
+                  label: "Faculty Salaries",
+                  icon: <FaChalkboardTeacher />,
+                  primary: false,
+                  onClick: () => handleTabClick('teachers')
+                },
+                {
+                  label: "Master Ledger",
+                  icon: <FaHistory />,
+                  primary: false,
+                  onClick: () => navigate('/admin/finance/transactions')
+                }
+              ]}
+            />
+
             <ExecutiveGrid>
               <ExecutiveCard>
                 <div className="card-top">
@@ -1611,11 +1672,11 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                   required
                   error={paymentFormErrors.paidDate}
                 >
-                  <AdminInput
-                    type="date"
+                  <DatePicker
                     name="paidDate"
                     defaultValue={new Date().toISOString().split('T')[0]}
                     hasError={!!paymentFormErrors.paidDate}
+                    aria-label="Paid Date"
                   />
                 </FormField>
 
@@ -1770,11 +1831,11 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                     required
                     error={salaryFormErrors.paidDate}
                   >
-                    <AdminInput
-                      type="date"
+                    <DatePicker
                       name="paidDate"
                       defaultValue={new Date().toISOString().split('T')[0]}
                       hasError={!!salaryFormErrors.paidDate}
+                      aria-label="Disbursement Date"
                     />
                   </FormField>
                 </FormGrid>

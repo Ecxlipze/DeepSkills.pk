@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import styled, { keyframes } from 'styled-components';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/router';
 import {
   FaCalendarCheck, FaCalendarAlt, FaDownload, FaFilePdf, FaSearch,
   FaEdit, FaLock, FaUnlock, FaCog, FaCheckCircle, FaTimesCircle,
   FaClock, FaExclamationTriangle, FaUndo, FaWhatsapp, FaBell,
-  FaUserGraduate, FaQrcode, FaCamera, FaBarcode, FaArrowRight,
-  FaTimes, FaSave, FaExclamationCircle, FaChartLine
+  FaUserGraduate, FaTimes, FaSave, FaExclamationCircle, FaChartLine
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
@@ -26,6 +25,7 @@ import {
   AdminTextarea,
   AdminButton
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import { validateRequired } from '../utils/formValidation';
 
 // ─── Styled Components ───
@@ -145,13 +145,6 @@ const HeaderBtn = styled.button`
     color: #cbd5e1;
     border-color: rgba(255, 255, 255, 0.1);
     &:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
-  }
-
-  &.kiosk {
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.3);
-    &:hover { background: rgba(16, 185, 129, 0.25); color: #fff; transform: translateY(-1px); }
   }
 `;
 
@@ -488,77 +481,6 @@ const SheetFooter = styled.div`
   }
 `;
 
-const PulseIndicator = keyframes`
-  0% { transform: scale(0.95); opacity: 0.7; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.7; }
-`;
-
-const LiveBadge = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 0.76rem;
-  font-weight: 800;
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #10b981;
-    animation: ${PulseIndicator} 2s infinite ease-in-out;
-  }
-`;
-
-const KioskContainer = styled.div`
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 24px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const QrBox = styled.div`
-  background: #090a0d;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 30px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 18px;
-
-  .qr-frame {
-    background: #fff;
-    padding: 16px;
-    border-radius: 14px;
-    box-shadow: 0 0 25px rgba(56, 189, 248, 0.15);
-    img {
-      width: 220px;
-      height: 220px;
-      display: block;
-    }
-  }
-
-  .clock {
-    font-family: monospace;
-    font-size: 1.6rem;
-    font-weight: 800;
-    color: #38bdf8;
-    background: rgba(56, 189, 248, 0.08);
-    padding: 8px 18px;
-    border-radius: 10px;
-  }
-`;
-
 const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
@@ -616,7 +538,7 @@ export default function AdminAttendance() {
   const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'attendance', 'full');
 
   // Main navigation tabs
-  const [activeTab, setActiveTab] = useState('sheet'); // 'sheet', 'matrix', 'defaulters', 'kiosk'
+  const [activeTab, setActiveTab] = useState('sheet'); // 'sheet', 'matrix', 'defaulters'
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -635,30 +557,12 @@ export default function AdminAttendance() {
   const [sheetLocked, setSheetLocked] = useState(false);
   const [savingSheet, setSavingSheet] = useState(false);
 
-  // Kiosk State
-  const [kioskInput, setKioskInput] = useState('');
-  const [kioskHistory, setKioskHistory] = useState([]);
-  const [kioskProcessing, setKioskProcessing] = useState(false);
-  const [currentTime, setCurrentTime] = useState('');
-  const kioskInputRef = useRef(null);
-
   // Override Modal
   const [overrideRecord, setOverrideRecord] = useState(null);
   const [overrideStatus, setOverrideStatus] = useState('present');
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideError, setOverrideError] = useState('');
   const [savingOverride, setSavingOverride] = useState(false);
-
-  // Clock Ticker
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Fetch Attendance Data
   const fetchData = useCallback(async () => {
@@ -808,51 +712,6 @@ export default function AdminAttendance() {
       toast.error(err.message || 'Save failed.');
     } finally {
       setSavingSheet(false);
-    }
-  };
-
-  // Kiosk Check-In Handler
-  const handleKioskCheckin = async (e) => {
-    if (e) e.preventDefault();
-    const id = kioskInput.trim();
-    if (!id) return;
-
-    setKioskProcessing(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || user?.sessionToken || localStorage.getItem('deepskill_session_token');
-      const res = await fetch('/api/admin/academic/attendance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          action: 'kiosk_checkin',
-          identifier: id,
-          batch_id: selectedBatchId,
-          date: selectedDate
-        })
-      });
-
-      const json = await res.json();
-      if (!res.ok || json.status === 'error') {
-        throw new Error(json.message || 'Student not recognized.');
-      }
-
-      const checkin = json.data || {};
-      toast.success(`${checkin.student?.name} marked ${checkin.status?.toUpperCase()}!`, {
-        duration: 3000
-      });
-
-      setKioskHistory(prev => [checkin, ...prev.slice(0, 9)]);
-      setKioskInput('');
-      fetchData();
-    } catch (err) {
-      toast.error(err.message || 'Check-in failed.');
-    } finally {
-      setKioskProcessing(false);
-      kioskInputRef.current?.focus();
     }
   };
 
@@ -1067,16 +926,10 @@ export default function AdminAttendance() {
             <h1>
               <FaCalendarCheck style={{ color: '#38bdf8' }} /> Attendance Directorate
             </h1>
-            <p>Batch-wide bulk daily sheets, classroom kiosk station, monthly matrix audit, and student defaulter alerts.</p>
+            <p>Batch-wide bulk daily sheets, monthly matrix audit, and student defaulter alerts.</p>
           </div>
 
           <div className="action-cluster">
-            <HeaderBtn
-              className={activeTab === 'kiosk' ? 'primary' : 'kiosk'}
-              onClick={() => setActiveTab(activeTab === 'kiosk' ? 'sheet' : 'kiosk')}
-            >
-              <FaQrcode /> {activeTab === 'kiosk' ? 'Exit Kiosk' : 'Kiosk Mode'}
-            </HeaderBtn>
             <HeaderBtn className="pdf" onClick={handleExportPdf}>
               <FaFilePdf /> PDF Register
             </HeaderBtn>
@@ -1100,9 +953,6 @@ export default function AdminAttendance() {
           <MainTab $active={activeTab === 'defaulters'} onClick={() => setActiveTab('defaulters')}>
             <FaExclamationTriangle /> Defaulters & Warnings ({defaulters.length})
           </MainTab>
-          <MainTab $active={activeTab === 'kiosk'} onClick={() => setActiveTab('kiosk')}>
-            <FaQrcode /> QR & Kiosk Check-In
-          </MainTab>
         </TabNav>
 
         {/* ─── TAB 1: DAILY BULK ATTENDANCE SHEET ─── */}
@@ -1112,10 +962,11 @@ export default function AdminAttendance() {
             <FilterBar>
               <FormGroup>
                 <label>Select Date</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={selectedDate}
                   onChange={e => setSelectedDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  aria-label="Select Date"
                 />
               </FormGroup>
 
@@ -1624,141 +1475,6 @@ export default function AdminAttendance() {
           </Card>
         )}
 
-        {/* ─── TAB 4: QR & KIOSK CHECK-IN STATION ─── */}
-        {activeTab === 'kiosk' && (
-          <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 14 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <FaQrcode style={{ color: '#38bdf8' }} /> Classroom & Campus Check-In Station
-                </h3>
-                <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  Students scan their QR code on their mobile app or present their physical barcode ID card.
-                </p>
-              </div>
-
-              <LiveBadge>
-                <div className="dot" /> Kiosk Active & Listening
-              </LiveBadge>
-            </div>
-
-            <KioskContainer>
-              {/* Left Column: Rotating Session QR Code */}
-              <QrBox>
-                <div className="clock">{currentTime || '10:00:00 AM'}</div>
-                <div className="qr-frame">
-                  {/* Dynamic SVG / QR image representation */}
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`deepskills://attendance?batch=${selectedBatchId}&date=${selectedDate}`)}`}
-                    alt="Classroom Check-In QR Code"
-                  />
-                </div>
-                <div>
-                  <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', color: '#fff' }}>
-                    {currentBatch.batch_name || 'Active Batch'}
-                  </h4>
-                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>
-                    Scan with DeepSkills Student App to mark presence
-                  </p>
-                </div>
-              </QrBox>
-
-              {/* Right Column: Rapid Keypad & Recent Check-Ins */}
-              <div>
-                {/* Rapid Scanner Input */}
-                <form onSubmit={handleKioskCheckin} style={{ marginBottom: 24 }}>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', display: 'block', marginBottom: 8 }}>
-                    Barcode Scanner / CNIC Keypad Input:
-                  </label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <FaBarcode style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
-                      <input
-                        ref={kioskInputRef}
-                        style={{
-                          width: '100%',
-                          background: '#090a0d',
-                          border: '2px solid rgba(56, 189, 248, 0.4)',
-                          borderRadius: 10,
-                          padding: '14px 14px 14px 42px',
-                          color: '#fff',
-                          fontSize: '1.05rem',
-                          outline: 'none',
-                          boxShadow: '0 0 15px rgba(56, 189, 248, 0.1)'
-                        }}
-                        placeholder="Scan barcode or type 13-digit CNIC..."
-                        value={kioskInput}
-                        onChange={e => setKioskInput(e.target.value)}
-                        disabled={kioskProcessing}
-                        autoFocus
-                      />
-                    </div>
-                    <HeaderBtn
-                      type="submit"
-                      className="primary"
-                      disabled={kioskProcessing || !kioskInput.trim()}
-                      style={{ padding: '0 24px' }}
-                    >
-                      <FaArrowRight /> {kioskProcessing ? 'Verifying...' : 'Check In'}
-                    </HeaderBtn>
-                  </div>
-                </form>
-
-                {/* Recent Check-Ins Stream */}
-                <div>
-                  <h4 style={{ margin: '0 0 12px', fontSize: '0.95rem', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Live Check-In Activity Ticker:
-                  </h4>
-
-                  {kioskHistory.length === 0 ? (
-                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: 10, padding: 30, textAlign: 'center', color: '#64748b' }}>
-                      Waiting for student check-ins...
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {kioskHistory.map((item, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.07)',
-                            borderRadius: 10,
-                            padding: '10px 14px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <AvatarCircle style={{ width: 32, height: 32, fontSize: '0.75rem' }}>
-                              {getInitials(item.student?.name)}
-                            </AvatarCircle>
-                            <div>
-                              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.student?.name}</div>
-                              <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                                {item.student?.course} • {item.student?.batch}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <StatusBadge className={item.status === 'present' ? 'good' : 'warning'}>
-                              {item.status === 'present' ? <FaCheckCircle size={9} /> : <FaClock size={9} />}
-                              {item.status?.toUpperCase()}
-                            </StatusBadge>
-                            <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: 2 }}>{item.timestamp}</div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </KioskContainer>
-          </Card>
-        )}
 
         {/* ─── OVERRIDE MODAL ─── */}
         {overrideRecord && (

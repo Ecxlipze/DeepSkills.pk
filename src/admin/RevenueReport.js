@@ -20,6 +20,7 @@ import { canAccess } from '../utils/permissions';
 import { createRevenueStatementPdf, downloadBlob } from '../utils/financePdf';
 import { supabase } from '../supabaseClient';
 import { getAuthHeaders } from '../utils/adminAccessApi';
+import DatePicker from '../components/DatePicker';
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -1077,18 +1078,20 @@ const RevenueReport = () => {
               <>
                 <InputGroup>
                   <label>Start Date</label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={startDate}
+                    max={endDate || undefined}
                     onChange={(e) => setStartDate(e.target.value)}
+                    aria-label="Start Date"
                   />
                 </InputGroup>
                 <InputGroup>
                   <label>End Date</label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={endDate}
+                    min={startDate || undefined}
                     onChange={(e) => setEndDate(e.target.value)}
+                    aria-label="End Date"
                   />
                 </InputGroup>
               </>

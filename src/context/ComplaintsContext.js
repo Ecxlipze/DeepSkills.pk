@@ -4,7 +4,18 @@ import { useAuth } from './AuthContext';
 import { getAssignedTeacherBatches, getTeacherByCnic } from '../utils/teacherUtils';
 import { createBatchNotifications, createNotification, getTeachersForBatch, notifyAdmins } from '../utils/notifications';
 
-const ComplaintsContext = createContext();
+const defaultComplaintsState = {
+  complaints: [],
+  loading: false,
+  fetchComplaints: async () => {},
+  createComplaint: async () => {},
+  sendMessage: async () => {},
+  closeComplaint: async () => {},
+  reopenComplaint: async () => {},
+  toggleUrgent: async () => {}
+};
+
+const ComplaintsContext = createContext(defaultComplaintsState);
 
 export const ComplaintsProvider = ({ children }) => {
   const { user } = useAuth();
@@ -287,4 +298,4 @@ export const ComplaintsProvider = ({ children }) => {
   );
 };
 
-export const useComplaints = () => useContext(ComplaintsContext);
+export const useComplaints = () => useContext(ComplaintsContext) || defaultComplaintsState;

@@ -16,6 +16,7 @@ import { BLOG_CATEGORIES, mergeBlogCategories, calculateReadingTime, countWords,
 import { requestRevalidate } from '../utils/revalidatePublic';
 import { canAccess } from '../utils/permissions';
 import { getAuthHeaders } from '../utils/adminAccessApi';
+import DatePicker from '../components/DatePicker';
 
 const EMPTY_CONTENT = '<p></p>';
 const MAX_TITLE_LENGTH = 120;
@@ -350,8 +351,20 @@ function BlogList() {
           <option value="all">All Categories</option>
           {categories.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} />
-        <input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
+        <DatePicker
+          value={filters.from}
+          max={filters.to || undefined}
+          onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
+          placeholder="From Date"
+          aria-label="From Date"
+        />
+        <DatePicker
+          value={filters.to}
+          min={filters.from || undefined}
+          onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
+          placeholder="To Date"
+          aria-label="To Date"
+        />
       </FilterBar>
 
       {canMutate && isAdmin && selectedIds.length > 0 && (

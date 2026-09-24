@@ -246,7 +246,7 @@ export default async function handler(req, res) {
   }
 
   // ──────────────────────────────────────────
-  // POST: Bulk Save, Kiosk Check-In, Lock, Warning
+  // POST: Bulk Save, Lock, Warning
   // ──────────────────────────────────────────
   if (req.method === 'POST') {
     const { action } = req.body || {};
@@ -320,126 +320,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Action 2: Kiosk Check-In (by CNIC, Student ID, or QR Scan)
-    if (action === 'kiosk_checkin') {
-      const { identifier, batch_id, date = new Date().toISOString().slice(0, 10) } = req.body;
-      if (!identifier) {
-        return res.status(400).json({ status: 'error', message: 'Student CNIC or ID is required.' });
-      }
-
-      try {
-        const cleanRaw = String(identifier).trim();
-        const cleanCnic = normalizeCnic(cleanRaw);
-
-        // Find Student
-        let query = supabase
-          .from('admissions')
-          .select('*')
-          .in('status', ['Active', 'Graduated']);
-
-        if (cleanCnic) {
-          query = query.or(`cnic.eq.${cleanCnic},id.eq.${cleanRaw}`);
-        } else {
-          query = query.or(`id.eq.${cleanRaw},cnic.ilike.%${cleanRaw}%`);
-        }
-
-        const { data: studentMatches, error: sErr } = await query.limit(1);
-        if (sErr) throw sErr;
-
-        const student = studentMatches && studentMatches[0];
-        if (!student) {
-          return res.status(404).json({ status: 'error', message: 'No active student found matching this identifier.' });
-        }
-
-        // Determine Batch
-        let targetBatch = null;
-        if (batch_id) {
-          const { data: bData } = await supabase.from('batches').select('*').eq('id', batch_id).single();
-          targetBatch = bData;
-        } else if (student.batch) {
-          const { data: bData } = await supabase
-            .from('batches')
-            .select('*')
-            .eq('batch_name', student.batch)
-            .eq('course', student.course)
-            .limit(1);
-          targetBatch = bData && bData[0];
-        }
-
-        const finalBatchId = targetBatch?.id || 'general';
-        const finalBatchName = targetBatch?.batch_name || student.batch || 'General Batch';
-        const finalCourse = targetBatch?.course || student.course || 'Training Program';
-
-        // Check current time against batch schedule to determine 'present' vs 'late'
-        let checkinStatus = 'present';
-        const now = new Date();
-        const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
-
-        if (targetBatch?.time_shift) {
-          const shiftLower = String(targetBatch.time_shift).toLowerCase();
-          const match = shiftLower.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/);
-          if (match) {
-            let hour = parseInt(match[1], 10);
-            const minute = parseInt(match[2] || '0', 10);
-            const ampm = match[3];
-            if (ampm === 'pm' && hour < 12) hour += 12;
-            if (ampm === 'am' && hour === 12) hour = 0;
-
-            const scheduleMins = hour * 60 + minute;
-            const currentMins = now.getHours() * 60 + now.getMinutes();
-            if (currentMins > scheduleMins + 15) {
-              checkinStatus = 'late';
-            }
-          }
-        }
-
-        const checkinRow = {
-          student_id: student.id,
-          student_name: student.name,
-          student_cnic: student.cnic,
-          batch_id: finalBatchId,
-          batch_name: finalBatchName,
-          course: finalCourse,
-          date,
-          day_of_week: dayOfWeek,
-          status: checkinStatus,
-          marked_by: 'kiosk',
-          marked_at: now.toISOString(),
-          is_locked: false
-        };
-
-        const { data: saved, error: insErr } = await supabase
-          .from('attendance')
-          .upsert(checkinRow, { onConflict: 'student_id,batch_id,date' })
-          .select()
-          .single();
-
-        if (insErr) throw insErr;
-
-        return res.status(200).json({
-          status: 'success',
-          message: `${student.name} checked in successfully as ${checkinStatus.toUpperCase()}!`,
-          data: {
-            student: {
-              id: student.id,
-              name: student.name,
-              cnic: student.cnic,
-              course: finalCourse,
-              batch: finalBatchName,
-              photo_url: student.photo_url
-            },
-            record: saved,
-            status: checkinStatus,
-            timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        });
-      } catch (err) {
-        console.error('Error in kiosk check-in:', err);
-        return res.status(500).json({ status: 'error', message: err.message || 'Check-in failed.' });
-      }
-    }
-
-    // Action 3: Toggle Lock / Unlock Session
+    // Action 2: Toggle Lock / Unlock Session
     if (action === 'toggle_lock') {
       const { date, batch_id, is_locked } = req.body;
       if (!date || !batch_id) {

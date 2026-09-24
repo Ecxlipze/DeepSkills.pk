@@ -6,6 +6,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useTasks } from '../context/TasksContext';
 import { getAssignedTeacherBatches, getTeacherByCnic, uniqueCoursesFromBatches } from '../utils/teacherUtils';
+import DatePicker from '../components/DatePicker';
 
 const Container = styled.div`
   max-width: 800px;
@@ -227,12 +228,12 @@ const AssignTask = () => {
 
               <FormGroup>
                 <label>Due Date *</label>
-                <input 
-                  type="date" 
+                <DatePicker 
                   required 
                   min={getTodayString()}
                   value={formData.dueDate}
                   onChange={e => setFormData({...formData, dueDate: e.target.value})}
+                  aria-label="Due Date"
                 />
               </FormGroup>
             </Row>

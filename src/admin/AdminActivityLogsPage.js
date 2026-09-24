@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { downloadCsv } from '../utils/csvExport';
 import { fetchActivityStats, fetchGlobalActivity } from '../utils/userManagementApi';
+import DatePicker from '../components/DatePicker';
 
 const AdminActivityLogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -125,11 +126,23 @@ const AdminActivityLogsPage = () => {
             </Field>
             <Field>
               <label>Date from</label>
-              <input type="date" value={filters.dateFrom} onChange={(e) => { setFilters((prev) => ({ ...prev, dateFrom: e.target.value })); setPage(1); }} />
+              <DatePicker
+                value={filters.dateFrom}
+                max={filters.dateTo || undefined}
+                onChange={(e) => { setFilters((prev) => ({ ...prev, dateFrom: e.target.value })); setPage(1); }}
+                placeholder="From Date"
+                aria-label="From Date"
+              />
             </Field>
             <Field>
               <label>Date to</label>
-              <input type="date" value={filters.dateTo} onChange={(e) => { setFilters((prev) => ({ ...prev, dateTo: e.target.value })); setPage(1); }} />
+              <DatePicker
+                value={filters.dateTo}
+                min={filters.dateFrom || undefined}
+                onChange={(e) => { setFilters((prev) => ({ ...prev, dateTo: e.target.value })); setPage(1); }}
+                placeholder="To Date"
+                aria-label="To Date"
+              />
             </Field>
           </FilterGrid>
         </FilterCard>

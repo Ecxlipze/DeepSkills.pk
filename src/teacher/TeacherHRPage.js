@@ -90,7 +90,7 @@ const TeacherHRPage = () => {
   const handleUploadDocument = async (config, payload) => {
     setSaving(true);
     try {
-      await uploadHRDocument({
+      const res = await uploadHRDocument({
         ...payload,
         profile: bundle.profile,
         teacherId: bundle.teacher.id,
@@ -99,7 +99,9 @@ const TeacherHRPage = () => {
         isRequired: config.required,
         cnic: user.cnic
       });
-      toast.success(`${config.label} uploaded.`);
+      const count = Array.isArray(res) ? res.length : 1;
+      const countLabel = count > 1 ? `${count} items` : (payload.linkUrl || payload.linkUrls ? 'link' : 'file');
+      toast.success(`${config.label}: ${countLabel} uploaded successfully.`);
       await load();
     } catch (error) {
       toast.error(error.message || 'Upload failed.');

@@ -4,7 +4,9 @@ import {
   canAccessDepartment,
   getVisibleDepartments,
   getDepartmentNav,
-  getDefaultDepartmentPath
+  getDefaultDepartmentPath,
+  getDepartmentPortalBranding,
+  getDepartmentTitle
 } from '../src/utils/departments.js';
 
 test('canAccessDepartment enforces strict role boundaries', () => {
@@ -192,4 +194,46 @@ test('authorizeAdminOperation allows view permission on GET and enforces full on
   assert.equal(noPermGetAuth.status, 403);
   assert.match(noPermGetAuth.message, /requires view on attendance/i);
 });
+
+test('getDepartmentPortalBranding returns dedicated branding for single-department staff and admin branding for multi-department/super admin', () => {
+  const counsellorUser = {
+    role: 'custom',
+    permissions: { counsellor: 'full' }
+  };
+  const counsellorVisible = getVisibleDepartments(counsellorUser);
+  assert.equal(counsellorVisible.length, 1);
+  assert.equal(counsellorVisible[0].id, 'counsellor');
+
+  const counsellorBranding = getDepartmentPortalBranding(counsellorUser, 'counsellor', counsellorVisible);
+  assert.equal(counsellorBranding.isDedicated, true);
+  assert.equal(counsellorBranding.portalName, 'DeepSkills Admissions Portal');
+  assert.equal(counsellorBranding.headerTitle, 'DeepSkills Admissions Portal');
+  assert.equal(counsellorBranding.shortName, 'Admissions Portal');
+  assert.equal(counsellorBranding.workstationLabel, 'Admissions Workstation');
+
+  // Breadcrumbs for dedicated counsellor
+  const counsellorCrumbs = getDepartmentTitle('/admin/counsellor/inquiries', {
+    branding: counsellorBranding,
+    user: counsellorUser,
+    visibleDepartments: counsellorVisible
+  });
+  assert.equal(counsellorCrumbs.title, 'Inquiries');
+  assert.equal(counsellorCrumbs.breadcrumbs, 'Admissions Portal / Inquiries');
+
+  // Multi-department / Super Admin user
+  const adminUser = { role: 'admin', permissions: {} };
+  const adminVisible = getVisibleDepartments(adminUser);
+  const adminBranding = getDepartmentPortalBranding(adminUser, 'counsellor', adminVisible);
+  assert.equal(adminBranding.isDedicated, false);
+  assert.equal(adminBranding.portalName, 'DeepSkills Admissions Portal');
+  assert.equal(adminBranding.headerTitle, 'Admissions & Counselling Portal');
+
+  const adminCrumbs = getDepartmentTitle('/admin/counsellor/inquiries', {
+    branding: adminBranding,
+    user: adminUser,
+    visibleDepartments: adminVisible
+  });
+  assert.equal(adminCrumbs.breadcrumbs, 'Admin / Counsellor / Inquiries');
+});
+
 

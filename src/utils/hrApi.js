@@ -62,42 +62,81 @@ export const saveHRProfile = async (profile, cnic = profile?.cnic) => {
 
 export const uploadHRDocument = async ({
   file,
+  files,
   profile,
   teacherId,
+  candidateId,
+  isStaff,
   docType,
   category,
   isRequired,
   linkUrl,
+  linkUrls,
   cnic
 }) => {
-  let fileMeta = {
-    filePath: null,
-    fileUrl: null,
-    fileName: null,
-    fileSize: null,
-    mimeType: null
-  };
+  const id = candidateId || teacherId || profile?.teacher_id || profile?.user_id;
+  const staffMode = isStaff ?? Boolean(profile?.user_id || profile?.employee_type === 'staff');
 
-  if (file) {
-    fileMeta = await uploadHrAsset({
-      bucket: 'hr-documents',
-      file,
-      teacherId,
-      hrProfileId: profile.id,
-      docType
-    });
+  const fileList = files && Array.isArray(files) && files.length > 0
+    ? files
+    : (file ? [file] : []);
+
+  if (fileList.length > 0) {
+    const results = [];
+    for (const singleFile of fileList) {
+      const fileMeta = await uploadHrAsset({
+        bucket: 'hr-documents',
+        file: singleFile,
+        candidateId: id,
+        isStaff: staffMode,
+        hrProfileId: profile.id,
+        docType
+      });
+
+      const res = await teacherHrRequest({
+        action: 'add_document',
+        cnic: cnic || profile?.cnic,
+        profileId: profile.id,
+        category,
+        docType,
+        isRequired,
+        linkUrl: null,
+        file: fileMeta
+      });
+      results.push(res);
+    }
+    return results.length === 1 ? results[0] : results;
   }
 
-  return teacherHrRequest({
-    action: 'add_document',
-    cnic: cnic || profile?.cnic,
-    profileId: profile.id,
-    category,
-    docType,
-    isRequired,
-    linkUrl,
-    file: fileMeta
-  });
+  const linkList = linkUrls && Array.isArray(linkUrls) && linkUrls.length > 0
+    ? linkUrls
+    : (linkUrl ? [linkUrl] : []);
+
+  if (linkList.length > 0) {
+    const results = [];
+    for (const singleLink of linkList) {
+      const res = await teacherHrRequest({
+        action: 'add_document',
+        cnic: cnic || profile?.cnic,
+        profileId: profile.id,
+        category,
+        docType,
+        isRequired,
+        linkUrl: singleLink,
+        file: {
+          filePath: null,
+          fileUrl: null,
+          fileName: null,
+          fileSize: null,
+          mimeType: null
+        }
+      });
+      results.push(res);
+    }
+    return results.length === 1 ? results[0] : results;
+  }
+
+  throw new Error('No file or link provided for upload.');
 };
 
 export const removeHRDocument = async (id, cnic) => {
@@ -129,23 +168,26 @@ export const fetchAdminHRApplications = async () => {
   }
 
   const teacherIds = profiles.map((profile) => profile.teacher_id).filter(Boolean);
+  const userIds = profiles.map((profile) => profile.user_id).filter(Boolean);
   const profileIds = profiles.map((profile) => profile.id);
 
-  const [teachersRes, docsRes, jdRes, sigRes, fileRes] = await Promise.all([
-    supabase.from('teachers').select('*').in('id', teacherIds),
-    supabase.from('hr_documents').select('*').in('hr_profile_id', profileIds),
-    supabase.from('hr_jds').select('*').in('hr_profile_id', profileIds),
-    supabase.from('hr_signatures').select('*').in('hr_profile_id', profileIds),
-    supabase.from('hr_files').select('*').in('hr_profile_id', profileIds)
+  const [teachersRes, usersRes, docsRes, jdRes, sigRes, fileRes] = await Promise.all([
+    teacherIds.length ? supabase.from('teachers').select('*').in('id', teacherIds) : Promise.resolve({ data: [] }),
+    userIds.length ? supabase.from('users').select('*, custom_roles(name)').in('id', userIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? supabase.from('hr_documents').select('*').in('hr_profile_id', profileIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? supabase.from('hr_jds').select('*').in('hr_profile_id', profileIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? supabase.from('hr_signatures').select('*').in('hr_profile_id', profileIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? supabase.from('hr_files').select('*').in('hr_profile_id', profileIds) : Promise.resolve({ data: [] })
   ]);
 
-  [teachersRes, docsRes, jdRes, sigRes, fileRes].forEach((result) => {
+  [teachersRes, usersRes, docsRes, jdRes, sigRes, fileRes].forEach((result) => {
     if (result.error) {
       throw result.error;
     }
   });
 
   const teacherMap = Object.fromEntries((teachersRes.data || []).map((teacher) => [teacher.id, teacher]));
+  const userMap = Object.fromEntries((usersRes.data || []).map((user) => [user.id, user]));
   const docsMap = (docsRes.data || []).reduce((accumulator, document) => {
     if (!accumulator[document.hr_profile_id]) {
       accumulator[document.hr_profile_id] = [];
@@ -163,14 +205,33 @@ export const fetchAdminHRApplications = async () => {
     return accumulator;
   }, {});
 
-  return profiles.map((profile) => ({
-    teacher: teacherMap[profile.teacher_id] || null,
-    profile,
-    documents: docsMap[profile.id] || [],
-    jd: jdMap[profile.id] || null,
-    signature: signatureMap[profile.id] || null,
-    files: filesMap[profile.id] || []
-  }));
+  return profiles.map((profile) => {
+    const teacher = teacherMap[profile.teacher_id] || null;
+    const user = userMap[profile.user_id] || null;
+    const isStaff = Boolean(profile.user_id || profile.employee_type === 'staff');
+    const candidate = teacher || (user ? {
+      id: user.id,
+      name: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      cnic: user.cnic,
+      specialization: user.custom_roles?.name || user.role,
+      status: user.status === 'active' ? 'Active' : (user.status === 'onboarding' ? 'Onboarding' : 'Pending'),
+      isStaff: true
+    } : null);
+
+    return {
+      teacher: candidate,
+      candidate,
+      isStaff,
+      employeeType: isStaff ? 'staff' : 'faculty',
+      profile,
+      documents: docsMap[profile.id] || [],
+      jd: jdMap[profile.id] || null,
+      signature: signatureMap[profile.id] || null,
+      files: filesMap[profile.id] || []
+    };
+  });
 };
 
 export const fetchJDTemplates = async () => {
@@ -302,12 +363,16 @@ export const finalizeHiring = async ({
   acceptanceBlob,
   hiringBlob
 }) => {
-  const { profile, teacher, jd } = application;
+  const { profile, teacher, candidate, isStaff } = application;
+  const activeCandidate = candidate || teacher;
+  const candidateId = activeCandidate?.id || profile.teacher_id || profile.user_id;
+  const staffMode = isStaff ?? Boolean(profile.user_id || profile.employee_type === 'staff');
 
   const acceptanceUpload = await uploadHrBlob({
     bucket: 'hr-files',
     blob: acceptanceBlob,
-    teacherId: teacher.id,
+    candidateId,
+    isStaff: staffMode,
     hrProfileId: profile.id,
     fileType: 'acceptance-letter',
     fileName: `acceptance-letter-${profile.id}.pdf`
@@ -316,7 +381,8 @@ export const finalizeHiring = async ({
   const hiringUpload = await uploadHrBlob({
     bucket: 'hr-files',
     blob: hiringBlob,
-    teacherId: teacher.id,
+    candidateId,
+    isStaff: staffMode,
     hrProfileId: profile.id,
     fileType: 'hiring-file',
     fileName: `hiring-file-${profile.id}.pdf`
@@ -355,16 +421,16 @@ export const finalizeHiring = async ({
   const delivery = await hrAction('/api/admin/hr/finalize', { profileId: profile.id, adminNote });
 
   await createNotification({
-    userId: teacher.id,
-    role: 'teacher',
+    userId: candidateId,
+    role: staffMode ? 'custom' : 'teacher',
     type: 'hr_hired',
     title: 'Hiring Finalized',
     message: `Your DeepSkills hiring process has been finalized.`,
-    link: '/teacher/hr',
+    link: staffMode ? '/staff/onboarding' : '/teacher/hr',
     sendEmail: false,
     emailData: {
-      email: teacher.email || profile.personal_email,
-      name: teacher.name || profile.full_name,
+      email: activeCandidate?.email || profile.personal_email,
+      name: activeCandidate?.name || profile.full_name,
       title: 'Hiring Finalized',
       message: 'Your DeepSkills hiring process has been finalized.'
     }

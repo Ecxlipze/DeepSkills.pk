@@ -20,6 +20,7 @@ import {
   createFeeReceiptPdf, 
   createTeacherPayslipPdf 
 } from '../utils/financePdf';
+import DatePicker from '../components/DatePicker';
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -702,18 +703,20 @@ const TransactionHistory = () => {
             <CustomDateRow>
               <div className="custom-input-group">
                 <label><FaCalendarAlt /> Start Date</label>
-                <input 
-                  type="date" 
+                <DatePicker 
                   value={customStartDate} 
+                  max={customEndDate || undefined}
                   onChange={(e) => setCustomStartDate(e.target.value)} 
+                  aria-label="Start Date"
                 />
               </div>
               <div className="custom-input-group">
                 <label><FaCalendarAlt /> End Date</label>
-                <input 
-                  type="date" 
+                <DatePicker 
                   value={customEndDate} 
+                  min={customStartDate || undefined}
                   onChange={(e) => setCustomEndDate(e.target.value)} 
+                  aria-label="End Date"
                 />
               </div>
             </CustomDateRow>

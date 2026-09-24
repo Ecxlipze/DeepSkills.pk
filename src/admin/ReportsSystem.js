@@ -17,6 +17,7 @@ import { supabase } from '../supabaseClient';
 import { DEPARTMENTS } from '../utils/departments';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import DatePicker from '../components/DatePicker';
 
 const DEPT_COLORS = {
   counsellor: '#378ADD',
@@ -407,10 +408,22 @@ function TimePeriodSelector({ period, setPeriod, batches }) {
           </select>
         )}
         {period.type === 'custom' && (
-          <>
-            <input type="date" value={period.from || ''} onChange={(event) => setPeriod((prev) => ({ ...prev, from: event.target.value }))} />
-            <input type="date" value={period.to || ''} onChange={(event) => setPeriod((prev) => ({ ...prev, to: event.target.value }))} />
-          </>
+          <div style={{ display: 'flex', gap: '8px', minWidth: '320px' }}>
+            <DatePicker
+              value={period.from || ''}
+              max={period.to || undefined}
+              onChange={(event) => setPeriod((prev) => ({ ...prev, from: event.target.value }))}
+              placeholder="From Date"
+              aria-label="From Date"
+            />
+            <DatePicker
+              value={period.to || ''}
+              min={period.from || undefined}
+              onChange={(event) => setPeriod((prev) => ({ ...prev, to: event.target.value }))}
+              placeholder="To Date"
+              aria-label="To Date"
+            />
+          </div>
         )}
         <Badge><FaCalendarAlt /> {selectedBatch ? selectedBatch.batch_name : `${range.from} to ${range.to}`}</Badge>
       </div>

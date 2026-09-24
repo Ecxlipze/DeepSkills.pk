@@ -7,7 +7,8 @@ import {
   FaHome, FaTasks, FaChartLine, FaCertificate,
   FaExclamationCircle, FaUserPlus, FaComments,
   FaWallet, FaUserFriends, FaGraduationCap, FaCalendarCheck, FaGift,
-  FaUserGraduate, FaChalkboardTeacher, FaMoneyBillWave, FaBullhorn, FaIdBadge
+  FaUserGraduate, FaChalkboardTeacher, FaMoneyBillWave, FaBullhorn, FaIdBadge,
+  FaClock
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -541,6 +542,7 @@ export const DashboardLayout = ({ children, navItems }) => {
         { label: 'Announcements', path: '/teacher/announcements', icon: <FaBullhorn /> },
         { label: 'Complaints', path: '/teacher/complaints', icon: <FaExclamationCircle /> },
         { section: 'CAREER & PAYROLL' },
+        { label: 'Time & Attendance', path: '/teacher/time-tracker', icon: <FaClock /> },
         { label: 'My HR Profile', path: '/teacher/hr', icon: <FaIdBadge /> },
         { label: 'Salary & Finance', path: '/teacher/finance', icon: <FaWallet /> },
         { label: 'Referral Program', path: '/teacher/referral', icon: <FaUserFriends /> }

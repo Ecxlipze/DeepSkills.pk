@@ -4,10 +4,11 @@ import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaArrowLeft, FaPlus, FaTimes, FaEdit, FaArchive, FaEye, FaClock, FaSearch, FaMoneyBillWave, FaLaptopCode, FaPalette, FaChartLine, FaMobileAlt, FaShieldAlt, FaVideo, FaPen, FaGlobe, FaRobot, FaDraftingCompass, FaWrench, FaGraduationCap, FaCode, FaDatabase } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import DatePicker from '../components/DatePicker';
 
 const ACCENT = { maroon:'#7B1F2E', blue:'#7B1F2E', purple:'#9333ea', green:'#10b981', amber:'#f59e0b', red:'#ef4444', teal:'#14b8a6' };
 const ICONS = { laptop:FaLaptopCode, palette:FaPalette, chart:FaChartLine, mobile:FaMobileAlt, shield:FaShieldAlt, video:FaVideo, pen:FaPen, globe:FaGlobe, robot:FaRobot, compass:FaDraftingCompass, wrench:FaWrench, grad:FaGraduationCap, code:FaCode, database:FaDatabase };
@@ -25,7 +26,26 @@ const sColors = { active:'#10b981', upcoming:'#3b82f6', completed:'#8b5cf6', arc
 
 // Styled
 const Container = styled.div`padding:20px 0;color:#fff;`;
-const BackLink = styled.button`background:none;border:none;color:#666;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-bottom:24px;transition:0.2s;&:hover{color:#fff;}`;
+const BackLink = styled.button`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: #94a3b8;
+  padding: 8px 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin-bottom: 24px;
+  transition: all 0.2s;
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+`;
 
 const InfoBar = styled.div`
   background:linear-gradient(135deg,#0d0d0d,#131313);border:1px solid rgba(255,255,255,0.06);border-radius:16px;
@@ -98,6 +118,7 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   const params = useParams();
   const courseId = courseIdProp || params.courseId || getCourseIdFromPath();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'courses', 'full');
   const [course, setCourse] = useState(null);
@@ -204,7 +225,9 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
   return (
     <AdminLayout>
       <Container>
-        <BackLink onClick={()=>navigate('/admin/management/courses')}><FaArrowLeft /> Back to Courses</BackLink>
+        <BackLink onClick={() => navigate(location?.pathname?.startsWith('/staff') ? '/staff/courses' : '/admin/management/courses')}>
+          <FaArrowLeft /> Back to Courses
+        </BackLink>
 
         <InfoBar>
           <div className="left">
@@ -272,7 +295,26 @@ const CourseDetailPage = ({ courseId: courseIdProp }) => {
                 <FR><FG><label>Batch Name *</label><input value={bf.batch_name} onChange={e=>setBf({...bf,batch_name:e.target.value})} placeholder="e.g. Batch 14" /></FG>
                 <FG><label>Timing</label><select value={bf.timing_label} onChange={e=>setBf({...bf,timing_label:e.target.value})}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option><option value="weekend">Weekend</option></select></FG></FR>
                 <FR><FG><label>Start Time</label><input type="time" value={bf.start_time} onChange={e=>setBf({...bf,start_time:e.target.value})} /></FG><FG><label>End Time</label><input type="time" value={bf.end_time} onChange={e=>setBf({...bf,end_time:e.target.value})} /></FG></FR>
-                <FR><FG><label>Start Date</label><input type="date" value={bf.start_date} onChange={e=>setBf({...bf,start_date:e.target.value})} /></FG><FG><label>End Date</label><input type="date" value={bf.end_date} onChange={e=>setBf({...bf,end_date:e.target.value})} /></FG></FR>
+                <FR>
+                  <FG>
+                    <label>Start Date</label>
+                    <DatePicker 
+                      value={bf.start_date || ''} 
+                      max={bf.end_date || undefined}
+                      onChange={e=>setBf({...bf,start_date:e.target.value})} 
+                      aria-label="Start Date"
+                    />
+                  </FG>
+                  <FG>
+                    <label>End Date</label>
+                    <DatePicker 
+                      value={bf.end_date || ''} 
+                      min={bf.start_date || undefined}
+                      onChange={e=>setBf({...bf,end_date:e.target.value})} 
+                      aria-label="End Date"
+                    />
+                  </FG>
+                </FR>
                 <FG><label>Capacity</label><input type="number" value={bf.capacity} onChange={e=>setBf({...bf,capacity:e.target.value})} min="1" /></FG>
                 <FG><label>Notes (optional)</label><textarea value={bf.notes} onChange={e=>setBf({...bf,notes:e.target.value})} placeholder="Internal notes..." /></FG>
                 <SaveBtn onClick={saveBatch} disabled={saving}>{saving?'Saving...':(editBatch?'Update Batch':'Create Batch')}</SaveBtn>

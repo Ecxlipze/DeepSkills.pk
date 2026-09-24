@@ -15,7 +15,8 @@ export const MODULE_KEYS = [
   'reports',
   'hr',
   'users',
-  'settings'
+  'settings',
+  'time_tracking'
 ];
 
 export const ADMIN_FULL_PERMISSIONS = MODULE_KEYS.reduce((acc, key) => {
@@ -46,7 +47,7 @@ export const BUILTIN_ROLE_NAMES = {
   student: 'Student',
   teacher: 'Teacher',
   admin: 'Admin',
-  custom: 'Custom'
+  custom: 'Staff Member'
 };
 
 const normalizePermissionMap = (permissions = {}) =>
@@ -111,7 +112,8 @@ export const getRoleColor = (role, customRoleColor) => {
   return ROLE_COLOR_STYLES[colorKey] || ROLE_COLOR_STYLES.gray;
 };
 
-export const getRoleLabel = (role, customRoleName) => customRoleName || BUILTIN_ROLE_NAMES[role] || 'Custom';
+export const getRoleLabel = (role, customRoleName) =>
+  customRoleName || BUILTIN_ROLE_NAMES[role] || (role === 'custom' ? 'Staff Member' : 'Staff');
 
 export const buildAdminSidebar = (user, permissions = {}, hasOpenComplaints = false) => {
   const baseItems = [

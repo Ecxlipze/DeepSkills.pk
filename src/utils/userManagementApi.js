@@ -111,7 +111,7 @@ const ensureTeacherRecord = async (payload) => {
 const syncCompanionRecords = async (payload, previousUser = null) => {
   const role = payload.role;
   const status = payload.status || 'active';
-  const shouldAllowLogin = status === 'active';
+  const shouldAllowLogin = ['active', 'onboarding', 'pending'].includes(String(status).toLowerCase());
 
   if (role === 'student') {
     await ensureStudentRecord(payload);
@@ -253,6 +253,12 @@ export const deleteRole = async (roleId) => {
   if (error) throw error;
 };
 
+const findRoleNameById = async (id) => {
+  if (!id) return null;
+  const { data } = await supabase.from('custom_roles').select('name').eq('id', id).maybeSingle();
+  return data?.name || null;
+};
+
 export const createUser = async (payload, actor) => {
   const roleMeta = mapRolePayload(payload.roleValue);
   const resolvedCustomRoleId = payload.customRoleId || roleMeta.customRoleId || await findRoleIdByName(payload.roleValue);
@@ -274,6 +280,27 @@ export const createUser = async (payload, actor) => {
   if (error) throw error;
 
   await syncCompanionRecords(insertPayload);
+
+  if (['onboarding', 'pending'].includes(String(payload.status || '').toLowerCase())) {
+    try {
+      const roleName = resolvedCustomRoleId ? (await findRoleNameById(resolvedCustomRoleId)) : payload.roleValue;
+      await supabase.from('hr_profiles').upsert({
+        user_id: data.id,
+        employee_type: 'staff',
+        full_name: data.full_name,
+        cnic: data.cnic,
+        personal_email: data.email || null,
+        personal_phone: data.phone || null,
+        specialization: roleName || 'Administrative Staff',
+        current_step: 1,
+        hr_status: 'pending',
+        created_at: nowIso(),
+        updated_at: nowIso()
+      }, { onConflict: 'user_id' });
+    } catch (hrErr) {
+      console.warn('[createUser] hr_profile init notice:', hrErr);
+    }
+  }
 
   await logActivity({
     userId: data.id,

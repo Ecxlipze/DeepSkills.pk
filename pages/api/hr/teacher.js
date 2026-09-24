@@ -1,12 +1,13 @@
 import { getSupabaseServerClient } from '../../../lib/supabaseServer';
 import { normalizeCnic, validatePortalSession, authorizeAdminOperation } from '../../../lib/portalAuthServer';
 
-function pickProfileFields(profile, teacher) {
+function pickProfileFields(profile, teacher, isStaff = false) {
   const allowed = [
     'father_name', 'date_of_birth', 'gender', 'personal_phone', 'personal_email',
     'current_address', 'permanent_address', 'years_experience', 'last_employer',
     'linkedin', 'expected_salary', 'available_to_join', 'teaching_mode',
-    'emergency_name', 'emergency_relationship', 'emergency_phone'
+    'emergency_name', 'emergency_relationship', 'emergency_phone',
+    'bank_name', 'account_title', 'account_number', 'iban'
   ];
   const payload = {};
   for (const field of allowed) {
@@ -14,7 +15,13 @@ function pickProfileFields(profile, teacher) {
       payload[field] = profile[field];
     }
   }
-  payload.teacher_id = teacher.id;
+  if (isStaff) {
+    payload.user_id = teacher.id;
+    payload.employee_type = 'staff';
+  } else {
+    payload.teacher_id = teacher.id;
+    payload.employee_type = 'faculty';
+  }
   payload.full_name = teacher.name || profile.full_name || '';
   payload.cnic = teacher.cnic;
   payload.specialization = teacher.specialization || profile.specialization || null;
@@ -75,7 +82,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Look up teacher record
+  // 2. Look up teacher or staff record
   const { data: teacherRows, error: teacherErr } = await supabase
     .from('teachers')
     .select('*')
@@ -87,9 +94,39 @@ export default async function handler(req, res) {
     return res.status(500).json({ status: 'error', message: 'Failed to look up teacher record.' });
   }
 
-  const teacher = teacherRows?.[0];
+  let teacher = teacherRows?.[0] || null;
+  let isStaff = false;
+
+  if (!teacher) {
+    const { data: userRows, error: userErr } = await supabase
+      .from('users')
+      .select('*, custom_roles(id, name, color, icon, permissions)')
+      .eq('cnic', teacherCnic)
+      .limit(1);
+
+    if (userErr) {
+      console.error('[hr/teacher] User lookup error:', userErr);
+      return res.status(500).json({ status: 'error', message: 'Failed to look up staff record.' });
+    }
+
+    const user = userRows?.[0];
+    if (user && ['active', 'onboarding', 'pending'].includes(String(user.status || '').toLowerCase())) {
+      isStaff = true;
+      teacher = {
+        id: user.id,
+        name: user.full_name,
+        cnic: user.cnic,
+        email: user.email,
+        phone: user.phone,
+        specialization: user.custom_roles?.name || user.role,
+        status: user.status === 'active' ? 'Active' : (user.status === 'onboarding' ? 'Onboarding' : 'Pending'),
+        isStaff: true
+      };
+    }
+  }
+
   if (!teacher || !['Active', 'Pending', 'Onboarding'].includes(teacher.status)) {
-    return res.status(403).json({ status: 'error', message: 'Valid teacher profile not found or inactive.' });
+    return res.status(403).json({ status: 'error', message: 'Valid candidate profile not found or inactive.' });
   }
 
   const action = data.action || '';
@@ -97,18 +134,33 @@ export default async function handler(req, res) {
 
   // Helper: get or create hr_profiles row
   async function getOrCreateProfile() {
-    const { data: profileRows } = await supabase
-      .from('hr_profiles')
-      .select('*')
-      .eq('teacher_id', teacher.id)
-      .limit(1);
+    let query = supabase.from('hr_profiles').select('*');
+    if (isStaff) {
+      query = query.eq('user_id', teacher.id);
+    } else {
+      query = query.eq('teacher_id', teacher.id);
+    }
+    const { data: profileRows } = await query.limit(1);
 
     if (profileRows && profileRows[0]) {
       return profileRows[0];
     }
 
-    const newProfile = {
+    const newProfile = isStaff ? {
+      user_id: teacher.id,
+      employee_type: 'staff',
+      full_name: teacher.name || '',
+      cnic: teacher.cnic,
+      personal_email: teacher.email || '',
+      personal_phone: teacher.phone || '',
+      specialization: teacher.specialization || null,
+      current_step: 1,
+      hr_status: 'pending',
+      created_at: now,
+      updated_at: now
+    } : {
       teacher_id: teacher.id,
+      employee_type: 'faculty',
       full_name: teacher.name || '',
       cnic: teacher.cnic,
       personal_email: teacher.email || '',
@@ -120,9 +172,10 @@ export default async function handler(req, res) {
       updated_at: now
     };
 
+    const conflictTarget = isStaff ? 'user_id' : 'teacher_id';
     const { data: inserted, error: insErr } = await supabase
       .from('hr_profiles')
-      .upsert(newProfile, { onConflict: 'teacher_id' })
+      .upsert(newProfile, { onConflict: conflictTarget })
       .select()
       .single();
 
@@ -134,17 +187,18 @@ export default async function handler(req, res) {
     return inserted;
   }
 
-  // Helper: ensure profile belongs to this teacher
+  // Helper: ensure profile belongs to this teacher or staff member
   async function requireOwnedProfile(profileId) {
     if (!profileId) {
       throw new Error('HR profile ID is required.');
     }
-    const { data: profileRows } = await supabase
-      .from('hr_profiles')
-      .select('*')
-      .eq('id', profileId)
-      .eq('teacher_id', teacher.id)
-      .limit(1);
+    let query = supabase.from('hr_profiles').select('*').eq('id', profileId);
+    if (isStaff) {
+      query = query.eq('user_id', teacher.id);
+    } else {
+      query = query.eq('teacher_id', teacher.id);
+    }
+    const { data: profileRows } = await query.limit(1);
 
     if (!profileRows || !profileRows[0]) {
       throw new Error('HR profile access denied.');
@@ -185,11 +239,12 @@ export default async function handler(req, res) {
     // ----------------------------------------------------
     if (action === 'save_profile') {
       const profileInput = data.profile && typeof data.profile === 'object' ? data.profile : {};
-      const payload = pickProfileFields(profileInput, teacher);
+      const payload = pickProfileFields(profileInput, teacher, isStaff);
 
+      const conflictTarget = isStaff ? 'user_id' : 'teacher_id';
       const { data: savedRows, error: saveErr } = await supabase
         .from('hr_profiles')
-        .upsert(payload, { onConflict: 'teacher_id' })
+        .upsert(payload, { onConflict: conflictTarget })
         .select();
 
       if (saveErr || !savedRows || !savedRows[0]) {
@@ -208,8 +263,8 @@ export default async function handler(req, res) {
         if (stepUpdated) profile = stepUpdated;
       }
 
-      // Non-blocking sync to teacher_salaries if expected_salary provided
-      if (payload.expected_salary && Number(payload.expected_salary) > 0) {
+      // Non-blocking sync to teacher_salaries if expected_salary provided for teachers
+      if (!isStaff && payload.expected_salary && Number(payload.expected_salary) > 0) {
         try {
           await supabase.from('teacher_salaries').upsert({
             teacher_id: teacher.id,
@@ -231,6 +286,40 @@ export default async function handler(req, res) {
       const profile = await requireOwnedProfile(data.profileId);
       const file = data.file && typeof data.file === 'object' ? data.file : {};
 
+      // Server-side validation for uploaded files
+      if (file.fileName || file.filePath || file.fileUrl) {
+        if (file.fileSize && Number(file.fileSize) > 10 * 1024 * 1024) {
+          return res.status(400).json({ status: 'error', message: 'File exceeds 10 MB limit.' });
+        }
+        const ext = String(file.fileName || file.filePath || '').split('.').pop().toLowerCase();
+        const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'docx', 'doc', 'zip'];
+        if (ext && !allowedExts.includes(ext)) {
+          return res.status(400).json({
+            status: 'error',
+            message: `File format .${ext} is not allowed. Only images, PDF, DOCX, and ZIP files are accepted.`
+          });
+        }
+      }
+
+      // Server-side validation for link URLs
+      let linkUrl = data.linkUrl ? String(data.linkUrl).trim() : null;
+      if (linkUrl) {
+        if (!/^https?:\/\//i.test(linkUrl)) {
+          linkUrl = `https://${linkUrl}`;
+        }
+        try {
+          const parsed = new URL(linkUrl);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return res.status(400).json({ status: 'error', message: 'Link must start with http:// or https://' });
+          }
+          if (!parsed.hostname || !parsed.hostname.includes('.')) {
+            return res.status(400).json({ status: 'error', message: 'Please enter a valid website link.' });
+          }
+        } catch (_) {
+          return res.status(400).json({ status: 'error', message: 'Invalid URL format.' });
+        }
+      }
+
       const docPayload = {
         hr_profile_id: profile.id,
         category: String(data.category || '').slice(0, 100),
@@ -240,7 +329,7 @@ export default async function handler(req, res) {
         file_url: file.fileUrl || null,
         file_path: file.filePath || null,
         mime_type: file.mimeType || null,
-        link_url: data.linkUrl || null,
+        link_url: linkUrl,
         is_required: Boolean(data.isRequired),
         uploaded_at: now
       };

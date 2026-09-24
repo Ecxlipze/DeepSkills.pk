@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '../components/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/permissions';
+import DatePicker from '../components/DatePicker';
 
 const Container = styled.div`
   padding: 20px 0;
@@ -635,9 +636,21 @@ const StudentManager = () => {
             </InputWrapper>
 
             <DateRangeWrapper>
-              <input type="date" value={filters.dateFrom} onChange={e => setFilters({...filters, dateFrom: e.target.value})} />
+              <DatePicker
+                value={filters.dateFrom}
+                max={filters.dateTo || undefined}
+                onChange={e => setFilters({...filters, dateFrom: e.target.value})}
+                placeholder="From"
+                aria-label="Enrolled From"
+              />
               <span style={{ color: '#555' }}>&rarr;</span>
-              <input type="date" value={filters.dateTo} onChange={e => setFilters({...filters, dateTo: e.target.value})} />
+              <DatePicker
+                value={filters.dateTo}
+                min={filters.dateFrom || undefined}
+                onChange={e => setFilters({...filters, dateTo: e.target.value})}
+                placeholder="To"
+                aria-label="Enrolled To"
+              />
             </DateRangeWrapper>
           </FilterGrid>
 

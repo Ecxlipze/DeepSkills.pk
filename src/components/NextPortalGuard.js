@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { canAccess, getFirstAccessibleAdminPath } from '../utils/permissions';
 import { canAccessDepartment, getDefaultDepartmentPath } from '../utils/departments';
+import { mapAdminPathToStaffPath } from '../../lib/staffRouting';
 
 const loadingStyle = {
   height: '100vh',
@@ -24,8 +25,14 @@ const getRedirectPath = (user, fallback = '/login') => {
     return '/teacher/dashboard';
   }
   if (user.role === 'student') return '/student/dashboard';
-  if (user.role === 'admin') return '/admin/dashboard';
-  return getDefaultDepartmentPath(user) || getFirstAccessibleAdminPath(user.permissions || {});
+  if (['custom', 'admin'].includes(user.role)) {
+    if (['onboarding', 'pending'].includes(String(user.status || '').toLowerCase())) {
+      return '/staff/onboarding';
+    }
+    if (user.role === 'admin') return '/admin/dashboard';
+    return '/staff/dashboard';
+  }
+  return fallback;
 };
 
 const NextPortalGuard = ({
@@ -44,6 +51,10 @@ const NextPortalGuard = ({
   const isPendingTeacher = user?.role === 'teacher' && (user?.status === 'Pending' || user?.status === 'Onboarding');
   const isActiveTeacher = user?.role === 'teacher' && user?.status === 'Active';
 
+  const isStaffOnboarding = currentPath === '/staff/onboarding' || currentPath.startsWith('/staff/onboarding/');
+  const isPendingStaff = (user?.role === 'custom' || user?.role === 'admin') && ['onboarding', 'pending'].includes(String(user?.status || '').toLowerCase());
+  const isActiveStaff = (user?.role === 'custom' || user?.role === 'admin') && String(user?.status || '').toLowerCase() === 'active';
+
   const roleBlocked = Boolean(user && allowedRoles && !allowedRoles.includes(user.role));
   const permissionBlocked = Boolean(
     user &&
@@ -61,12 +72,26 @@ const NextPortalGuard = ({
   const teacherBlocked = Boolean(
     isPendingTeacher && !isTeacherHR
   );
+  const staffBlocked = Boolean(
+    isPendingStaff && !isStaffOnboarding
+  );
+  const activeStaffOnboardingBlocked = Boolean(
+    isActiveStaff && isStaffOnboarding
+  );
+  const staffAdminBlocked = Boolean(
+    user?.role === 'custom' && (currentPath === '/admin' || currentPath.startsWith('/admin/'))
+  );
 
   useEffect(() => {
     if (loading) return;
 
     if (!user) {
       router.replace(loginPath);
+      return;
+    }
+
+    if (staffAdminBlocked) {
+      router.replace(mapAdminPathToStaffPath(currentPath));
       return;
     }
 
@@ -78,13 +103,24 @@ const NextPortalGuard = ({
       return;
     }
 
+    if (staffBlocked) {
+      toast.error("Please complete your onboarding first.");
+      router.replace('/staff/onboarding');
+      return;
+    }
+
+    if (activeStaffOnboardingBlocked) {
+      router.replace(getRedirectPath(user, loginPath));
+      return;
+    }
+
     if (roleBlocked || permissionBlocked || departmentBlocked) {
       toast.error("You don't have permission to access this section.");
       router.replace(getRedirectPath(user, loginPath));
     }
-  }, [loading, user, roleBlocked, permissionBlocked, departmentBlocked, teacherBlocked, isPendingTeacher, isActiveTeacher, router, loginPath]);
+  }, [loading, user, roleBlocked, permissionBlocked, departmentBlocked, teacherBlocked, staffBlocked, staffAdminBlocked, activeStaffOnboardingBlocked, isPendingTeacher, isActiveTeacher, isPendingStaff, isActiveStaff, router, loginPath, currentPath]);
 
-  if (loading || !user || roleBlocked || permissionBlocked || departmentBlocked || teacherBlocked) {
+  if (loading || !user || roleBlocked || permissionBlocked || departmentBlocked || teacherBlocked || staffBlocked || activeStaffOnboardingBlocked || staffAdminBlocked) {
     return <div style={loadingStyle}>Loading...</div>;
   }
 
