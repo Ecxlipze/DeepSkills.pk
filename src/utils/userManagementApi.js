@@ -259,9 +259,54 @@ const findRoleNameById = async (id) => {
   return data?.name || null;
 };
 
+const assertCnicAvailableForStaff = async (cnic, excludeUserId = null, targetRole = 'staff') => {
+  if (!cnic) return;
+  const cleanDigits = String(cnic).replace(/\D/g, '');
+  const formatted = cleanDigits.length === 13 ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}` : cnic;
+  const variants = Array.from(new Set([formatted, cleanDigits]));
+
+  // Check another user in users table
+  let userQuery = supabase.from('users').select('id, full_name, role').in('cnic', variants);
+  if (excludeUserId) {
+    userQuery = userQuery.neq('id', excludeUserId);
+  }
+  const { data: userConflict } = await userQuery.limit(1);
+  if (userConflict && userConflict.length > 0) {
+    throw new Error(`CNIC ${cnic} is already registered to user "${userConflict[0].full_name}" (${userConflict[0].role}). A CNIC must be unique across all roles.`);
+  }
+
+  // Check teachers
+  if (targetRole !== 'teacher') {
+    const { data: teacherConflict } = await supabase.from('teachers').select('id, name').in('cnic', variants).limit(1);
+    if (teacherConflict && teacherConflict.length > 0) {
+      throw new Error(`Cannot register account: CNIC ${cnic} is already registered to faculty instructor "${teacherConflict[0].name}". A CNIC must be unique across staff, students, and teachers.`);
+    }
+  }
+
+  // Check admissions (students)
+  if (targetRole !== 'student') {
+    const { data: studentConflict } = await supabase.from('admissions').select('id, name').in('cnic', variants).in('status', ['Active', 'Pending', 'Graduated']).limit(1);
+    if (studentConflict && studentConflict.length > 0) {
+      throw new Error(`Cannot register account: CNIC ${cnic} is already registered to student "${studentConflict[0].name}". A CNIC must be unique across staff, students, and teachers.`);
+    }
+  }
+
+  // Check allowed_cnics whitelist
+  const { data: allowedConflict } = await supabase.from('allowed_cnics').select('role, name').in('cnic', variants).limit(1);
+  if (allowedConflict && allowedConflict.length > 0) {
+    const aRole = allowedConflict[0].role;
+    if (['staff', 'admin', 'custom'].includes(targetRole) && ['student', 'teacher'].includes(aRole)) {
+      throw new Error(`Cannot register account: CNIC ${cnic} is already active in the login whitelist as a ${aRole} ("${allowedConflict[0].name}").`);
+    }
+  }
+};
+
 export const createUser = async (payload, actor) => {
   const roleMeta = mapRolePayload(payload.roleValue);
   const resolvedCustomRoleId = payload.customRoleId || roleMeta.customRoleId || await findRoleIdByName(payload.roleValue);
+
+  await assertCnicAvailableForStaff(payload.cnic, null, roleMeta.role);
+
   const insertPayload = {
     full_name: payload.fullName,
     cnic: payload.cnic,
@@ -319,6 +364,11 @@ export const updateUser = async (userId, payload, actor) => {
 
   const roleMeta = mapRolePayload(payload.roleValue);
   const resolvedCustomRoleId = payload.customRoleId || roleMeta.customRoleId || await findRoleIdByName(payload.roleValue);
+
+  if (payload.cnic && payload.cnic !== previousUser.cnic) {
+    await assertCnicAvailableForStaff(payload.cnic, userId, roleMeta.role);
+  }
+
   const updatePayload = {
     full_name: payload.fullName,
     cnic: payload.cnic,

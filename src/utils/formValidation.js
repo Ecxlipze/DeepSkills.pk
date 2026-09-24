@@ -166,6 +166,42 @@ export const validateDateRange = (startDate, endDate, {
 };
 
 /**
+ * Validates a single date string (format YYYY-MM-DD, valid calendar day, min/max limits)
+ */
+export const validateDate = (value, {
+  fieldName = 'Date',
+  required = false,
+  min = null,
+  max = null
+} = {}) => {
+  if (!value || !String(value).trim()) {
+    return required ? `${fieldName} is required.` : null;
+  }
+  const str = String(value).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return `Please enter a valid ${fieldName.toLowerCase()} in YYYY-MM-DD format.`;
+  }
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (year < 1900 || year > 2100 || month < 1 || month > 12) {
+    return `Please enter a valid ${fieldName.toLowerCase()}.`;
+  }
+  const dateObj = new Date(year, month - 1, day);
+  if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
+    return `Please enter a valid calendar date for ${fieldName.toLowerCase()}.`;
+  }
+  if (min && str < min) {
+    return `${fieldName} cannot be earlier than ${min}.`;
+  }
+  if (max && str > max) {
+    return `${fieldName} cannot be later than ${max}.`;
+  }
+  return null;
+};
+
+/**
  * Validates an entire form object against a schema definition
  * Schema structure:
  * {

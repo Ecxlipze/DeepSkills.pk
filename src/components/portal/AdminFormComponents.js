@@ -3,6 +3,7 @@ import styled, { keyframes, css } from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaTimes, FaExclamationCircle, FaSpinner } from 'react-icons/fa';
 import { portalTheme } from './PortalTheme';
+import DatePicker from '../ui/DatePicker';
 
 // --- Animations ---
 const spin = keyframes`
@@ -323,8 +324,24 @@ export const AdminInput = styled.input`
   &[type="date"],
   &[type="datetime-local"] {
     color-scheme: dark;
+    cursor: pointer;
+
+    &::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      filter: invert(0.85);
+      opacity: 0.85;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      &:hover {
+        filter: invert(1);
+        opacity: 1;
+      }
+    }
   }
 `;
+
+export const AdminDatePicker = DatePicker;
 
 export const AdminSelect = styled.select`
   ${controlCommonStyles}
@@ -630,6 +647,8 @@ export default {
   FormError,
   FormHelperText,
   AdminInput,
+  AdminDatePicker,
+  DatePicker,
   AdminSelect,
   AdminTextarea,
   AdminCheckbox,

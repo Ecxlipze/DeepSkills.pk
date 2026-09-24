@@ -614,6 +614,38 @@ const TeacherManager = ({ basePath }) => {
 
     setProcessing(true);
     try {
+      const cleanDigits = String(formData.cnic).replace(/\D/g, '');
+      const formatted = cleanDigits.length === 13 ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}` : formData.cnic;
+      const variants = Array.from(new Set([formatted, cleanDigits]));
+
+      const { data: existingTeacher } = await supabase.from('teachers').select('id, name').in('cnic', variants).limit(1);
+      if (existingTeacher && existingTeacher.length > 0) {
+        toast.error(`A teacher with CNIC ${formData.cnic} already exists ("${existingTeacher[0].name}").`);
+        setProcessing(false);
+        return;
+      }
+
+      const { data: existingStaff } = await supabase.from('users').select('id, full_name, role').in('cnic', variants).limit(1);
+      if (existingStaff && existingStaff.length > 0) {
+        toast.error(`Cannot add instructor: CNIC ${formData.cnic} is already registered to staff member "${existingStaff[0].full_name}" (${existingStaff[0].role}). A CNIC must be unique across staff, students, and teachers.`);
+        setProcessing(false);
+        return;
+      }
+
+      const { data: existingStudent } = await supabase.from('admissions').select('id, name').in('cnic', variants).limit(1);
+      if (existingStudent && existingStudent.length > 0) {
+        toast.error(`Cannot add instructor: CNIC ${formData.cnic} is already registered to student "${existingStudent[0].name}". A CNIC must be unique across staff, students, and teachers.`);
+        setProcessing(false);
+        return;
+      }
+
+      const { data: existingAllowed } = await supabase.from('allowed_cnics').select('role, name').in('cnic', variants).limit(1);
+      if (existingAllowed && existingAllowed.length > 0 && existingAllowed[0].role !== 'teacher') {
+        toast.error(`Cannot add instructor: CNIC ${formData.cnic} is active in the login system as a ${existingAllowed[0].role} ("${existingAllowed[0].name}").`);
+        setProcessing(false);
+        return;
+      }
+
       if (addMode === 'invite') {
         // Mode A: Invite into HR Pipeline
         // 1. Create teacher record in 'teachers' table with status: 'Pending'

@@ -19,6 +19,10 @@ export default async function handler(req, res) {
     const existing = await db.from('admissions').select('id').eq('cnic', row.cnic).limit(1);
     if (existing.error) throw existing.error;
     if (existing.data?.length) return res.status(409).json({ status: 'error', message: 'This CNIC is already registered.' });
+    const existingTeacher = await db.from('teachers').select('id').eq('cnic', row.cnic).eq('status', 'Active').limit(1);
+    if (existingTeacher.data?.length) return res.status(409).json({ status: 'error', message: 'This CNIC is already registered to a faculty member.' });
+    const existingStaff = await db.from('users').select('id').eq('cnic', row.cnic).eq('status', 'active').limit(1);
+    if (existingStaff.data?.length) return res.status(409).json({ status: 'error', message: 'This CNIC is already registered to a staff member.' });
     const { data, error } = await db.from('admissions').insert([row]).select().single();
     if (error || !data) throw error || new Error('Missing inserted admission');
     return res.status(200).json({ status: 'success', message: 'Registration submitted successfully.', data });

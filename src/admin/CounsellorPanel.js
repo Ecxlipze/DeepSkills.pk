@@ -25,6 +25,7 @@ import {
   AdminButton,
   DepartmentWelcomeBanner
 } from '../components/portal';
+import DatePicker from '../components/DatePicker';
 import { validateRequired, validatePhone, validateEmail, validateForm, formatPhone } from '../utils/formValidation';
 
 const STATUS_OPTIONS = [
@@ -1318,13 +1319,13 @@ const CounsellorPanel = ({ initialView }) => {
 
                     <Field $hasError={!!errors.dob}>
                       <label>Date of Birth <span className="req">*</span></label>
-                      <input
+                      <DatePicker
                         ref={dobRef}
-                        type="date"
                         max={todayDateStr}
                         value={enrollment.dob}
                         onChange={(e) => updateEnrollment('dob', e.target.value)}
-                        onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                        hasError={!!errors.dob}
+                        aria-label="Date of Birth"
                       />
                       {errors.dob && <FieldError><FaExclamationCircle /> {errors.dob}</FieldError>}
                     </Field>
@@ -1584,12 +1585,12 @@ const CounsellorPanel = ({ initialView }) => {
 
                     <Field $hasError={!!errors.firstPaymentDate}>
                       <label>Payment Date</label>
-                      <input
+                      <DatePicker
                         ref={payDateRef}
-                        type="date"
                         value={enrollment.firstPaymentDate}
                         onChange={(e) => updateEnrollment('firstPaymentDate', e.target.value)}
-                        onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                        hasError={!!errors.firstPaymentDate}
+                        aria-label="Payment Date"
                       />
                       {errors.firstPaymentDate && <FieldError><FaExclamationCircle /> {errors.firstPaymentDate}</FieldError>}
                     </Field>
@@ -1682,23 +1683,25 @@ const CounsellorPanel = ({ initialView }) => {
                   <Field compact><select value={filters.course} onChange={(e) => setFilters({ ...filters, course: e.target.value })}><option value="all">All Courses</option>{courseTitles.map((title) => <option key={title} value={title}>{title}</option>)}</select></Field>
                   <Field compact><select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}><option value="all">All Sources</option>{SOURCES.map((source) => <option key={source} value={source}>{source}</option>)}</select></Field>
                   <Field compact>
-                    <input
+                    <DatePicker
                       ref={filterFromRef}
-                      type="date"
                       value={filters.from}
+                      max={filters.to || undefined}
                       onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-                      onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                      placeholder="From Date"
                       title="From Date"
+                      aria-label="From Date"
                     />
                   </Field>
                   <Field compact>
-                    <input
+                    <DatePicker
                       ref={filterToRef}
-                      type="date"
                       value={filters.to}
+                      min={filters.from || undefined}
                       onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-                      onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                      placeholder="To Date"
                       title="To Date"
+                      aria-label="To Date"
                     />
                   </Field>
                   {hasActiveInquiryFilters && (
@@ -2243,13 +2246,12 @@ const CounsellorPanel = ({ initialView }) => {
 
               <Field>
                 <label>Next Follow-Up Date</label>
-                <input
+                <DatePicker
                   ref={statusFollowUpRef}
-                  type="date"
                   min={todayDateStr}
                   value={statusForm.followUpDate || ''}
                   onChange={(e) => setStatusForm({ ...statusForm, followUpDate: e.target.value })}
-                  onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                  aria-label="Next Follow-Up Date"
                 />
               </Field>
 
@@ -2436,16 +2438,11 @@ const CounsellorPanel = ({ initialView }) => {
                   </Field>
                   <Field>
                     <label>Paid Date <span className="req">*</span></label>
-                    <input
+                    <DatePicker
                       ref={modalPayDateRef}
-                      type="date"
                       value={studentAction.paidDate || todayDateStr}
                       onChange={(e) => setStudentAction({ ...studentAction, paidDate: e.target.value })}
-                      onClick={(e) => {
-                        try {
-                          e.target.showPicker?.();
-                        } catch (_) {}
-                      }}
+                      aria-label="Paid Date"
                     />
                   </Field>
                   <Field>
@@ -2707,13 +2704,12 @@ const CounsellorPanel = ({ initialView }) => {
                   </AdminSelect>
                 </FormField>
                 <FormField label="Next Follow-Up Date">
-                  <AdminInput
+                  <DatePicker
                     ref={leadFollowUpRef}
-                    type="date"
                     min={todayDateStr}
                     value={newLeadForm.followUpDate}
                     onChange={(e) => setNewLeadForm({ ...newLeadForm, followUpDate: e.target.value })}
-                    onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+                    aria-label="Next Follow-Up Date"
                   />
                 </FormField>
               </FormGrid>
@@ -2940,23 +2936,25 @@ function StudentList({ students = [], batches = [], courses = [], navigate, onAc
           </select>
         </Field>
         <Field compact>
-          <input
+          <DatePicker
             ref={filterFromRef}
-            type="date"
             value={filters.from}
+            max={filters.to || undefined}
             onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-            onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+            placeholder="Enrolled From"
             title="Enrolled From"
+            aria-label="Enrolled From"
           />
         </Field>
         <Field compact>
-          <input
+          <DatePicker
             ref={filterToRef}
-            type="date"
             value={filters.to}
+            min={filters.from || undefined}
             onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-            onClick={(e) => { try { e.target.showPicker?.(); } catch (_) {} }}
+            placeholder="Enrolled To"
             title="Enrolled To"
+            aria-label="Enrolled To"
           />
         </Field>
         {hasActiveFilters && (

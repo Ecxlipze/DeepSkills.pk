@@ -1458,6 +1458,34 @@ const AdminHRManagement = ({ initialView }) => {
     const finalTeacherNotes = [compensationNote, addTeacherForm.notes].filter(Boolean).join(' | ');
 
     try {
+      const cleanDigits = String(addTeacherForm.cnic).replace(/\D/g, '');
+      const formatted = cleanDigits.length === 13 ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}` : addTeacherForm.cnic;
+      const variants = Array.from(new Set([formatted, cleanDigits]));
+
+      const { data: existingTeacher } = await supabase.from('teachers').select('id, name').in('cnic', variants).limit(1);
+      if (existingTeacher && existingTeacher.length > 0) {
+        toast.error(`A teacher with CNIC ${addTeacherForm.cnic} is already registered ("${existingTeacher[0].name}"). CNIC must be unique across all roles.`);
+        return;
+      }
+
+      const { data: existingStaff } = await supabase.from('users').select('id, full_name, role').in('cnic', variants).limit(1);
+      if (existingStaff && existingStaff.length > 0) {
+        toast.error(`Cannot register candidate: CNIC ${addTeacherForm.cnic} is already registered to staff member "${existingStaff[0].full_name}" (${existingStaff[0].role}). A CNIC must be unique across all roles.`);
+        return;
+      }
+
+      const { data: existingStudent } = await supabase.from('admissions').select('id, name').in('cnic', variants).limit(1);
+      if (existingStudent && existingStudent.length > 0) {
+        toast.error(`Cannot register candidate: CNIC ${addTeacherForm.cnic} is already registered to student "${existingStudent[0].name}". A CNIC must be unique across all roles.`);
+        return;
+      }
+
+      const { data: existingAllowed } = await supabase.from('allowed_cnics').select('role, name').in('cnic', variants).limit(1);
+      if (existingAllowed && existingAllowed.length > 0) {
+        toast.error(`Cannot register candidate: CNIC ${addTeacherForm.cnic} is already active in login access as ${existingAllowed[0].role} ("${existingAllowed[0].name}").`);
+        return;
+      }
+
       if (addTeacherForm.employee_type === 'staff') {
         const selectedRole = rolesList.find(r => r.id === addTeacherForm.role_id);
         const roleName = selectedRole?.name || addTeacherForm.custom_role_name || addTeacherForm.department || 'Administrative Staff';

@@ -32,6 +32,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'sync') {
+      const { data: existingAllowed } = await supabase.from('allowed_cnics').select('role, name').eq('cnic', formattedCnic).maybeSingle();
+      if (existingAllowed && existingAllowed.role !== 'student') {
+        return res.status(409).json({
+          status: 'error',
+          message: `CNIC ${formattedCnic} is already active in the login whitelist as ${existingAllowed.role} (${existingAllowed.name}). CNIC must be unique across all roles.`
+        });
+      }
+
       const { error } = await supabase.from('allowed_cnics').upsert({
         cnic: formattedCnic,
         name: name || '',

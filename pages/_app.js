@@ -33,6 +33,30 @@ export default function App({ Component, pageProps }) {
     return () => document.body.classList.remove('ds-native-cursor');
   }, [isDashboardRoute]);
 
+  useEffect(() => {
+    const handleGlobalDateClick = (e) => {
+      const target = e.target;
+      if (
+        target &&
+        target.tagName === 'INPUT' &&
+        (target.type === 'date' || target.type === 'datetime-local') &&
+        !target.disabled &&
+        !target.readOnly
+      ) {
+        try {
+          if (typeof target.showPicker === 'function') {
+            target.showPicker();
+          }
+        } catch (_) {}
+      }
+    };
+
+    document.addEventListener('click', handleGlobalDateClick, { capture: true });
+    return () => {
+      document.removeEventListener('click', handleGlobalDateClick, { capture: true });
+    };
+  }, []);
+
   return (
     <>
       {GA_MEASUREMENT_ID ? (

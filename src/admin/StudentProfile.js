@@ -687,6 +687,37 @@ const StudentProfile = ({ studentId }) => {
   const handleUpdateProfile = async () => {
     setProcessing(true);
     try {
+      if (editFormData.cnic && editFormData.cnic !== student.cnic) {
+        const cleanDigits = String(editFormData.cnic).replace(/\D/g, '');
+        const formatted = cleanDigits.length === 13 ? `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 12)}-${cleanDigits.slice(12)}` : editFormData.cnic;
+        const variants = Array.from(new Set([formatted, cleanDigits]));
+
+        const { data: teacherConflict } = await supabase.from('teachers').select('id, name').in('cnic', variants).limit(1);
+        if (teacherConflict && teacherConflict.length > 0) {
+          toast.error(`Cannot update CNIC: ${editFormData.cnic} is registered to faculty instructor "${teacherConflict[0].name}".`);
+          setProcessing(false);
+          return;
+        }
+
+        const { data: staffConflict } = await supabase.from('users').select('id, full_name, role').in('cnic', variants).limit(1);
+        if (staffConflict && staffConflict.length > 0) {
+          toast.error(`Cannot update CNIC: ${editFormData.cnic} is registered to staff member "${staffConflict[0].full_name}".`);
+          setProcessing(false);
+          return;
+        }
+
+        const { data: studentConflict } = await supabase.from('admissions').select('id, name').in('cnic', variants).neq('id', id).limit(1);
+        if (studentConflict && studentConflict.length > 0) {
+          const normIncoming = (editFormData.name || student.name || '').trim().toLowerCase();
+          const normExisting = (studentConflict[0].name || '').trim().toLowerCase();
+          if (normIncoming && normExisting && normIncoming !== normExisting) {
+            toast.error(`Cannot update CNIC: ${editFormData.cnic} is registered to another student ("${studentConflict[0].name}").`);
+            setProcessing(false);
+            return;
+          }
+        }
+      }
+
       // 1. Update Admissions
       const { error: admError } = await supabase
         .from('admissions')

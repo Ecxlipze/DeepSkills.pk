@@ -1,1 +1,1 @@
-export { default, DatePicker, isValidDateString, parseDate, getTodayStr, toDateStr } from './ui/DatePicker';
+export { default, DatePicker, isValidDateString, parseDate, getTodayStr, toDateStr } from './ui/DatePicker.js';

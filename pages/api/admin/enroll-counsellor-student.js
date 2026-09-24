@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from '../../../lib/supabaseServer';
 import { authorizeAdminOperation } from '../../../lib/portalAuthServer';
+import { findCnicConflict } from '../../../lib/cnicServer.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -52,6 +53,17 @@ export default async function handler(req, res) {
   payload.discountAmount = discountAmount;
   payload.finalFee = finalFee;
   payload.firstPayment = firstPayment;
+
+  if (payload.cnic) {
+    const conflictResult = await findCnicConflict(supabase, payload.cnic, {
+      targetRole: 'student',
+      studentName: payload.name,
+      excludeAdmissionId: payload.admissionId || payload.id
+    });
+    if (conflictResult.conflict) {
+      return res.status(400).json({ status: 'error', message: conflictResult.message });
+    }
+  }
 
   try {
     const { data, error } = await supabase.rpc('enroll_counsellor_student', { payload });
