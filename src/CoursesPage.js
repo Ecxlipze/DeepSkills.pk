@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { Link } from "../lib/nextRouterDomCompat";
 import { FaLaptop, FaCode, FaPaintBrush, FaWordpress, FaSearchDollar, FaPenNib } from "react-icons/fa";
-import { getCourseDetailPath, getCourseSlugFromCategory } from './utils/enrollmentNavigation';
+import { getCourseDetailPath, resolveCourseSlug } from './utils/enrollmentNavigation';
 import SmartCoverImage from '../components/next/SmartCoverImage';
 import RegisterButton from './components/RegisterButton';
 
@@ -295,10 +295,8 @@ const CoursesPage = ({ initialCourses = null }) => {
   };
 
   const getPath = (category, title, slug) => {
-    if (slug) return getCourseDetailPath(slug);
-    const catSlug = getCourseSlugFromCategory(category || title || '');
-    if (catSlug) return getCourseDetailPath(catSlug);
-    return '/inquiry';
+    const resolved = resolveCourseSlug({ slug, title, category });
+    return resolved ? getCourseDetailPath(resolved) : '/inquiry';
   };
 
   return (

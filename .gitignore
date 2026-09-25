@@ -58,3 +58,4 @@ scratch/*audit*.json
 /deepskills-cpanel-node
 /deepskills-cpanel-node
 /deepskills-cpanel-24sept
+.claude/launch.json

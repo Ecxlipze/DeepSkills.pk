@@ -51,21 +51,36 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
   const [activeTab, setActiveTab] = useState(() => normalizeTab(initialTab));
   const [loading, setLoading] = useState(true);
 
+  const isStaffContext = location?.pathname?.startsWith('/staff');
+
+  const getFinancePath = (tabKey, query = '') => {
+    const q = query ? (query.startsWith('?') ? query : `?${query}`) : '';
+    if (isStaffContext) {
+      if (tabKey === 'overview') return `/staff/fees?view=overview${q ? `&${q.slice(1)}` : ''}`;
+      if (tabKey === 'students' || tabKey === 'fees') return `/staff/fees${q}`;
+      if (tabKey === 'teachers' || tabKey === 'salaries') return `/staff/salaries${q}`;
+      if (tabKey === 'transactions') return `/staff/transactions${q}`;
+      if (tabKey === 'reports') return `/staff/reports${q}`;
+      return `/staff/fees${q}`;
+    }
+    if (tabKey === 'overview') return `/admin/finance${q}`;
+    if (tabKey === 'students' || tabKey === 'fees') return `/admin/finance/fees${q}`;
+    if (tabKey === 'teachers' || tabKey === 'salaries') return `/admin/finance/salaries${q}`;
+    if (tabKey === 'transactions') return `/admin/finance/transactions${q}`;
+    if (tabKey === 'reports') return `/admin/finance/reports${q}`;
+    return `/admin/finance/${tabKey}${q}`;
+  };
+
   useEffect(() => {
+    const queryView = new URLSearchParams(location?.search || '').get('view');
     const pathSegment = location?.pathname ? location.pathname.split('/')[3] : null;
-    const resolved = initialTab || pathSegment || 'overview';
+    const resolved = queryView || initialTab || pathSegment || 'overview';
     setActiveTab(normalizeTab(resolved));
-  }, [initialTab, location?.pathname]);
+  }, [initialTab, location?.pathname, location?.search]);
 
   const handleTabClick = (tabKey) => {
     setActiveTab(tabKey);
-    if (tabKey === 'overview') {
-      navigate('/admin/finance');
-    } else if (tabKey === 'students') {
-      navigate('/admin/finance/fees');
-    } else if (tabKey === 'teachers') {
-      navigate('/admin/finance/salaries');
-    }
+    navigate(getFinancePath(tabKey));
   };
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -690,7 +705,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
             <Button
               type="button"
               $primary
-              onClick={() => navigate('/admin/finance/transactions')}
+              onClick={() => navigate(getFinancePath('transactions'))}
               title="View Master Ledger"
             >
               <FaHistory /> Master Ledger
@@ -745,7 +760,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
           <Tab
             type="button"
             $active={false}
-            onClick={() => navigate('/admin/finance/transactions')}
+            onClick={() => navigate(getFinancePath('transactions'))}
             title="Open Master Ledger"
           >
             <FaHistory /> Master Ledger <FaChevronRight style={{ fontSize: '0.65rem', opacity: 0.6 }} />
@@ -808,7 +823,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                   label: "Master Ledger",
                   icon: <FaHistory />,
                   primary: false,
-                  onClick: () => navigate('/admin/finance/transactions')
+                  onClick: () => navigate(getFinancePath('transactions'))
                 }
               ]}
             />
@@ -941,7 +956,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                 <FaChevronRight className="qa-arrow" />
               </QuickActionCard>
 
-              <QuickActionCard onClick={() => navigate('/admin/finance/transactions')}>
+              <QuickActionCard onClick={() => navigate(getFinancePath('transactions'))}>
                 <div className="qa-icon" style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8' }}>
                   <FaHistory />
                 </div>
@@ -952,7 +967,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                 <FaChevronRight className="qa-arrow" />
               </QuickActionCard>
 
-              <QuickActionCard onClick={() => navigate('/admin/finance/reports')}>
+              <QuickActionCard onClick={() => navigate(getFinancePath('reports'))}>
                 <div className="qa-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
                   <FaChartBar />
                 </div>
@@ -1917,7 +1932,7 @@ const FinanceManager = ({ initialTab = 'overview' }) => {
                 <div className="modal-actions">
                   <Button
                     type="button"
-                    onClick={() => navigate(`/admin/finance/transactions?search=${encodeURIComponent(selectedTeacherForHistory.name)}`)}
+                    onClick={() => navigate(getFinancePath('transactions', `search=${encodeURIComponent(selectedTeacherForHistory.name)}`))}
                     title="Open in global transaction ledger"
                   >
                     <FaHistory /> Global Ledger

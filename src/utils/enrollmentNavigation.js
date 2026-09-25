@@ -27,6 +27,21 @@ export function getCourseSlugFromCategory(category = '') {
   return '';
 }
 
+/**
+ * Resolves the course-page slug for a course record.
+ *
+ * The title is matched before the category because several courses share a broad
+ * category in the admin `courses` table ("UI/UX Design" is filed under "Graphic
+ * Design"), and matching the category first sends them to the wrong course page.
+ * Rows from the database have a null slug, so this mirrors how getStaticPaths in
+ * pages/courses/[slug].js derives a slug from the title.
+ */
+export function resolveCourseSlug(course = {}) {
+  const { slug = '', title = '', category = '' } = course || {};
+  if (slug && COURSE_DETAIL_PATH_BY_SLUG[slug]) return slug;
+  return getCourseSlugFromCategory(title) || getCourseSlugFromCategory(category) || slug || '';
+}
+
 export function getCourseDetailPath(slug = '') {
   if (!slug) return '/courses';
   return COURSE_DETAIL_PATH_BY_SLUG[slug] || `/courses/${slug}`;

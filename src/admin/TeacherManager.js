@@ -504,7 +504,11 @@ const TeacherManager = ({ basePath }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'teachers', 'full') || canAccess(user?.permissions || {}, 'hr', 'full');
-  const targetBase = basePath || (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin/hr') ? '/admin/hr/teachers' : '/admin/management/teachers');
+  const targetBase = basePath || (
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/staff')
+      ? '/staff/teachers'
+      : (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin/hr') ? '/admin/hr/teachers' : '/admin/management/teachers')
+  );
   const [teachers, setTeachers] = useState([]);
   const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);

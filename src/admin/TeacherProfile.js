@@ -1018,7 +1018,9 @@ const TeacherProfile = ({ teacherId }) => {
       });
     } catch (err) {
       toast.error('Error loading teacher profile: ' + (err.message || ''));
-      if (router.asPath?.includes('/admin/hr/')) {
+      if (router.asPath?.startsWith('/staff/')) {
+        router.push('/staff/teachers');
+      } else if (router.asPath?.includes('/admin/hr/')) {
         router.push('/admin/hr/teachers');
       } else {
         navigate('/admin/management/teachers');
@@ -1287,7 +1289,9 @@ const TeacherProfile = ({ teacherId }) => {
     ((attendanceStats.attendanceRate || 85) * 0.3)
   ));
 
-  const isFromHrSection = router.asPath?.includes('/admin/hr/');
+  const isStaffContext = Boolean(router.asPath?.startsWith('/staff/'));
+  const isFromHrSection = Boolean(router.asPath?.includes('/admin/hr/') || router.asPath?.includes('/staff/hr'));
+  const teachersBackPath = isStaffContext ? '/staff/teachers' : (isFromHrSection ? '/admin/hr/teachers' : '/admin/management/teachers');
 
   if (loading) {
     return (
@@ -1306,7 +1310,7 @@ const TeacherProfile = ({ teacherId }) => {
         <Container style={{ textAlign: 'center', paddingTop: '80px' }}>
           <h2 style={{ color: '#f87171' }}>Teacher Not Found</h2>
           <p style={{ color: '#94a3b8' }}>The requested teacher record does not exist or has been removed.</p>
-          <BackButton onClick={() => router.push(isFromHrSection ? '/admin/hr/teachers' : '/admin/management/teachers')}>
+          <BackButton onClick={() => router.push(teachersBackPath)}>
             <FaArrowLeft /> Back to Directory
           </BackButton>
         </Container>
@@ -1321,20 +1325,30 @@ const TeacherProfile = ({ teacherId }) => {
       <Container>
         {/* BREADCRUMB */}
         <BreadcrumbNav>
-          <span className="crumb" onClick={() => router.push('/admin/dashboard')}>Admin</span>
-          <span className="sep"><FaChevronRight /></span>
-          {isFromHrSection ? (
+          {isStaffContext ? (
             <>
-              <span className="crumb" onClick={() => router.push('/admin/hr/teachers')}>HR Management</span>
+              <span className="crumb" onClick={() => router.push('/staff/dashboard')}>Staff Portal</span>
               <span className="sep"><FaChevronRight /></span>
+              <span className="crumb" onClick={() => router.push('/staff/teachers')}>Faculty Directory</span>
             </>
           ) : (
             <>
-              <span className="crumb" onClick={() => router.push('/admin/management/teachers')}>Management</span>
+              <span className="crumb" onClick={() => router.push('/admin/dashboard')}>Admin</span>
               <span className="sep"><FaChevronRight /></span>
+              {isFromHrSection ? (
+                <>
+                  <span className="crumb" onClick={() => router.push('/admin/hr/teachers')}>HR Management</span>
+                  <span className="sep"><FaChevronRight /></span>
+                </>
+              ) : (
+                <>
+                  <span className="crumb" onClick={() => router.push('/admin/management/teachers')}>Management</span>
+                  <span className="sep"><FaChevronRight /></span>
+                </>
+              )}
+              <span className="crumb" onClick={() => router.push(isFromHrSection ? '/admin/hr/teachers' : '/admin/management/teachers')}>Teachers</span>
             </>
           )}
-          <span className="crumb" onClick={() => router.push(isFromHrSection ? '/admin/hr/teachers' : '/admin/management/teachers')}>Teachers</span>
           <span className="sep"><FaChevronRight /></span>
           <span className="active">{teacher.name}</span>
         </BreadcrumbNav>
@@ -1345,10 +1359,8 @@ const TeacherProfile = ({ teacherId }) => {
           onClick={() => {
             if (typeof window !== 'undefined' && window.history.length > 1) {
               router.back();
-            } else if (isFromHrSection) {
-              router.push('/admin/hr/teachers');
             } else {
-              router.push('/admin/management/teachers');
+              router.push(teachersBackPath);
             }
           }}
         >

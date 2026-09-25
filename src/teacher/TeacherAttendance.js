@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import styled from 'styled-components';
 import { 
   FaCalendarCheck, FaCalendarAlt, FaCheck, FaTimes, FaClock, 
-  FaUserCheck, FaUserTimes, FaExclamationTriangle, FaSearch
+  FaUserCheck, FaUserTimes, FaExclamationTriangle, FaSearch,
+  FaChevronLeft, FaChevronRight, FaCommentAlt, FaUndo
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import DashboardLayout from '../components/DashboardLayout';
@@ -16,6 +17,8 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 22px;
+  max-width: 1200px;
+  margin: 0 auto;
 `;
 
 const Header = styled.div`
@@ -55,7 +58,7 @@ const ControlsBar = styled.div`
 const ControlGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
 
   label {
@@ -64,48 +67,55 @@ const ControlGroup = styled.div`
     text-transform: uppercase;
     color: #888;
     letter-spacing: 0.4px;
-  }
-
-  input[type="date"] {
-    background: #181b22;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    color-scheme: dark;
-    padding: 9px 14px;
-    border-radius: 9px;
-    font-size: 0.92rem;
-    outline: none;
-    cursor: pointer;
-
-    &:focus {
-      border-color: #10b981;
-    }
+    display: block;
+    margin-bottom: 4px;
   }
 
   select {
     background: #181b22;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
-    padding: 9px 14px;
-    border-radius: 9px;
-    font-size: 0.92rem;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
     outline: none;
     cursor: pointer;
 
     &:focus {
-      border-color: #10b981;
+      border-color: #7B1F2E;
     }
+  }
+`;
 
-    option {
-      background: #181b22;
-      color: #fff;
-    }
+const DateNavWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const DateNavBtn = styled.button`
+  background: #181b22;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 `;
 
 const QuickActions = styled.div`
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 
   button {
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -132,6 +142,64 @@ const QuickActions = styled.div`
       border-color: #ef4444;
       color: #ef4444;
     }
+  }
+`;
+
+const FilterSearchRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 16px;
+`;
+
+const SearchBox = styled.div`
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 12px;
+  gap: 8px;
+  min-width: 240px;
+
+  input {
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 0.85rem;
+    width: 100%;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.35);
+    }
+  }
+`;
+
+const FilterPills = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+`;
+
+const FilterPillBtn = styled.button`
+  background: ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.04)'};
+  color: ${props => props.$active ? '#fff' : 'rgba(255,255,255,0.6)'};
+  border: 1px solid ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.08)'};
+  border-radius: 50px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.08)'};
   }
 `;
 
@@ -172,7 +240,7 @@ const StudentListCard = styled.div`
   table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 680px;
+    min-width: 720px;
   }
 
   th, td {
@@ -191,14 +259,7 @@ const StudentListCard = styled.div`
 
   td {
     font-size: 0.92rem;
-    strong {
-      display: block;
-      color: #fff;
-    }
-    small {
-      color: #777;
-      font-family: monospace;
-    }
+    vertical-align: middle;
   }
 
   tr:hover td {
@@ -206,28 +267,45 @@ const StudentListCard = styled.div`
   }
 `;
 
+const HealthPill = styled.span`
+  padding: 3px 8px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  ${({ $rate }) => {
+    if ($rate >= 80) return 'background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);';
+    if ($rate >= 60) return 'background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);';
+    return 'background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);';
+  }}
+`;
+
 const StatusButtonGroup = styled.div`
   display: flex;
   gap: 6px;
+  align-items: center;
 `;
 
 const StatusBtn = styled.button`
   border: 1px solid ${p => {
-    if (p.$active && p.$type === 'present') return '#10b981';
-    if (p.$active && p.$type === 'late') return '#f59e0b';
-    if (p.$active && p.$type === 'absent') return '#ef4444';
+    if (p.$active && p.$type === 'Present') return '#10b981';
+    if (p.$active && p.$type === 'Late') return '#f59e0b';
+    if (p.$active && p.$type === 'Absent') return '#ef4444';
     return 'rgba(255, 255, 255, 0.08)';
   }};
   background: ${p => {
-    if (p.$active && p.$type === 'present') return 'rgba(16, 185, 129, 0.2)';
-    if (p.$active && p.$type === 'late') return 'rgba(245, 158, 11, 0.2)';
-    if (p.$active && p.$type === 'absent') return 'rgba(239, 68, 68, 0.2)';
+    if (p.$active && p.$type === 'Present') return 'rgba(16, 185, 129, 0.2)';
+    if (p.$active && p.$type === 'Late') return 'rgba(245, 158, 11, 0.2)';
+    if (p.$active && p.$type === 'Absent') return 'rgba(239, 68, 68, 0.2)';
     return 'rgba(255, 255, 255, 0.03)';
   }};
   color: ${p => {
-    if (p.$active && p.$type === 'present') return '#10b981';
-    if (p.$active && p.$type === 'late') return '#f59e0b';
-    if (p.$active && p.$type === 'absent') return '#ef4444';
+    if (p.$active && p.$type === 'Present') return '#10b981';
+    if (p.$active && p.$type === 'Late') return '#f59e0b';
+    if (p.$active && p.$type === 'Absent') return '#ef4444';
     return '#888';
   }};
   padding: 6px 14px;
@@ -246,6 +324,24 @@ const StatusBtn = styled.button`
   }
 `;
 
+const RemarkTag = styled.button`
+  background: none;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    border-color: #ff4d6d;
+    color: #fff;
+  }
+`;
+
 export default function TeacherAttendance() {
   const { user } = useAuth();
   const [teacher, setTeacher] = useState(null);
@@ -254,7 +350,12 @@ export default function TeacherAttendance() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [students, setStudents] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState({});
+  const [historicalAttendance, setHistoricalAttendance] = useState({}); // student_id -> { total, presents }
   const [loading, setLoading] = useState(true);
+
+  // Search & filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Present' | 'Late' | 'Absent' | 'Unmarked'
 
   // 1. Load Teacher info and assigned batches
   useEffect(() => {
@@ -280,12 +381,12 @@ export default function TeacherAttendance() {
     fetchTeacher();
   }, [user]);
 
-  // 2. Load students and today's attendance for the selected batch
+  // 2. Load students, historical rates, and today's attendance
   const loadBatchAttendance = useCallback(async () => {
     if (!selectedBatch?.batch_name) return;
 
     try {
-      // Fetch batch students
+      // Fetch active batch students
       const { data: studs, error: studErr } = await supabase
         .from('admissions')
         .select('id, name, cnic, course, batch')
@@ -310,6 +411,24 @@ export default function TeacherAttendance() {
         });
         setAttendanceRecords(map);
       }
+
+      // Fetch historical attendance stats for all batch students to calculate overall attendance rates
+      const { data: histData } = await supabase
+        .from('attendance')
+        .select('student_id, student_cnic, status')
+        .or(`batch_id.eq.${selectedBatch.id},batch_name.eq.${selectedBatch.batch_name}`);
+
+      if (histData) {
+        const counts = {};
+        histData.forEach(row => {
+          const key = row.student_id || row.student_cnic;
+          if (!counts[key]) counts[key] = { total: 0, present: 0 };
+          counts[key].total += 1;
+          const st = (row.status || '').toLowerCase();
+          if (st === 'present' || st === 'late') counts[key].present += 1;
+        });
+        setHistoricalAttendance(counts);
+      }
     } catch (err) {
       console.error('Error fetching batch attendance:', err);
     }
@@ -319,8 +438,21 @@ export default function TeacherAttendance() {
     loadBatchAttendance();
   }, [loadBatchAttendance]);
 
+  // Quick date jump
+  const shiftDate = (days) => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + days);
+    const dateStr = current.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (dateStr <= todayStr) {
+      setSelectedDate(dateStr);
+    } else {
+      toast.error("Cannot mark attendance for future dates.");
+    }
+  };
+
   // 3. Mark or Update Attendance
-  const markStatus = async (student, status) => {
+  const markStatus = async (student, status, reason = null) => {
     const dayOfWeek = new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' });
     const existing = attendanceRecords[student.id] || attendanceRecords[student.cnic];
 
@@ -332,12 +464,16 @@ export default function TeacherAttendance() {
       batch_name: selectedBatch.batch_name,
       course: selectedBatch.course,
       date: selectedDate,
-      status,
+      status: status, // Capitalized: 'Present', 'Late', 'Absent'
       marked_by: teacher?.name || user?.name || 'Teacher',
       marked_at: new Date().toISOString(),
       day_of_week: dayOfWeek,
       teacher_id: teacher?.id || null
     };
+
+    if (reason !== null) {
+      payload.override_reason = reason;
+    }
 
     // Optimistic UI update
     setAttendanceRecords(prev => ({
@@ -363,11 +499,11 @@ export default function TeacherAttendance() {
           setAttendanceRecords(prev => ({ ...prev, [student.id]: data }));
         }
       }
-      toast.success(`${student.name}: ${status.toUpperCase()}`, { id: `att-${student.id}`, duration: 1500 });
+      toast.success(`${student.name}: ${status}`, { id: `att-${student.id}`, duration: 1200 });
     } catch (err) {
       toast.error('Failed to update attendance');
       console.error(err);
-      loadBatchAttendance(); // Revert on failure
+      loadBatchAttendance();
     }
   };
 
@@ -384,7 +520,7 @@ export default function TeacherAttendance() {
       batch_name: selectedBatch.batch_name,
       course: selectedBatch.course,
       date: selectedDate,
-      status,
+      status: status,
       marked_by: teacher?.name || user?.name || 'Teacher',
       marked_at: new Date().toISOString(),
       day_of_week: dayOfWeek,
@@ -392,20 +528,18 @@ export default function TeacherAttendance() {
     }));
 
     try {
-      // Upsert by deleting existing for this date/batch and re-inserting
       await supabase
         .from('attendance')
         .delete()
         .eq('date', selectedDate)
         .or(`batch_id.eq.${selectedBatch.id},batch_name.eq.${selectedBatch.batch_name}`);
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('attendance')
-        .insert(rows)
-        .select();
+        .insert(rows);
 
       if (error) throw error;
-      toast.success(`Marked all as ${status.toUpperCase()}`);
+      toast.success(`Marked all ${students.length} students as ${status}!`);
       loadBatchAttendance();
     } catch (err) {
       toast.error('Batch attendance update failed');
@@ -413,7 +547,7 @@ export default function TeacherAttendance() {
     }
   };
 
-  // 5. Calculations
+  // 5. Calculations (Case-Insensitive)
   const stats = useMemo(() => {
     let present = 0;
     let late = 0;
@@ -422,9 +556,10 @@ export default function TeacherAttendance() {
 
     students.forEach(s => {
       const record = attendanceRecords[s.id] || attendanceRecords[s.cnic];
-      if (record?.status === 'present') present++;
-      else if (record?.status === 'late') late++;
-      else if (record?.status === 'absent') absent++;
+      const st = (record?.status || '').toLowerCase();
+      if (st === 'present') present++;
+      else if (st === 'late') late++;
+      else if (st === 'absent') absent++;
       else unmarked++;
     });
 
@@ -432,30 +567,46 @@ export default function TeacherAttendance() {
     return { present, late, absent, unmarked, total: students.length, rate };
   }, [students, attendanceRecords]);
 
+  // Filtered students
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => {
+      const record = attendanceRecords[s.id] || attendanceRecords[s.cnic];
+      const st = (record?.status || 'unmarked').toLowerCase();
+
+      // Status filter
+      if (statusFilter === 'Present' && st !== 'present') return false;
+      if (statusFilter === 'Late' && st !== 'late') return false;
+      if (statusFilter === 'Absent' && st !== 'absent') return false;
+      if (statusFilter === 'Unmarked' && st !== 'unmarked' && record?.status) return false;
+
+      // Keyword search
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchName = s.name?.toLowerCase().includes(q);
+        const matchCnic = s.cnic?.toLowerCase().includes(q);
+        return matchName || matchCnic;
+      }
+      return true;
+    });
+  }, [students, attendanceRecords, statusFilter, searchTerm]);
+
+  const todayString = new Date().toISOString().split('T')[0];
+
   return (
     <DashboardLayout>
       <Container>
         <Header>
           <div>
             <h1><FaCalendarCheck /> Attendance Register</h1>
-            <p>Track, mark, and override daily class attendance for your assigned batches.</p>
+            <p>Track, mark, and override daily class attendance for your assigned student cohorts.</p>
           </div>
         </Header>
 
         <ControlsBar>
           <ControlGroup>
-            <div>
-              <label>Select Date</label>
-              <DatePicker 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)} 
-                max={new Date().toISOString().split('T')[0]}
-                aria-label="Select Date"
-              />
-            </div>
             {batches.length > 0 && (
               <div>
-                <label>Batch</label>
+                <label>Active Batch</label>
                 <select 
                   value={selectedBatch?.id || ''} 
                   onChange={(e) => {
@@ -464,34 +615,66 @@ export default function TeacherAttendance() {
                   }}
                 >
                   {batches.map(b => (
-                    <option key={b.id} value={b.id}>{b.batch_name}</option>
+                    <option key={b.id} value={b.id}>
+                      {b.batch_name} — {b.course}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
+
+            <div>
+              <label>Attendance Date</label>
+              <DateNavWrap>
+                <DateNavBtn type="button" onClick={() => shiftDate(-1)} title="Previous Day">
+                  <FaChevronLeft size={10} />
+                </DateNavBtn>
+                <DatePicker 
+                  value={selectedDate} 
+                  onChange={(e) => setSelectedDate(e.target.value)} 
+                  max={todayString}
+                  aria-label="Select Date"
+                />
+                <DateNavBtn 
+                  type="button" 
+                  onClick={() => shiftDate(1)} 
+                  disabled={selectedDate === todayString}
+                  title="Next Day"
+                  style={{ opacity: selectedDate === todayString ? 0.4 : 1 }}
+                >
+                  <FaChevronRight size={10} />
+                </DateNavBtn>
+                {selectedDate !== todayString && (
+                  <DateNavBtn type="button" onClick={() => setSelectedDate(todayString)}>
+                    Today
+                  </DateNavBtn>
+                )}
+              </DateNavWrap>
+            </div>
           </ControlGroup>
 
           <QuickActions>
-            <button className="present" onClick={() => markAll('present')}>
+            <button className="present" onClick={() => markAll('Present')}>
               <FaUserCheck /> Mark All Present
             </button>
-            <button className="absent" onClick={() => markAll('absent')}>
+            <button className="absent" onClick={() => markAll('Absent')}>
               <FaUserTimes /> Mark All Absent
             </button>
           </QuickActions>
         </ControlsBar>
 
+        {/* Stats Row */}
         <StatsRow>
           <StatMini>
             <small>Total Students</small>
             <strong>{stats.total}</strong>
           </StatMini>
           <StatMini $color="rgba(16, 185, 129, 0.3)" $textColor="#10b981">
-            <small>Present</small>
+            <small>Present Today</small>
             <strong>{stats.present}</strong>
           </StatMini>
           <StatMini $color="rgba(245, 158, 11, 0.3)" $textColor="#f59e0b">
-            <small>Late</small>
+            <small>Late Arrivals</small>
             <strong>{stats.late}</strong>
           </StatMini>
           <StatMini $color="rgba(239, 68, 68, 0.3)" $textColor="#ef4444">
@@ -500,65 +683,135 @@ export default function TeacherAttendance() {
           </StatMini>
           <StatMini>
             <small>Attendance Rate</small>
-            <strong style={{ color: stats.rate >= 75 ? '#10b981' : stats.rate >= 50 ? '#f59e0b' : '#ef4444' }}>
+            <strong style={{ color: stats.rate >= 80 ? '#10b981' : stats.rate >= 60 ? '#f59e0b' : '#ef4444' }}>
               {stats.rate}%
             </strong>
           </StatMini>
         </StatsRow>
 
+        {/* Search & Filter Bar */}
+        <FilterSearchRow>
+          <SearchBox>
+            <FaSearch size={12} color="rgba(255,255,255,0.4)" />
+            <input 
+              type="text" 
+              placeholder="Search students by name or CNIC..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </SearchBox>
+
+          <FilterPills>
+            {['All', 'Present', 'Late', 'Absent', 'Unmarked'].map(f => (
+              <FilterPillBtn
+                key={f}
+                $active={statusFilter === f}
+                onClick={() => setStatusFilter(f)}
+              >
+                {f} {f === 'All' ? `(${students.length})` :
+                     f === 'Present' ? `(${stats.present})` :
+                     f === 'Late' ? `(${stats.late})` :
+                     f === 'Absent' ? `(${stats.absent})` :
+                     `(${stats.unmarked})`}
+              </FilterPillBtn>
+            ))}
+          </FilterPills>
+        </FilterSearchRow>
+
+        {/* Students Register Table */}
         <StudentListCard>
           <table>
             <thead>
               <tr>
                 <th>Student</th>
                 <th>CNIC</th>
+                <th>Course Attendance Health</th>
                 <th>Mark Status</th>
+                <th>Remarks / Reason</th>
               </tr>
             </thead>
             <tbody>
-              {students.map(student => {
+              {filteredStudents.map(student => {
                 const rec = attendanceRecords[student.id] || attendanceRecords[student.cnic];
-                const currentStatus = rec?.status;
+                const rawStatus = (rec?.status || '').toLowerCase();
+                
+                // Historical rate for this student
+                const hist = historicalAttendance[student.id] || historicalAttendance[student.cnic] || { total: 0, present: 0 };
+                const studentRate = hist.total > 0 ? Math.round((hist.present / hist.total) * 100) : 100;
+
                 return (
                   <tr key={student.id}>
                     <td>
-                      <strong>{student.name}</strong>
+                      <strong style={{ color: '#fff' }}>{student.name}</strong>
                     </td>
                     <td>
-                      <small>{student.cnic}</small>
+                      <small style={{ color: '#888', fontFamily: 'monospace' }}>{student.cnic}</small>
+                    </td>
+                    <td>
+                      <HealthPill $rate={studentRate}>
+                        {studentRate}% ({hist.present}/{hist.total} classes)
+                      </HealthPill>
                     </td>
                     <td>
                       <StatusButtonGroup>
                         <StatusBtn 
-                          $type="present" 
-                          $active={currentStatus === 'present'}
-                          onClick={() => markStatus(student, 'present')}
+                          $type="Present" 
+                          $active={rawStatus === 'present'}
+                          onClick={() => markStatus(student, 'Present')}
                         >
                           <FaCheck /> Present
                         </StatusBtn>
                         <StatusBtn 
-                          $type="late" 
-                          $active={currentStatus === 'late'}
-                          onClick={() => markStatus(student, 'late')}
+                          $type="Late" 
+                          $active={rawStatus === 'late'}
+                          onClick={() => markStatus(student, 'Late')}
                         >
                           <FaClock /> Late
                         </StatusBtn>
                         <StatusBtn 
-                          $type="absent" 
-                          $active={currentStatus === 'absent'}
-                          onClick={() => markStatus(student, 'absent')}
+                          $type="Absent" 
+                          $active={rawStatus === 'absent'}
+                          onClick={() => markStatus(student, 'Absent')}
                         >
                           <FaTimes /> Absent
                         </StatusBtn>
                       </StatusButtonGroup>
                     </td>
+                    <td>
+                      {rec?.override_reason ? (
+                        <span 
+                          onClick={() => {
+                            const newReason = prompt("Edit remarks for " + student.name + ":", rec.override_reason);
+                            if (newReason !== null) {
+                              markStatus(student, rec.status || 'Present', newReason.trim());
+                            }
+                          }}
+                          style={{ color: '#ff8a99', fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Click to edit reason"
+                        >
+                          <FaCommentAlt size={10} /> {rec.override_reason}
+                        </span>
+                      ) : (
+                        <RemarkTag
+                          onClick={() => {
+                            const reason = prompt("Add note / reason for " + student.name + " (e.g. sick leave, traffic delay):");
+                            if (reason) {
+                              markStatus(student, rec?.status || 'Present', reason.trim());
+                            }
+                          }}
+                        >
+                          + Add Note
+                        </RemarkTag>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
-              {!loading && students.length === 0 && (
+
+              {!loading && filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan="3" style={{ textAlign: 'center', padding: '40px', color: '#777' }}>
-                    No students currently assigned to this batch.
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#777' }}>
+                    No students match the selected filter.
                   </td>
                 </tr>
               )}

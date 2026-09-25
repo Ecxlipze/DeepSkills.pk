@@ -8,7 +8,7 @@ import {
   FaExclamationCircle, FaUserPlus, FaComments,
   FaWallet, FaUserFriends, FaGraduationCap, FaCalendarCheck, FaGift,
   FaUserGraduate, FaChalkboardTeacher, FaMoneyBillWave, FaBullhorn, FaIdBadge,
-  FaClock
+  FaClock, FaBookOpen
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -528,6 +528,7 @@ export const DashboardLayout = ({ children, navItems }) => {
         { label: 'Dashboard', path: '/teacher/dashboard', icon: <FaHome /> },
         { section: 'TEACHING' },
         { label: 'My Students', path: '/teacher/students', icon: <FaUserGraduate /> },
+        { label: 'Syllabus & Lectures', path: '/teacher/syllabus', icon: <FaBookOpen /> },
         { label: 'Attendance', path: '/teacher/attendance', icon: <FaCalendarCheck /> },
         { 
           label: 'Tasks', 
@@ -574,6 +575,7 @@ export const DashboardLayout = ({ children, navItems }) => {
     const p = location.pathname;
     if (p.includes('/dashboard')) return 'Overview';
     if (p.includes('/tasks')) return 'Tasks & Assignments';
+    if (p.includes('/syllabus')) return 'Syllabus & Lectures';
     if (p.includes('/progress')) return 'Course Progress';
     if (p.includes('/attendance')) return 'Attendance';
     if (p.includes('/results')) return 'Exam Results';

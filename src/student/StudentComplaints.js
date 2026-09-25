@@ -2,45 +2,120 @@ import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FaPlus, FaPaperPlane, FaTimes, FaInbox, FaUndo
+  FaPlus, FaPaperPlane, FaTimes, FaInbox, FaUndo,
+  FaShieldAlt, FaUserGraduate, FaChalkboardTeacher,
+  FaClock, FaCheckCircle, FaExclamationCircle, FaSearch,
+  FaInfoCircle
 } from 'react-icons/fa';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useComplaints } from '../context/ComplaintsContext';
+import toast from 'react-hot-toast';
 
 const Container = styled.div`
   display: flex;
-  height: calc(100vh - 100px);
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+`;
+
+// SLA Banner
+const SlaBanner = styled.div`
+  background: linear-gradient(135deg, rgba(123, 31, 46, 0.2) 0%, rgba(20, 20, 25, 0.9) 100%);
+  border: 1px solid rgba(123, 31, 46, 0.35);
+  border-radius: 12px;
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 15px;
+  color: #fff;
+`;
+
+const SlaContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .icon-wrap {
+    background: rgba(123, 31, 46, 0.4);
+    color: #ff4d6d;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+
+  .text {
+    h4 {
+      margin: 0 0 4px 0;
+      font-size: 1rem;
+      color: #fff;
+    }
+    p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+  }
+`;
+
+const SlaBadge = styled.div`
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+// Ticket Desk Frame
+const DeskFrame = styled.div`
+  display: flex;
+  height: calc(100vh - 240px);
+  min-height: 580px;
   background: #000;
   color: #fff;
   overflow: hidden;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 
   @media (max-width: 992px) {
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 100px);
+    min-height: calc(100vh - 180px);
   }
 `;
 
 // --- LEFT COLUMN ---
 const Sidebar = styled.div`
-  width: 320px;
+  width: 360px;
   background: #0a0a0a;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
 
   @media (max-width: 992px) {
     width: 100%;
-    max-height: 400px;
+    max-height: 380px;
   }
 `;
 
 const SidebarHeader = styled.div`
-  padding: 25px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 `;
 
 const NewTicketBtn = styled.button`
@@ -49,18 +124,62 @@ const NewTicketBtn = styled.button`
   background: #7B1F2E;
   color: #fff;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 600;
+  font-size: 0.92rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 
   &:hover {
-    background: #9b283b;
-    transform: translateY(-2px);
+    background: #9c273a;
+  }
+`;
+
+const SearchBox = styled.div`
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 7px 12px;
+  gap: 8px;
+
+  input {
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 0.85rem;
+    width: 100%;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  }
+`;
+
+const FilterPills = styled.div`
+  display: flex;
+  gap: 6px;
+`;
+
+const FilterPillBtn = styled.button`
+  background: ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.04)'};
+  color: ${props => props.$active ? '#fff' : 'rgba(255,255,255,0.6)'};
+  border: 1px solid ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.08)'};
+  border-radius: 50px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.$active ? '#7B1F2E' : 'rgba(255,255,255,0.08)'};
   }
 `;
 
@@ -69,9 +188,7 @@ const TicketList = styled.div`
   overflow-y: auto;
   padding: 10px;
 
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
+  &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
@@ -79,17 +196,19 @@ const TicketList = styled.div`
 `;
 
 const TicketCard = styled.div`
-  padding: 15px;
-  border-radius: 12px;
-  margin-bottom: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  margin-bottom: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  background: ${props => props.$active ? 'rgba(123, 31, 46, 0.15)' : 'transparent'};
-  border-left: 4px solid ${props => props.$active ? '#7B1F2E' : 'transparent'};
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  background: ${props => props.$active ? 'rgba(123, 31, 46, 0.18)' : 'rgba(255, 255, 255, 0.02)'};
+  border-left: 3px solid ${props => props.$active ? '#ff4d6d' : 'transparent'};
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 
   &:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.05);
   }
 `;
 
@@ -97,57 +216,48 @@ const TicketTop = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 `;
 
 const Subject = styled.h4`
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  max-width: 200px;
 `;
 
 const TimeLabel = styled.span`
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.45);
 `;
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 `;
 
 const Pill = styled.span`
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
   background: ${props => props.bg || '#333'};
-  color: #fff;
+  color: ${props => props.color || '#fff'};
 `;
 
 const MessagePreview = styled.p`
   margin: 0;
-  font-size: 0.85rem;
-  color: #888;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-`;
-
-const UnreadDot = styled.div`
-  width: 8px;
-  height: 8px;
-  background: #007bff;
-  border-radius: 50%;
-  position: absolute;
-  top: 15px;
-  right: 15px;
 `;
 
 // --- RIGHT COLUMN ---
@@ -159,8 +269,8 @@ const ChatPanel = styled.div`
 `;
 
 const ChatHeader = styled.div`
-  padding: 20px 30px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -170,30 +280,32 @@ const ChatHeader = styled.div`
 const HeaderInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 `;
 
-const HeaderSubject = styled.h2`
+const HeaderSubject = styled.h3`
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  color: #fff;
 `;
 
 const AssignedTo = styled.span`
-  font-size: 0.85rem;
-  color: #888;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 `;
 
 const ChatBody = styled.div`
   flex: 1;
-  padding: 30px;
+  padding: 24px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
+  &::-webkit-scrollbar { width: 5px; }
   &::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
@@ -201,42 +313,59 @@ const ChatBody = styled.div`
 `;
 
 const MessageBubble = styled.div`
-  max-width: 70%;
+  max-width: 75%;
   align-self: ${props => props.isOwn ? 'flex-end' : 'flex-start'};
   display: flex;
   flex-direction: column;
   gap: 5px;
 `;
 
+const BubbleHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  justify-content: ${props => props.isOwn ? 'flex-end' : 'flex-start'};
+`;
+
 const BubbleContent = styled.div`
-  padding: 12px 16px;
-  border-radius: 15px;
-  font-size: 0.95rem;
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-size: 0.92rem;
   line-height: 1.5;
-  background: ${props => props.isOwn ? '#7B1F2E' : '#1a1a1a'};
-  border-bottom-right-radius: ${props => props.isOwn ? '2px' : '15px'};
-  border-bottom-left-radius: ${props => props.isOwn ? '15px' : '2px'};
+  background: ${props => props.isOwn ? '#7B1F2E' : '#161b22'};
+  border: 1px solid ${props => props.isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(255, 255, 255, 0.08)'};
+  border-bottom-right-radius: ${props => props.isOwn ? '2px' : '14px'};
+  border-bottom-left-radius: ${props => props.isOwn ? '14px' : '2px'};
+  color: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
 `;
 
 const BubbleMeta = styled.div`
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
   text-align: ${props => props.isOwn ? 'right' : 'left'};
 `;
 
 const InputArea = styled.div`
-  padding: 20px 30px;
+  padding: 16px 24px;
   background: #0a0a0a;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 `;
 
 const InputRow = styled.div`
   display: flex;
-  gap: 15px;
-  background: #1a1a1a;
-  padding: 8px 8px 8px 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 12px;
+  background: #141414;
+  padding: 6px 6px 6px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  &:focus-within {
+    border-color: #7B1F2E;
+  }
 `;
 
 const ChatInput = styled.input`
@@ -245,29 +374,69 @@ const ChatInput = styled.input`
   border: none;
   color: #fff;
   outline: none;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
 `;
 
 const SendBtn = styled.button`
   background: #7B1F2E;
   color: #fff;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 8px 18px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
   transition: all 0.2s;
 
   &:hover {
-    background: #9b283b;
+    background: #9c273a;
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
+`;
+
+const ActionBtn = styled.button`
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+`;
+
+const EmptyState = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  padding: 40px;
+
+  h3 { color: #fff; margin: 0; }
+  p { margin: 0; font-size: 0.88rem; max-width: 320px; }
 `;
 
 // --- MODAL ---
@@ -284,81 +453,103 @@ const ModalOverlay = styled(motion.div)`
 `;
 
 const ModalContent = styled(motion.div)`
-  background: #0f0f0f;
+  background: #111;
   width: 100%;
-  max-width: 500px;
-  border-radius: 20px;
-  border: 1px solid rgba(123, 31, 46, 0.3);
-  padding: 30px;
+  max-width: 520px;
+  border-radius: 16px;
+  border: 1px solid rgba(123, 31, 46, 0.4);
+  padding: 26px;
   position: relative;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+`;
+
+const ChipContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+`;
+
+const CategoryChip = styled.button`
+  background: ${props => props.$selected ? 'rgba(123, 31, 46, 0.3)' : 'rgba(255, 255, 255, 0.05)'};
+  color: ${props => props.$selected ? '#ff4d6d' : 'rgba(255, 255, 255, 0.7)'};
+  border: 1px solid ${props => props.$selected ? '#ff4d6d' : 'rgba(255, 255, 255, 0.1)'};
+  padding: 6px 12px;
+  border-radius: 50px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(123, 31, 46, 0.2);
+    color: #fff;
+  }
 `;
 
 const FormGroup = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+
+  label {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+
+  input, select, textarea {
+    padding: 10px 14px;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+
+    &:focus {
+      border-color: #7B1F2E;
+    }
+  }
+
+  textarea {
+    min-height: 90px;
+    resize: vertical;
+  }
 `;
 
-const ModalLabel = styled.label`
-  font-size: 0.9rem;
-  color: #888;
-`;
-
-const ModalInput = styled.input`
+const SubmitBtn = styled.button`
   padding: 12px;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 10px;
-  color: #fff;
-  outline: none;
-  &:focus { border-color: #7B1F2E; }
-`;
-
-const ModalSelect = styled.select`
-  padding: 12px;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 10px;
-  color: #fff;
-  outline: none;
-  &:focus { border-color: #7B1F2E; }
-`;
-
-const ModalTextarea = styled.textarea`
-  padding: 12px;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 10px;
-  color: #fff;
-  outline: none;
-  min-height: 100px;
-  resize: vertical;
-  &:focus { border-color: #7B1F2E; }
-`;
-
-const CloseBtn = styled.button`
   background: #7B1F2E;
   color: #fff;
   border: none;
-  padding: 8px 16px;
   border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.85rem;
   font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+
+  &:hover {
+    background: #9c273a;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
-const EmptyState = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  color: #444;
-  text-align: center;
-  padding: 40px;
-`;
+const CATEGORY_CHIPS = [
+  { id: 'Academic', label: '🎓 Academic / Syllabus' },
+  { id: 'Attendance', label: '📋 Attendance Correction' },
+  { id: 'Fee', label: '💼 Fee / Installments' },
+  { id: 'Timetable', label: '⏰ Batch / Timetable' },
+  { id: 'Technical', label: '🐞 Portal / Tech Issue' },
+  { id: 'Behaviour', label: '🤝 Student Conduct' }
+];
 
 const StudentComplaints = () => {
   useAuth();
@@ -368,6 +559,8 @@ const StudentComplaints = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filter, setFilter] = useState('All'); // 'All' | 'Active' | 'Closed'
+  const [searchTerm, setSearchTerm] = useState('');
   
   const chatBodyRef = useRef(null);
 
@@ -387,8 +580,32 @@ const StudentComplaints = () => {
     }
   }, [activeTicket?.messages, activeId]);
 
+  // Set default active ticket if none selected
+  useEffect(() => {
+    if (!activeId && complaints.length > 0) {
+      setActiveId(complaints[0].id);
+    }
+  }, [complaints, activeId]);
+
+  const handleSelectCategory = (cat) => {
+    setFormData(prev => ({
+      ...prev,
+      category: cat,
+      send_to: (cat === 'Fee' || cat === 'Technical') ? 'Admin' : 'My Batch Teacher'
+    }));
+  };
+
   const handleNewComplaint = async (e) => {
     e.preventDefault();
+    if (!formData.subject.trim()) {
+      toast.error('Please enter a brief subject.');
+      return;
+    }
+    if (!formData.message.trim()) {
+      toast.error('Please describe your grievance or request.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { message, ...complaintData } = formData;
@@ -402,8 +619,9 @@ const StudentComplaints = () => {
         send_to: 'My Batch Teacher',
         message: ''
       });
+      toast.success("Grievance ticket created successfully! Expected SLA: 24-48 hours.");
     } catch (err) {
-      alert("Failed to create complaint. Please try again.");
+      toast.error(err?.message || "Failed to create complaint. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -414,12 +632,14 @@ const StudentComplaints = () => {
     try {
       await sendMessage(activeId, newMessage);
       setNewMessage('');
+      toast.success("Message sent!");
     } catch (err) {
-      alert("Failed to send message.");
+      toast.error("Failed to send message. Please retry.");
     }
   };
 
   const formatTime = (dateStr) => {
+    if (!dateStr) return 'Just now';
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now - date;
@@ -432,7 +652,7 @@ const StudentComplaints = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Open': return '#28a745';
+      case 'Open': return '#10B981';
       case 'Pending Reply': return '#ffc107';
       case 'Closed': return '#6c757d';
       default: return '#333';
@@ -441,210 +661,304 @@ const StudentComplaints = () => {
 
   const getCategoryColor = (cat) => {
     switch (cat) {
-      case 'Academic': return '#007bff';
+      case 'Academic': return '#378ADD';
       case 'Fee': return '#fd7e14';
       case 'Attendance': return '#20c997';
+      case 'Technical': return '#e83e8c';
       case 'Behaviour': return '#6f42c1';
       default: return '#333';
     }
   };
 
+  // Filtered tickets
+  const filteredComplaints = complaints.filter(t => {
+    if (filter === 'Active' && t.status === 'Closed') return false;
+    if (filter === 'Closed' && t.status !== 'Closed') return false;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const matchSub = t.subject?.toLowerCase().includes(q);
+      const matchCat = t.category?.toLowerCase().includes(q);
+      return matchSub || matchCat;
+    }
+    return true;
+  });
+
   return (
     <DashboardLayout>
       <Container>
-        <Sidebar>
-          <SidebarHeader>
-            <NewTicketBtn onClick={() => setIsModalOpen(true)}>
-              <FaPlus /> New Complaint
-            </NewTicketBtn>
-          </SidebarHeader>
-          <TicketList>
-            {complaints.map(ticket => (
-              <TicketCard 
-                key={ticket.id} 
-                $active={activeId === ticket.id}
-                onClick={() => setActiveId(ticket.id)}
-              >
-                <TicketTop>
-                  <Subject title={ticket.subject}>{ticket.subject}</Subject>
-                  <TimeLabel>{formatTime(ticket.updated_at)}</TimeLabel>
-                </TicketTop>
-                <BadgeRow>
-                  <Pill bg={getCategoryColor(ticket.category)}>{ticket.category}</Pill>
-                  <Pill bg={ticket.priority === 'Urgent' ? '#7B1F2E' : '#333'}>{ticket.priority}</Pill>
-                  <Pill bg={getStatusColor(ticket.status)}>{ticket.status}</Pill>
-                </BadgeRow>
-                <MessagePreview>
-                  {ticket.messages && ticket.messages.length > 0 
-                    ? ticket.messages[ticket.messages.length - 1].text 
-                    : 'No messages yet'}
-                </MessagePreview>
-                {ticket.messages && ticket.messages.length > 0 && 
-                 ticket.messages[ticket.messages.length - 1].sender_role !== 'student' && 
-                 ticket.status !== 'Closed' && <UnreadDot />}
-              </TicketCard>
-            ))}
-            {complaints.length === 0 && !loading && (
-              <EmptyState style={{ fontSize: '0.9rem' }}>
-                <FaInbox size={30} />
-                <p>No complaints yet</p>
+        
+        {/* Support SLA & Resolution Commitment Banner */}
+        <SlaBanner>
+          <SlaContent>
+            <div className="icon-wrap">
+              <FaShieldAlt />
+            </div>
+            <div className="text">
+              <h4>DeepSkills Student Support Desk & Grievance SLA</h4>
+              <p>Official Academic & Administrative inquiry desk. Guaranteed staff review within 24 to 48 hours.</p>
+            </div>
+          </SlaContent>
+          <SlaBadge>
+            <FaClock size={11} /> SLA: 24–48 Hours &bull; Mon–Sat 10 AM – 6 PM
+          </SlaBadge>
+        </SlaBanner>
+
+        <DeskFrame>
+          <Sidebar>
+            <SidebarHeader>
+              <NewTicketBtn onClick={() => setIsModalOpen(true)}>
+                <FaPlus size={12} /> Raise Support Ticket
+              </NewTicketBtn>
+
+              <SearchBox>
+                <FaSearch size={12} color="rgba(255,255,255,0.3)" />
+                <input 
+                  type="text" 
+                  placeholder="Search your tickets..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </SearchBox>
+
+              <FilterPills>
+                {['All', 'Active', 'Closed'].map(f => (
+                  <FilterPillBtn 
+                    key={f}
+                    $active={filter === f}
+                    onClick={() => setFilter(f)}
+                  >
+                    {f}
+                  </FilterPillBtn>
+                ))}
+              </FilterPills>
+            </SidebarHeader>
+
+            <TicketList>
+              {filteredComplaints.map(ticket => (
+                <TicketCard 
+                  key={ticket.id} 
+                  $active={activeId === ticket.id}
+                  onClick={() => setActiveId(ticket.id)}
+                >
+                  <TicketTop>
+                    <Subject title={ticket.subject}>{ticket.subject}</Subject>
+                    <TimeLabel>{formatTime(ticket.updated_at)}</TimeLabel>
+                  </TicketTop>
+                  
+                  <BadgeRow>
+                    <Pill bg={getCategoryColor(ticket.category)}>{ticket.category}</Pill>
+                    {ticket.priority === 'Urgent' && (
+                      <Pill bg="rgba(255, 77, 109, 0.2)" color="#ff4d6d">Urgent</Pill>
+                    )}
+                    <Pill bg={getStatusColor(ticket.status)}>{ticket.status}</Pill>
+                  </BadgeRow>
+                  
+                  <MessagePreview>
+                    {ticket.messages && ticket.messages.length > 0 
+                      ? ticket.messages[ticket.messages.length - 1].text 
+                      : 'No messages yet'}
+                  </MessagePreview>
+                </TicketCard>
+              ))}
+
+              {filteredComplaints.length === 0 && !loading && (
+                <EmptyState style={{ fontSize: '0.88rem' }}>
+                  <FaInbox size={28} />
+                  <p>No support tickets match your filter.</p>
+                </EmptyState>
+              )}
+            </TicketList>
+          </Sidebar>
+
+          <ChatPanel>
+            {activeTicket ? (
+              <>
+                <ChatHeader>
+                  <HeaderInfo>
+                    <HeaderSubject>{activeTicket.subject}</HeaderSubject>
+                    <AssignedTo>
+                      <FaChalkboardTeacher size={12} /> Routed To:{' '}
+                      <strong style={{ color: '#fff' }}>
+                        {activeTicket.send_to === 'Admin' ? 'Administrative Directorate' : 'Batch Faculty / Academic Coordinator'}
+                      </strong>
+                    </AssignedTo>
+                  </HeaderInfo>
+
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <Pill bg={getStatusColor(activeTicket.status)} style={{ fontSize: '0.78rem', padding: '5px 12px' }}>
+                      {activeTicket.status}
+                    </Pill>
+
+                    {activeTicket.status !== 'Closed' ? (
+                      <ActionBtn onClick={() => {
+                        closeComplaint(activeTicket.id);
+                        toast.success("Ticket closed.");
+                      }}>
+                        Close Ticket
+                      </ActionBtn>
+                    ) : (
+                      <ActionBtn 
+                        onClick={() => {
+                          reopenComplaint(activeTicket.id);
+                          toast.success("Ticket reopened.");
+                        }}
+                        style={{ color: '#10B981', borderColor: 'rgba(16, 185, 129, 0.4)' }}
+                      >
+                        <FaUndo size={11} /> Reopen
+                      </ActionBtn>
+                    )}
+                  </div>
+                </ChatHeader>
+                
+                <ChatBody ref={chatBodyRef}>
+                  {activeTicket.messages?.map((msg, idx) => {
+                    const isStudent = msg.sender_role === 'student';
+                    return (
+                      <MessageBubble key={idx} isOwn={isStudent}>
+                        <BubbleHeader isOwn={isStudent}>
+                          {isStudent ? (
+                            <><span>You</span> <FaUserGraduate size={10} /></>
+                          ) : (
+                            <><FaShieldAlt size={11} color="#ff4d6d" /> <span>{msg.sender_name || 'Academic Support'} (Staff)</span></>
+                          )}
+                        </BubbleHeader>
+                        
+                        <BubbleContent isOwn={isStudent}>
+                          {msg.text}
+                        </BubbleContent>
+                        
+                        <BubbleMeta isOwn={isStudent}>
+                          {formatTime(msg.created_at)}
+                        </BubbleMeta>
+                      </MessageBubble>
+                    );
+                  })}
+                </ChatBody>
+
+                <InputArea>
+                  {activeTicket.status !== 'Closed' ? (
+                    <InputRow>
+                      <ChatInput 
+                        placeholder="Write a message to your instructor or coordinator..." 
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                      />
+                      <SendBtn onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                        <FaPaperPlane size={12} /> Send
+                      </SendBtn>
+                    </InputRow>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', padding: '6px 0' }}>
+                      This grievance ticket has been marked as resolved and closed. Click <strong>Reopen</strong> above if you require further assistance.
+                    </div>
+                  )}
+                </InputArea>
+              </>
+            ) : (
+              <EmptyState>
+                <FaInbox size={54} style={{ opacity: 0.2 }} />
+                <h3>Select a Grievance Ticket</h3>
+                <p>Pick an existing conversation from the left, or raise a new ticket to resolve academic, fee, or technical inquiries.</p>
               </EmptyState>
             )}
-          </TicketList>
-        </Sidebar>
+          </ChatPanel>
+        </DeskFrame>
 
-        <ChatPanel>
-          {activeTicket ? (
-            <>
-              <ChatHeader>
-                <HeaderInfo>
-                  <HeaderSubject>{activeTicket.subject}</HeaderSubject>
-                  <AssignedTo>
-                    Sent to: {activeTicket.send_to === 'Admin' ? 'Admin' : 'Batch Teacher'}
-                  </AssignedTo>
-                </HeaderInfo>
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                  <Pill bg={getStatusColor(activeTicket.status)} style={{ fontSize: '0.8rem', padding: '5px 12px' }}>
-                    {activeTicket.status}
-                  </Pill>
-                  {activeTicket.status !== 'Closed' ? (
-                    <CloseBtn onClick={() => closeComplaint(activeTicket.id)}>
-                      Close Ticket
-                    </CloseBtn>
-                  ) : (
-                    <button 
-                      onClick={() => reopenComplaint(activeTicket.id)}
-                      style={{ background: '#28a745', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                    >
-                      <FaUndo size={12} /> Reopen
-                    </button>
-                  )}
-                </div>
-              </ChatHeader>
-              
-              <ChatBody ref={chatBodyRef}>
-                {activeTicket.messages?.map((msg, idx) => (
-                  <MessageBubble key={idx} isOwn={msg.sender_role === 'student'}>
-                    <BubbleContent isOwn={msg.sender_role === 'student'}>
-                      {msg.text}
-                    </BubbleContent>
-                    <BubbleMeta isOwn={msg.sender_role === 'student'}>
-                      {msg.sender_name} • {formatTime(msg.created_at)}
-                    </BubbleMeta>
-                  </MessageBubble>
-                ))}
-              </ChatBody>
-
-              <InputArea>
-                {activeTicket.status !== 'Closed' ? (
-                  <InputRow>
-                    <ChatInput 
-                      placeholder="Type your message..." 
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    />
-                    <SendBtn onClick={handleSendMessage} disabled={!newMessage.trim()}>
-                      <FaPaperPlane /> Send
-                    </SendBtn>
-                  </InputRow>
-                ) : (
-                  <div style={{ textAlign: 'center', color: '#666', fontSize: '0.9rem' }}>
-                    This ticket is closed. Reopen to send messages.
-                  </div>
-                )}
-              </InputArea>
-            </>
-          ) : (
-            <EmptyState>
-              <FaCertificate size={60} style={{ opacity: 0.1 }} />
-              <h3>Select a ticket to view conversation</h3>
-              <p>Or create a new one to get help from our team.</p>
-            </EmptyState>
-          )}
-        </ChatPanel>
       </Container>
 
+      {/* Raise New Complaint Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <ModalOverlay
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={() => setIsModalOpen(false)}
           >
             <ModalContent
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
             >
-              <div style={{ display: 'flex', justifyBetween: 'center', alignItems: 'center', marginBottom: '25px' }}>
-                <h3 style={{ margin: 0 }}>Raise a New Complaint</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem' }}>Raise Support Ticket</h3>
+                  <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                    SLA Commitment: 24–48 hours guaranteed review
+                  </div>
+                </div>
                 <FaTimes 
-                  style={{ cursor: 'pointer', opacity: 0.5 }} 
+                  style={{ cursor: 'pointer', opacity: 0.6, color: '#fff' }} 
+                  size={18}
                   onClick={() => setIsModalOpen(false)} 
                 />
               </div>
               
               <form onSubmit={handleNewComplaint}>
                 <FormGroup>
-                  <ModalLabel>Subject</ModalLabel>
-                  <ModalInput 
+                  <label>Select Grievance Category</label>
+                  <ChipContainer>
+                    {CATEGORY_CHIPS.map(chip => (
+                      <CategoryChip
+                        key={chip.id}
+                        type="button"
+                        $selected={formData.category === chip.id}
+                        onClick={() => handleSelectCategory(chip.id)}
+                      >
+                        {chip.label}
+                      </CategoryChip>
+                    ))}
+                  </ChipContainer>
+                </FormGroup>
+
+                <FormGroup>
+                  <label>Brief Subject Title *</label>
+                  <input 
                     required 
                     value={formData.subject}
                     onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                    placeholder="Briefly describe the issue"
+                    placeholder="e.g., Attendance missing for Lecture 6, or Fee receipt verification"
                   />
                 </FormGroup>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <FormGroup>
-                    <ModalLabel>Category</ModalLabel>
-                    <ModalSelect 
-                      value={formData.category}
-                      onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    >
-                      <option>Academic</option>
-                      <option>Fee</option>
-                      <option>Attendance</option>
-                      <option>Behaviour</option>
-                      <option>Other</option>
-                    </ModalSelect>
-                  </FormGroup>
-                  <FormGroup>
-                    <ModalLabel>Priority</ModalLabel>
-                    <ModalSelect 
+                    <label>Priority Level</label>
+                    <select 
                       value={formData.priority}
                       onChange={(e) => setFormData({...formData, priority: e.target.value})}
                     >
-                      <option>Normal</option>
-                      <option>Urgent</option>
-                    </ModalSelect>
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">Urgent (Immediate attention)</option>
+                    </select>
+                  </FormGroup>
+
+                  <FormGroup>
+                    <label>Route Desk</label>
+                    <select 
+                      value={formData.send_to}
+                      onChange={(e) => setFormData({...formData, send_to: e.target.value})}
+                    >
+                      <option value="My Batch Teacher">Batch Teacher / Coordinator</option>
+                      <option value="Admin">Administration & Finance</option>
+                    </select>
                   </FormGroup>
                 </div>
 
                 <FormGroup>
-                  <ModalLabel>Send To</ModalLabel>
-                  <ModalSelect 
-                    value={formData.send_to}
-                    onChange={(e) => setFormData({...formData, send_to: e.target.value})}
-                  >
-                    <option value="My Batch Teacher">My Batch Teacher</option>
-                    <option value="Admin">Admin</option>
-                  </ModalSelect>
-                </FormGroup>
-
-                <FormGroup>
-                  <ModalLabel>Initial Message</ModalLabel>
-                  <ModalTextarea 
+                  <label>Describe the Issue in Detail *</label>
+                  <textarea 
                     required
                     value={formData.message}
                     onChange={(e) => setFormData({...formData, message: e.target.value})}
-                    placeholder="Explain your problem in detail..."
+                    placeholder="Please provide dates, lecture numbers, or transaction details so we can resolve this swiftly..."
                   />
                 </FormGroup>
 
-                <SubmitBtn type="submit" disabled={isSubmitting} style={{ width: '100%', gridColumn: 'auto' }}>
-                  {isSubmitting ? 'Creating...' : 'Submit Complaint'}
+                <SubmitBtn type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Filing Ticket...' : 'Submit Support Ticket'}
                 </SubmitBtn>
               </form>
             </ModalContent>
@@ -654,28 +968,5 @@ const StudentComplaints = () => {
     </DashboardLayout>
   );
 };
-
-const SubmitBtn = styled.button`
-  padding: 14px;
-  background: #7B1F2E;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-
-  &:hover {
-    background: #9b283b;
-    transform: translateY(-2px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const FaCertificate = styled(FaInbox)``;
 
 export default StudentComplaints;

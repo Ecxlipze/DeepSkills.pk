@@ -21,6 +21,12 @@ import {
   formatHourDecimal
 } from '../utils/timeTrackingApi';
 import { fetchStaffTasks } from '../utils/staffTasksApi';
+import CounsellorDashboardView from './dashboards/CounsellorDashboardView';
+import FinanceDashboardView from './dashboards/FinanceDashboardView';
+import HRDashboardView from './dashboards/HRDashboardView';
+import AcademicDashboardView from './dashboards/AcademicDashboardView';
+import MarketingDashboardView from './dashboards/MarketingDashboardView';
+import AuditorDashboardView from './dashboards/AuditorDashboardView';
 
 const DashboardWrapper = styled.div`
   display: flex;
@@ -330,9 +336,950 @@ export default function StaffDashboard() {
     user?.custom_roles?.name ||
     (user?.role === 'custom' ? (user?.designation || 'Staff Member') : (user?.role || 'Staff Member'));
 
+  const isSuperAdmin = user?.role === 'admin';
+  const isCounsellor =
+    (user?.customRoleName && /counsellor/i.test(user.customRoleName)) ||
+    (user?.roleName && /counsellor/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /counsellor/i.test(user.custom_roles.name)) ||
+    (user?.permissions?.counsellor === 'full' && user?.permissions?.finance !== 'full' && user?.permissions?.attendance !== 'full');
+
+  const isFinanceOfficer =
+    (user?.customRoleName && /finance/i.test(user.customRoleName)) ||
+    (user?.roleName && /finance/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /finance/i.test(user.custom_roles.name)) ||
+    (user?.permissions?.finance === 'full' && user?.permissions?.counsellor !== 'full' && user?.permissions?.attendance !== 'full');
+
+  const isHRManager =
+    (user?.customRoleName && /hr|faculty manager/i.test(user.customRoleName)) ||
+    (user?.roleName && /hr|faculty manager/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /hr|faculty manager/i.test(user.custom_roles.name)) ||
+    (user?.permissions?.hr === 'full' && user?.permissions?.counsellor !== 'full' && user?.permissions?.finance !== 'full');
+
+  const isAcademicCoordinator =
+    (user?.customRoleName && /academic/i.test(user.customRoleName)) ||
+    (user?.roleName && /academic/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /academic/i.test(user.custom_roles.name)) ||
+    (user?.permissions?.courses === 'full' && user?.permissions?.attendance === 'full' && user?.permissions?.finance !== 'full');
+
+  const isMarketingSpecialist =
+    (user?.customRoleName && /marketing|media|outreach/i.test(user.customRoleName)) ||
+    (user?.roleName && /marketing|media|outreach/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /marketing|media|outreach/i.test(user.custom_roles.name)) ||
+    (user?.permissions?.blog === 'full' && user?.permissions?.announcements === 'full' && user?.permissions?.finance !== 'full');
+
+  const isAuditor =
+    (user?.customRoleName && /auditor|executive viewer|compliance/i.test(user.customRoleName)) ||
+    (user?.roleName && /auditor|executive viewer|compliance/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /auditor|executive viewer|compliance/i.test(user.custom_roles.name)) ||
+    user?.custom_role_id === '07cf8bb6-1b3a-4db0-b5f4-50ec38b8eeb7' ||
+    (user?.permissions?.reports === 'full' && user?.permissions?.complaints === 'view' && user?.permissions?.finance === 'view');
+
+  const [adminViewRole, setAdminViewRole] = useState('auto');
+
+  const showCounsellorDashboard = isCounsellor || (isSuperAdmin && adminViewRole === 'counsellor');
+  const showFinanceDashboard = isFinanceOfficer || (isSuperAdmin && adminViewRole === 'finance');
+  const showHRDashboard = isHRManager || (isSuperAdmin && adminViewRole === 'hr');
+  const showAcademicDashboard = isAcademicCoordinator || (isSuperAdmin && adminViewRole === 'academic');
+  const showMarketingDashboard = isMarketingSpecialist || (isSuperAdmin && adminViewRole === 'marketing');
+  const showAuditorDashboard = isAuditor || (isSuperAdmin && adminViewRole === 'auditor');
+
+  if (showFinanceDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#34D399' }}>👑 <strong>Super Admin Mode:</strong> Previewing Finance Officer Workstation</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60A5FA',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  color: '#F472B6',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <FinanceDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+        />
+      </StaffLayout>
+    );
+  }
+
+  if (showCounsellorDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#FBBF24' }}>👑 <strong>Super Admin Mode:</strong> Previewing Admission Counsellor Workstation</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#34D399',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60A5FA',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  color: '#F472B6',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <CounsellorDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+        />
+      </StaffLayout>
+    );
+  }
+
+  if (showHRDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(139, 92, 246, 0.12)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#c4b5fd' }}>👑 <strong>Super Admin Mode:</strong> Previewing HR & Faculty Manager Workstation</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#34D399',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60A5FA',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  color: '#F472B6',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <HRDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+        />
+      </StaffLayout>
+    );
+  }
+
+  if (showAcademicDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(59, 130, 246, 0.12)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#93c5fd' }}>👑 <strong>Super Admin Mode:</strong> Previewing Academic Coordinator Workstation</span>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#34D399',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  color: '#F472B6',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <AcademicDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+        />
+      </StaffLayout>
+    );
+  }
+
+  if (showMarketingDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(236, 72, 153, 0.12)',
+            border: '1px solid rgba(236, 72, 153, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#f472b6' }}>👑 <strong>Super Admin Mode:</strong> Previewing Marketing & Media Specialist Workstation</span>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#34D399',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60A5FA',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.2)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <MarketingDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+        />
+      </StaffLayout>
+    );
+  }
+
+  if (showAuditorDashboard) {
+    return (
+      <StaffLayout>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(71, 85, 105, 0.25)',
+            border: '1px solid rgba(148, 163, 184, 0.35)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            marginBottom: '16px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#cbd5e1' }}>👑 <strong>Super Admin Mode:</strong> Previewing Auditor & Executive Viewer Workstation</span>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#34D399',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'rgba(139, 92, 246, 0.2)',
+                  color: '#c4b5fd',
+                  border: '1px solid rgba(139, 92, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60A5FA',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  color: '#F472B6',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('general')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Standard View
+              </button>
+            </div>
+          </div>
+        )}
+        <AuditorDashboardView
+          user={user}
+          shift={shift}
+          todaySeconds={todaySeconds}
+          myTasks={myTasks}
+          activeTimer={activeTimer}
+          handleShiftPunch={handleShiftPunch}
+          handleToggleTimer={handleToggleTimer}
+          onRefresh={loadDashboardData}
+          isSuperAdmin={isSuperAdmin}
+          setAdminViewRole={setAdminViewRole}
+        />
+      </StaffLayout>
+    );
+  }
+
   return (
     <StaffLayout>
       <DashboardWrapper>
+        {isSuperAdmin && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(55, 138, 221, 0.12)',
+            border: '1px solid rgba(55, 138, 221, 0.3)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            fontSize: '0.82rem'
+          }}>
+            <span style={{ color: '#93C5FD' }}>👑 <strong>Super Admin:</strong> Switch to test staff role workstations</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('counsellor')}
+                style={{
+                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                  color: '#111827',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Counsellor View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('finance')}
+                style={{
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Finance View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('hr')}
+                style={{
+                  background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                HR View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('academic')}
+                style={{
+                  background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Academic View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('marketing')}
+                style={{
+                  background: 'linear-gradient(135deg, #EC4899, #DB2777)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Marketing View
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminViewRole('auditor')}
+                style={{
+                  background: 'linear-gradient(135deg, #64748B, #475569)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.78rem'
+                }}
+              >
+                Auditor View
+              </button>
+            </div>
+          </div>
+        )}
         {/* ── WELCOME BANNER ── */}
         <WelcomeBanner>
           <div className="text-side">

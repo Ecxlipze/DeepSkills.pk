@@ -5,11 +5,16 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useTasks } from '../context/TasksContext';
 import { supabase } from '../supabaseClient';
-import { FaTimes, FaEdit, FaTrash, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
+import { 
+  FaTimes, FaEdit, FaTrash, FaCheckCircle, 
+  FaExclamationCircle, FaExternalLinkAlt, FaStar,
+  FaCommentDots, FaAward, FaCopy, FaSave, FaSearch
+} from 'react-icons/fa';
 import DatePicker from '../components/DatePicker';
+import toast from 'react-hot-toast';
 
 const Container = styled.div`
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 0 auto;
 `;
 
@@ -28,6 +33,11 @@ const Title = styled.h2`
   font-size: 1.5rem;
   border-bottom: 1px solid rgba(255,255,255,0.1);
   padding-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 `;
 
 const TableWrapper = styled.div`
@@ -39,20 +49,22 @@ const StyledTable = styled.table`
   border-collapse: collapse;
   
   th, td {
-    padding: 15px;
+    padding: 14px 16px;
     text-align: left;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
   
   th {
     color: rgba(255, 255, 255, 0.5);
-    font-weight: 500;
-    font-size: 0.9rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   
   td {
     color: #ccc;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     vertical-align: middle;
   }
   
@@ -62,29 +74,40 @@ const StyledTable = styled.table`
 `;
 
 const Badge = styled.span`
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  margin-left: 10px;
+  margin-left: 8px;
   background: rgba(123, 31, 46, 0.2);
   color: #ff4d6d;
   border: 1px solid rgba(123, 31, 46, 0.4);
 `;
 
 const ActionBtn = styled.button`
-  background: transparent;
+  background: rgba(77, 166, 255, 0.1);
   color: #4da6ff;
-  border: 1px solid #4da6ff;
+  border: 1px solid rgba(77, 166, 255, 0.3);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: all 0.2s ease;
 
   &:hover {
     background: #4da6ff;
     color: #000;
+  }
+
+  &.grade {
+    background: #7B1F2E;
+    border-color: #9c273a;
+    color: #fff;
+    &:hover { background: #9c273a; }
   }
 `;
 
@@ -93,9 +116,9 @@ const IconButton = styled.button`
   color: ${props => props.danger ? '#ff4d6d' : '#4da6ff'};
   border: none;
   cursor: pointer;
-  font-size: 1.1rem;
-  padding: 5px;
-  margin-left: 10px;
+  font-size: 1rem;
+  padding: 6px;
+  margin-left: 8px;
   opacity: 0.8;
   transition: opacity 0.2s;
 
@@ -113,21 +136,21 @@ const Form = styled.form`
 const FormGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 
   label {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.85rem;
+    font-weight: 600;
   }
 
   input, select, textarea {
-    padding: 12px 15px;
+    padding: 10px 14px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background: #0a0a0a;
     color: #fff;
-    font-size: 1rem;
+    font-size: 0.92rem;
     font-family: inherit;
 
     &:focus {
@@ -148,13 +171,22 @@ const SubmitBtn = styled.button`
   border: none;
   padding: 12px;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin-top: 10px;
 
   &:hover {
     background: #9c273a;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;
 
@@ -169,7 +201,8 @@ const EmptyState = styled.div`
 const ModalOverlay = styled(motion.div)`
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -179,23 +212,24 @@ const ModalOverlay = styled(motion.div)`
 
 const ModalContent = styled(motion.div)`
   background: #111;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
   width: 100%;
-  max-width: 800px;
+  max-width: 860px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
 `;
 
 const ModalHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 25px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 20px 26px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   
-  h3 { margin: 0; color: #fff; }
+  h3 { margin: 0; color: #fff; font-size: 1.2rem; }
 `;
 
 const CloseBtn = styled.button`
@@ -204,21 +238,26 @@ const CloseBtn = styled.button`
   color: rgba(255,255,255,0.5);
   font-size: 1.2rem;
   cursor: pointer;
+  padding: 4px;
   &:hover { color: #fff; }
 `;
 
 const ModalBody = styled.div`
-  padding: 25px;
+  padding: 24px 26px;
   overflow-y: auto;
 `;
 
 const StatusPill = styled.span`
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-radius: 50px;
-  font-size: 0.75rem;
-  background: ${props => props.$danger ? 'rgba(239, 68, 68, 0.15)' : 'rgba(46, 125, 50, 0.15)'}; 
-  color: ${props => props.$danger ? '#ef4444' : '#4caf50'}; 
-  border: 1px solid ${props => props.$danger ? 'rgba(239, 68, 68, 0.3)' : 'rgba(46, 125, 50, 0.3)'};
+  font-size: 0.74rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: ${props => props.$status === 'Graded' ? 'rgba(16, 185, 129, 0.15)' : props.$danger ? 'rgba(239, 68, 68, 0.15)' : 'rgba(55, 138, 221, 0.15)'}; 
+  color: ${props => props.$status === 'Graded' ? '#10b981' : props.$danger ? '#ef4444' : '#378ADD'}; 
+  border: 1px solid ${props => props.$status === 'Graded' ? 'rgba(16, 185, 129, 0.3)' : props.$danger ? 'rgba(239, 68, 68, 0.3)' : 'rgba(55, 138, 221, 0.3)'};
 `;
 
 const ModalTabs = styled.div`
@@ -248,14 +287,55 @@ const ModalTabBtn = styled.button`
   }
 `;
 
+const ChipContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+`;
+
+const FeedbackChip = styled.button`
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 50px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(123, 31, 46, 0.2);
+    border-color: #ff4d6d;
+    color: #fff;
+  }
+`;
+
+const PRESET_FEEDBACKS = [
+  "🌟 Excellent clean code structure & git commits.",
+  "👍 Good implementation, meets core requirements.",
+  "⚠️ Please review responsive layout on mobile screens.",
+  "💡 Add proper error handling and input validation.",
+  "🔄 Resubmission requested to meet specifications."
+];
+
 const ViewTasks = () => {
   const { user } = useAuth();
   const { tasks, deleteTask, updateTask, gradeSubmission } = useTasks();
+  
   const [selectedTask, setSelectedTask] = useState(null);
   const [modalTab, setModalTab] = useState('submitted');
   const [batchStudents, setBatchStudents] = useState([]);
   const [loadingBatchStudents, setLoadingBatchStudents] = useState(false);
-  const [gradingMarks, setGradingMarks] = useState({}); // { submissionId: value }
+  
+  // Evaluation Drawer / Modal State
+  const [evaluatingSubmission, setEvaluatingSubmission] = useState(null);
+  const [evalMarks, setEvalMarks] = useState('');
+  const [evalGrade, setEvalGrade] = useState('A');
+  const [evalFeedback, setEvalFeedback] = useState('');
+  const [isGrading, setIsGrading] = useState(false);
+
+  // Edit task modal state
   const [editingTask, setEditingTask] = useState(null);
   const [editFormData, setEditFormData] = useState({
     title: '', category: '', description: '', dueDate: ''
@@ -300,8 +380,13 @@ const ViewTasks = () => {
   };
 
   const handleDelete = async (task) => {
-    if (window.confirm(`Are you sure you want to delete "${task.title}"? This will also delete all student submissions for this task.`)) {
-      await deleteTask(task.id);
+    if (window.confirm(`Are you sure you want to delete "${task.title}"? This will also remove all student submissions.`)) {
+      try {
+        await deleteTask(task.id);
+        toast.success("Task deleted.");
+      } catch (err) {
+        toast.error("Failed to delete task.");
+      }
     }
   };
 
@@ -317,15 +402,92 @@ const ViewTasks = () => {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    await updateTask(editingTask.id, editFormData);
-    setEditingTask(null);
+    try {
+      await updateTask(editingTask.id, editFormData);
+      toast.success("Task updated successfully!");
+      setEditingTask(null);
+    } catch (err) {
+      toast.error("Failed to update task.");
+    }
+  };
+
+  // Open Evaluation Modal
+  const openEvaluation = (sub) => {
+    setEvaluatingSubmission(sub);
+    const existingMarks = sub.marksObtained !== null && sub.marksObtained !== undefined ? String(sub.marksObtained) : '';
+    setEvalMarks(existingMarks);
+    setEvalFeedback(sub.feedback || '');
+    
+    // Auto-compute or preset grade
+    if (sub.grade) {
+      setEvalGrade(sub.grade);
+    } else if (existingMarks !== '' && selectedTask?.totalMarks) {
+      const pct = (Number(existingMarks) / Number(selectedTask.totalMarks)) * 100;
+      if (pct >= 90) setEvalGrade('A+');
+      else if (pct >= 80) setEvalGrade('A');
+      else if (pct >= 70) setEvalGrade('B');
+      else if (pct >= 60) setEvalGrade('C');
+      else setEvalGrade('F');
+    } else {
+      setEvalGrade('A');
+    }
+  };
+
+  // Recalculate grade when marks change
+  const handleMarksChange = (val) => {
+    setEvalMarks(val);
+    if (val !== '' && selectedTask?.totalMarks) {
+      const pct = (Number(val) / Number(selectedTask.totalMarks)) * 100;
+      if (pct >= 90) setEvalGrade('A+');
+      else if (pct >= 80) setEvalGrade('A');
+      else if (pct >= 70) setEvalGrade('B');
+      else if (pct >= 60) setEvalGrade('C');
+      else setEvalGrade('F');
+    }
+  };
+
+  const handleSaveEvaluation = async (e) => {
+    e.preventDefault();
+    if (!evaluatingSubmission) return;
+    if (evalMarks === '') {
+      toast.error("Please enter the marks awarded.");
+      return;
+    }
+
+    const marksNum = Number(evalMarks);
+    const maxMarks = Number(selectedTask?.totalMarks || 100);
+    if (isNaN(marksNum) || marksNum < 0 || marksNum > maxMarks) {
+      toast.error(`Marks must be between 0 and ${maxMarks}.`);
+      return;
+    }
+
+    setIsGrading(true);
+    try {
+      await gradeSubmission(
+        evaluatingSubmission.id,
+        marksNum,
+        evalFeedback.trim() || null,
+        evalGrade
+      );
+      toast.success(`Evaluated ${evaluatingSubmission.studentName}: ${marksNum} marks (${evalGrade})`);
+      setEvaluatingSubmission(null);
+    } catch (err) {
+      toast.error(err?.message || "Failed to save grade.");
+    } finally {
+      setIsGrading(false);
+    }
   };
 
   return (
     <DashboardLayout>
       <Container>
         <Card initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Title>Assigned Tasks</Title>
+          <Title>
+            <span>Assigned Tasks & Coursework</span>
+            <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', fontWeight: 'normal' }}>
+              Faculty: <strong style={{ color: '#fff' }}>{teacherName}</strong>
+            </span>
+          </Title>
           
           <TableWrapper>
             <StyledTable>
@@ -363,7 +525,9 @@ const ViewTasks = () => {
                         <strong>{task.submissions.length}</strong> submitted
                       </td>
                       <td>
-                        <ActionBtn onClick={() => setSelectedTask(task)}>View Submissions</ActionBtn>
+                        <ActionBtn onClick={() => setSelectedTask(task)}>
+                          View Submissions
+                        </ActionBtn>
                         <IconButton onClick={() => openEditModal(task)} title="Edit Task">
                           <FaEdit />
                         </IconButton>
@@ -380,6 +544,7 @@ const ViewTasks = () => {
         </Card>
       </Container>
 
+      {/* Submissions List Modal */}
       <AnimatePresence>
         {selectedTask && (
           <ModalOverlay
@@ -395,7 +560,12 @@ const ViewTasks = () => {
               onClick={e => e.stopPropagation()}
             >
               <ModalHeader>
-                <h3>Submissions: {selectedTask.title}</h3>
+                <div>
+                  <h3>Submissions: {selectedTask.title}</h3>
+                  <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                    Batch: {selectedTask.batch} &bull; Total Marks: {selectedTask.totalMarks || 100}
+                  </div>
+                </div>
                 <CloseBtn onClick={() => setSelectedTask(null)}><FaTimes /></CloseBtn>
               </ModalHeader>
               <ModalBody>
@@ -430,56 +600,66 @@ const ViewTasks = () => {
                             <StyledTable>
                               <thead>
                                 <tr>
-                                  <th>Student Name</th>
-                                  <th>CNIC</th>
+                                  <th>Student</th>
                                   <th>Submitted At</th>
-                                  <th>File</th>
-                                  <th>Status</th>
-                                  {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && <th>Marks ({selectedTask.totalMarks})</th>}
+                                  <th>Work Link / File</th>
+                                  <th>Marks & Grade</th>
+                                  <th>Evaluation</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {selectedTask.submissions.map((sub, i) => (
                                   <tr key={i}>
-                                    <td style={{ color: '#fff', fontWeight: '500' }}>{sub.studentName}</td>
-                                    <td>{sub.cnic}</td>
-                                    <td>{new Date(sub.submittedAt).toLocaleString()}</td>
+                                    <td>
+                                      <div style={{ color: '#fff', fontWeight: '600' }}>{sub.studentName}</div>
+                                      <small style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>{sub.cnic}</small>
+                                    </td>
+                                    <td style={{ fontSize: '0.85rem' }}>
+                                      {new Date(sub.submittedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </td>
                                     <td>
                                       {sub.fileUrl ? (
-                                        <span 
-                                          onClick={() => {
-                                            if (sub.fileUrl && sub.fileUrl.startsWith('http')) {
-                                              window.open(sub.fileUrl, '_blank');
-                                            } else {
-                                              alert(`File preview not available for older submissions.`);
-                                            }
+                                        <a
+                                          href={sub.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            color: '#4da6ff',
+                                            textDecoration: 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            fontSize: '0.85rem'
                                           }}
-                                          style={{ color: '#4da6ff', textDecoration: 'underline', cursor: 'pointer' }}
                                         >
-                                          Preview File
-                                        </span>
-                                      ) : '-'}
+                                          <FaExternalLinkAlt size={11} /> Open Submission
+                                        </a>
+                                      ) : (
+                                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>No link</span>
+                                      )}
                                     </td>
-                                    <td><StatusPill>{sub.status}</StatusPill></td>
-                                    {['Assignment', 'Quiz', 'Project'].includes(selectedTask.category) && (
-                                      <td>
-                                        <div style={{ display: 'flex', gap: '5px' }}>
-                                          <input
-                                            type="number"
-                                            placeholder="Marks"
-                                            defaultValue={sub.marksObtained}
-                                            onChange={(e) => setGradingMarks({...gradingMarks, [sub.id]: e.target.value})}
-                                            style={{ width: '60px', padding: '5px', borderRadius: '4px', background: '#000', border: '1px solid #333', color: '#fff' }}
-                                          />
-                                          <button
-                                            onClick={() => gradeSubmission(sub.id, gradingMarks[sub.id] || sub.marksObtained)}
-                                            style={{ padding: '5px 10px', background: '#7B1F2E', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                                          >
-                                            Save
-                                          </button>
+                                    <td>
+                                      {sub.status === 'Graded' && sub.marksObtained !== null && sub.marksObtained !== undefined ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <strong style={{ color: '#10B981', fontSize: '1rem' }}>
+                                            {sub.marksObtained} / {selectedTask.totalMarks || 100}
+                                          </strong>
+                                          {sub.grade && (
+                                            <StatusPill $status="Graded">{sub.grade}</StatusPill>
+                                          )}
                                         </div>
-                                      </td>
-                                    )}
+                                      ) : (
+                                        <StatusPill $status="Submitted">Pending Grade</StatusPill>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <ActionBtn 
+                                        className="grade"
+                                        onClick={() => openEvaluation(sub)}
+                                      >
+                                        <FaStar size={11} /> {sub.status === 'Graded' ? 'Edit Grade' : 'Grade & Review'}
+                                      </ActionBtn>
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -492,34 +672,48 @@ const ViewTasks = () => {
                             All active students in {selectedTask.batch} have submitted! 🎉
                           </EmptyState>
                         ) : (
-                          <TableWrapper>
-                            <StyledTable>
-                              <thead>
-                                <tr>
-                                  <th>Student Name</th>
-                                  <th>CNIC</th>
-                                  <th>Phone</th>
-                                  <th>Email</th>
-                                  <th>Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {nonSubmitters.map((s, i) => (
-                                  <tr key={i}>
-                                    <td style={{ color: '#fff', fontWeight: '500' }}>{s.name}</td>
-                                    <td>{s.cnic}</td>
-                                    <td>{s.phone}</td>
-                                    <td style={{ fontSize: '0.85rem' }}>{s.email}</td>
-                                    <td>
-                                      <StatusPill $danger={isOverdue(selectedTask.dueDate)}>
-                                        {isOverdue(selectedTask.dueDate) ? 'Overdue' : 'Pending'}
-                                      </StatusPill>
-                                    </td>
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                              <ActionBtn 
+                                onClick={() => {
+                                  const text = `Pending Submissions for "${selectedTask.title}" (${selectedTask.batch}):\n` + 
+                                    nonSubmitters.map(s => `- ${s.name} (${s.phone || s.email || s.cnic})`).join('\n');
+                                  navigator.clipboard.writeText(text);
+                                  toast.success("Pending students list copied to clipboard!");
+                                }}
+                              >
+                                <FaCopy /> Copy Missing List
+                              </ActionBtn>
+                            </div>
+                            <TableWrapper>
+                              <StyledTable>
+                                <thead>
+                                  <tr>
+                                    <th>Student Name</th>
+                                    <th>CNIC</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </StyledTable>
-                          </TableWrapper>
+                                </thead>
+                                <tbody>
+                                  {nonSubmitters.map((s, i) => (
+                                    <tr key={i}>
+                                      <td style={{ color: '#fff', fontWeight: '500' }}>{s.name}</td>
+                                      <td>{s.cnic}</td>
+                                      <td>{s.phone || '—'}</td>
+                                      <td style={{ fontSize: '0.85rem' }}>{s.email || '—'}</td>
+                                      <td>
+                                        <StatusPill $danger={isOverdue(selectedTask.dueDate)}>
+                                          {isOverdue(selectedTask.dueDate) ? 'Overdue' : 'Pending'}
+                                        </StatusPill>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </StyledTable>
+                            </TableWrapper>
+                          </>
                         )
                       )}
                     </>
@@ -529,7 +723,151 @@ const ViewTasks = () => {
             </ModalContent>
           </ModalOverlay>
         )}
+      </AnimatePresence>
 
+      {/* Grade & Review Evaluation Drawer / Modal */}
+      <AnimatePresence>
+        {evaluatingSubmission && (
+          <ModalOverlay
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setEvaluatingSubmission(null)}
+          >
+            <ModalContent
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{ maxWidth: '620px' }}
+            >
+              <ModalHeader>
+                <div>
+                  <h3 style={{ margin: 0 }}>Grade & Review Submission</h3>
+                  <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                    {evaluatingSubmission.studentName} &bull; {selectedTask?.title}
+                  </div>
+                </div>
+                <CloseBtn onClick={() => setEvaluatingSubmission(null)}><FaTimes /></CloseBtn>
+              </ModalHeader>
+
+              <ModalBody>
+                <form onSubmit={handleSaveEvaluation}>
+                  {/* Submission Link Preview */}
+                  <div style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '14px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: '6px' }}>
+                      Student's Submission Link / File Archive:
+                    </div>
+                    {evaluatingSubmission.fileUrl ? (
+                      <a
+                        href={evaluatingSubmission.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: '#4da6ff',
+                          textDecoration: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontWeight: '500',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '480px' }}>
+                          {evaluatingSubmission.fileUrl}
+                        </span>
+                        <FaExternalLinkAlt size={12} />
+                      </a>
+                    ) : (
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                        No external URL or file attached.
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '14px' }}>
+                    <FormGroup>
+                      <label>Marks Awarded (Max: {selectedTask?.totalMarks || 100}) *</label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        max={selectedTask?.totalMarks || 100}
+                        value={evalMarks}
+                        onChange={e => handleMarksChange(e.target.value)}
+                        placeholder="e.g. 85"
+                      />
+                    </FormGroup>
+
+                    <FormGroup>
+                      <label>Letter Grade</label>
+                      <select
+                        value={evalGrade}
+                        onChange={e => setEvalGrade(e.target.value)}
+                      >
+                        <option value="A+">A+ (Distinction &bull; 90%+)</option>
+                        <option value="A">A (Excellent &bull; 80%+)</option>
+                        <option value="B+">B+ (Very Good &bull; 75%+)</option>
+                        <option value="B">B (Good &bull; 70%+)</option>
+                        <option value="C">C (Satisfactory &bull; 60%+)</option>
+                        <option value="F">F (Needs Revision &bull; &lt;60%)</option>
+                      </select>
+                    </FormGroup>
+                  </div>
+
+                  <FormGroup style={{ marginTop: '12px' }}>
+                    <label>Instructor Review & Feedback for Student</label>
+                    <textarea
+                      placeholder="Write constructive review feedback, suggestions for refactoring, or commendations..."
+                      value={evalFeedback}
+                      onChange={e => setEvalFeedback(e.target.value)}
+                    />
+                    
+                    <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+                      Quick Feedback Presets:
+                    </div>
+                    <ChipContainer>
+                      {PRESET_FEEDBACKS.map((chip, idx) => (
+                        <FeedbackChip
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setEvalFeedback(prev => prev ? `${prev} ${chip}` : chip);
+                          }}
+                        >
+                          {chip}
+                        </FeedbackChip>
+                      ))}
+                    </ChipContainer>
+                  </FormGroup>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+                    <SubmitBtn type="submit" disabled={isGrading} style={{ flex: 1 }}>
+                      <FaSave /> {isGrading ? 'Saving Evaluation...' : 'Save Grade & Notify Student'}
+                    </SubmitBtn>
+                    <ActionBtn 
+                      type="button"
+                      onClick={() => setEvaluatingSubmission(null)}
+                      style={{ padding: '12px 18px', marginTop: '10px' }}
+                    >
+                      Cancel
+                    </ActionBtn>
+                  </div>
+                </form>
+              </ModalBody>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Task Modal */}
+      <AnimatePresence>
         {editingTask && (
           <ModalOverlay
             initial={{ opacity: 0 }}
@@ -591,11 +929,11 @@ const ViewTasks = () => {
                       required 
                       value={editFormData.description}
                       onChange={e => setEditFormData({...editFormData, description: e.target.value})}
-                    ></textarea>
+                    />
                   </FormGroup>
 
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                    Note: Course and Batch cannot be edited once assigned. If you need to change them, please delete and reassign the task.
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', fontStyle: 'italic' }}>
+                    Course and Batch cohorts remain fixed to preserve student submission history.
                   </div>
 
                   <SubmitBtn type="submit">Save Changes</SubmitBtn>

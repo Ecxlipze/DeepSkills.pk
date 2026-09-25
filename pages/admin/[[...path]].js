@@ -62,6 +62,8 @@ const ProgramManager = dynamic(() => import('../../src/admin/ProgramManager'), {
 const StaffTimeTrackerPage = dynamic(() => import('../../src/admin/StaffTimeTrackerPage'), { ssr: false });
 const AdminStaffTimeReports = dynamic(() => import('../../src/admin/AdminStaffTimeReports'), { ssr: false });
 const AdminStaffJiraPage = dynamic(() => import('../../src/admin/AdminStaffJiraPage'), { ssr: false });
+const AdminSettingsHub = dynamic(() => import('../../src/admin/AdminSettingsHub'), { ssr: false });
+const ChatbotInsights = dynamic(() => import('../../src/admin/ChatbotInsights'), { ssr: false });
 
 const ADMIN_ROUTE_ACCESS = {
   dashboard: { allowedRoles: ['admin', 'custom'], permissionKey: 'dashboard' },
@@ -69,10 +71,12 @@ const ADMIN_ROUTE_ACCESS = {
   counsellor: { allowedRoles: ['admin', 'custom'], permissionKey: 'counsellor' },
   students: { allowedRoles: ['admin', 'custom'], permissionKey: 'students' },
   users: { allowedRoles: ['admin', 'custom'], permissionKey: 'users' },
+  roles: { allowedRoles: ['admin', 'custom'], permissionKey: 'users' },
   teachers: { allowedRoles: ['admin', 'custom'], permissionKey: 'teachers' },
   trainers: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   testimonials: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   'media-page': { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
+  chatbot: { allowedRoles: ['admin', 'custom'], permissionKey: 'settings' },
   courses: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   batches: { allowedRoles: ['admin', 'custom'], permissionKey: 'courses' },
   attendance: { allowedRoles: ['admin', 'custom'], permissionKey: 'attendance' },
@@ -141,6 +145,7 @@ function getAdminPage(path = [], user = null) {
   }
   if (section === 'students') return child ? <StudentProfile studentId={child} /> : <StudentManager />;
   if (section === 'users') return child === 'activity' ? <AdminActivityLogsPage /> : <AdminUserManagement />;
+  if (section === 'roles') return <AdminSettingsHub initialTab="roles" />;
   if (section === 'teachers') return child ? <TeacherProfile teacherId={child} /> : <TeacherManager />;
   if (section === 'courses') return child ? <CourseDetailPage courseId={child} /> : <CourseManager />;
   if (section === 'batches') return <CourseManager />;
@@ -202,6 +207,7 @@ function getAdminPage(path = [], user = null) {
     if (child === 'trainers') return <TrainerManager />;
     if (child === 'testimonials') return <TestimonialManager />;
     if (child === 'media-page') return <MediaPageManager />;
+    if (child === 'chatbot') return <ChatbotInsights />;
     if (child === 'programs' || child === 'announcement-bar' || child === 'announcements-banner') return <ProgramManager />;
     if (child === 'courses') return subpath ? <CourseDetailPage courseId={subpath} /> : <CourseManager />;
     if (child === 'referral') return <AdminReferral />;
@@ -213,10 +219,11 @@ function getAdminPage(path = [], user = null) {
     if (child === 'time-tracker') return <StaffTimeTrackerPage />;
     if (child === 'time-reports') return <AdminStaffTimeReports />;
     if (child === 'reports') return <ReportsSystem mode="master" />;
-    if (child === 'settings') return <ContentManager />;
+    if (child === 'settings') return subpath === 'content' ? <ContentManager /> : <AdminSettingsHub initialTab={subpath || 'roles'} />;
   }
 
   if (section === 'settings') {
+    if (!child || child === 'roles' || child === 'system' || child === 'departments') return <AdminSettingsHub initialTab={child || 'roles'} />;
     if (child === 'testimonials') return <TestimonialManager />;
     if (child === 'trainers') return <TrainerManager />;
     if (child === 'media') return <MediaLibrary />;
@@ -224,6 +231,7 @@ function getAdminPage(path = [], user = null) {
     if (child === 'media-page') return <MediaPageManager />;
     if (child === 'programs' || child === 'announcement-bar') return <ProgramManager />;
     if (child === 'attendance') return <AdminAttendanceSettings />;
+    return <AdminSettingsHub initialTab={child || 'roles'} />;
   }
 
   if (section === 'programs' || section === 'announcement-bar') return <ProgramManager />;
@@ -235,6 +243,9 @@ function getAdminAccess(path = []) {
   const [section, child] = path;
   const subpath = path.slice(2).join('/');
   const pathname = `/admin/${path.join('/')}`.replace(/\/$/, '');
+  if (section === 'roles') {
+    return { allowedRoles: ['admin', 'custom'], permissionKey: 'users' };
+  }
   if (section === 'academic' && child === 'attendance' && subpath === 'settings') {
     return { allowedRoles: ['admin', 'custom'], permissionKey: 'attendance' };
   }

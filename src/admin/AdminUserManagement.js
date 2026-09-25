@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FaBan, FaCheck, FaEdit, FaEye, FaFileCsv, FaPlus, FaShieldAlt, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaBan, FaCheck, FaCogs, FaEdit, FaEye, FaFileCsv, FaPlus, FaShieldAlt, FaTimes, FaUsers } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import AdminLayout from '../components/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { downloadCsv } from '../utils/csvExport';
 import { canAccess, getRoleColor, getRoleLabel, MODULE_KEYS } from '../utils/permissions';
 import { bulkActivate, bulkRoleChange, bulkSuspend, createRole, createUser, deleteRole, fetchRoles, fetchUserActivity, fetchUserStats, fetchUsers, reactivateUser, suspendUser, updateRole, updateUser } from '../utils/userManagementApi';
+import AdminRoleEditorModal from './AdminRoleEditorModal';
 import {
   AdminModal,
   AdminModalHeader,
@@ -133,7 +135,7 @@ const UserModal = ({ open, title, form, setForm, errors, setErrors, roles, editi
             />
           </FormField>
 
-          <FormField label="Role">
+          <FormField label="Role & Access Profile">
             <AdminSelect
               value={form.roleValue}
               onChange={(e) => {
@@ -146,8 +148,24 @@ const UserModal = ({ open, title, form, setForm, errors, setErrors, roles, editi
               }}
             >
               {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
-              {roles.map((role) => <option key={role.id} value={`custom-role:${role.id}`}>{role.name}</option>)}
+              {roles.map((role) => <option key={role.id} value={`custom-role:${role.id}`}>{role.icon || '👤'} {role.name}</option>)}
             </AdminSelect>
+            {form.roleValue === 'Admin' ? (
+              <small style={{ color: '#2ecc71', marginTop: '4px', display: 'block', fontSize: '0.78rem' }}>
+                Full Administrator (unrestricted access to all modules and system settings)
+              </small>
+            ) : form.customRoleId ? (
+              (() => {
+                const r = roles.find((item) => item.id === form.customRoleId);
+                const fullKeys = r?.permissions ? Object.keys(r.permissions).filter((k) => r.permissions[k] === 'full') : [];
+                const viewKeys = r?.permissions ? Object.keys(r.permissions).filter((k) => r.permissions[k] === 'view') : [];
+                return (
+                  <small style={{ color: '#9ca3af', marginTop: '4px', display: 'block', fontSize: '0.78rem' }}>
+                    Access: <strong style={{ color: '#2ecc71' }}>{fullKeys.length} Full</strong> ({fullKeys.slice(0, 3).join(', ')}{fullKeys.length > 3 ? '...' : ''}), <strong style={{ color: '#4F8EF7' }}>{viewKeys.length} View</strong>
+                  </small>
+                );
+              })()
+            ) : null}
           </FormField>
 
           <FormField label="Account Status">
@@ -191,6 +209,7 @@ const UserModal = ({ open, title, form, setForm, errors, setErrors, roles, editi
 );
 
 const AdminUserManagement = () => {
+  const router = useRouter();
   const { user } = useAuth();
   const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'users', 'full');
   const [stats, setStats] = useState({ total: 0, admins: 0, custom: 0, adminPanelUsers: 0 });
@@ -203,12 +222,11 @@ const AdminUserManagement = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showRolePanel, setShowRolePanel] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
   const [showActivityPanel, setShowActivityPanel] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
   const [userForm, setUserForm] = useState(emptyUserForm);
-  const [roleForm, setRoleForm] = useState(emptyRoleForm);
   const [activityTarget, setActivityTarget] = useState(null);
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityTotal, setActivityTotal] = useState(0);
@@ -303,31 +321,6 @@ const AdminUserManagement = () => {
     }
   };
 
-  const saveRole = async () => {
-    if (!canMutate) {
-      toast.error('You do not have permission to modify roles.');
-      return;
-    }
-    if (!roleForm.name.trim()) {
-      toast.error('Role name is required.');
-      return;
-    }
-    try {
-      if (editingRole) {
-        await updateRole(editingRole.id, roleForm);
-        toast.success('Role updated');
-      } else {
-        await createRole(roleForm);
-        toast.success('Role created');
-      }
-      setEditingRole(null);
-      setRoleForm(emptyRoleForm);
-      loadPage();
-    } catch (error) {
-      toast.error(error.message || 'Failed to save role');
-    }
-  };
-
   const runBulk = async (type) => {
     if (!selectedIds.length) return toast.error('Select at least one user');
     if (type !== 'export' && !canMutate) {
@@ -354,7 +347,30 @@ const AdminUserManagement = () => {
   return (
     <AdminLayout>
       <Wrap>
-        <Header><div><h1>User Management</h1><p>Manage admin-panel staff, existing roles, and permissions</p></div><Actions>{canMutate && <PrimaryButton onClick={() => { setEditingUser(null); setUserErrors({}); setUserForm(emptyUserForm); setShowUserModal(true); }}><FaPlus /> Add User</PrimaryButton>}{canMutate && <SecondaryButton onClick={() => setShowRolePanel(true)}><FaShieldAlt /> Manage Roles</SecondaryButton>}<SecondaryButton onClick={() => exportRows(users)}><FaFileCsv /> Export All</SecondaryButton></Actions></Header>
+        <Header>
+          <div>
+            <h1>User Management</h1>
+            <p>Manage admin-panel staff, existing roles, and permissions</p>
+          </div>
+          <Actions>
+            {canMutate && (
+              <PrimaryButton onClick={() => { setEditingUser(null); setUserErrors({}); setUserForm(emptyUserForm); setShowUserModal(true); }}>
+                <FaPlus /> Add User
+              </PrimaryButton>
+            )}
+            {canMutate && (
+              <SecondaryButton onClick={() => { setEditingRole(null); setShowRoleModal(true); }}>
+                <FaShieldAlt /> Custom Roles & Permissions
+              </SecondaryButton>
+            )}
+            <SecondaryButton onClick={() => router.push('/admin/settings/roles')}>
+              <FaCogs /> Role Settings Hub
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportRows(users)}>
+              <FaFileCsv /> Export All
+            </SecondaryButton>
+          </Actions>
+        </Header>
         <StatsGrid>{[['Admin Panel Users', stats.adminPanelUsers, '#4F8EF7'], ['Admins', stats.admins, '#d1d5db'], ['Staff Roles', stats.custom, '#9ca3af']].map(([label, value, color]) => <StatCard key={label}><span>{label}</span><strong style={{ color }}>{value}</strong></StatCard>)}</StatsGrid>
         <TabRow>{[['all', `All (${stats.adminPanelUsers})`], ['admin', `Admins (${stats.admins})`], ['custom', `Staff (${stats.custom})`]].map(([key, label]) => <Tab key={key} $active={tab === key} onClick={() => { setTab(key); setPage(1); }}>{label}</Tab>)}</TabRow>
         <Panel><Filters><Field><label>Search</label><input value={filters.search} onChange={(e) => { setFilters((prev) => ({ ...prev, search: e.target.value })); setPage(1); }} placeholder="name, cnic, email, phone" /></Field>{tab === 'all' && <Field><label>Role</label><select value={filters.role} onChange={(e) => { setFilters((prev) => ({ ...prev, role: e.target.value })); setPage(1); }}><option value="all">All</option>{[...ROLE_OPTIONS.map((label) => ({ value: label.toLowerCase().replace(/\s+/g, '_'), label })), { value: 'custom', label: 'Staff' }].map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}</select></Field>}<Field><label>Status</label><select value={filters.status} onChange={(e) => { setFilters((prev) => ({ ...prev, status: e.target.value })); setPage(1); }}><option value="all">All</option><option value="active">Active</option><option value="onboarding">Onboarding</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></Field><Field><label>Last Active</label><select value={filters.lastActive} onChange={(e) => { setFilters((prev) => ({ ...prev, lastActive: e.target.value })); setPage(1); }}><option value="any">Any time</option><option value="today">Today</option><option value="week">This week</option><option value="month">This month</option></select></Field></Filters></Panel>
@@ -362,7 +378,18 @@ const AdminUserManagement = () => {
         <Panel><Table><thead><tr><th><input type="checkbox" checked={users.length > 0 && selectedIds.length === users.length} onChange={(e) => setSelectedIds(e.target.checked ? users.map((row) => row.id) : [])} /></th><th>User</th><th>CNIC</th><th>Role</th><th>Status</th><th>Last Login</th><th>Joined On</th><th>Actions</th></tr></thead><tbody>{loading ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>Loading...</td></tr> : users.length === 0 ? <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40 }}>No users found.</td></tr> : users.map((row) => { const styles = getRoleColor(row.role, row.custom_roles?.color); return <tr key={row.id}><td><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id))} /></td><td><UserCell><Avatar style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{row.full_name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</Avatar><div><strong>{row.full_name}</strong><small>{row.email || 'No email'}</small></div></UserCell></td><td>{row.cnic}</td><td><Pill style={{ background: styles.bg, color: styles.text, borderColor: styles.border }}>{getRoleLabel(row.role, row.custom_roles?.name)}</Pill></td><td><Status $status={row.status}>{row.status}</Status></td><td>{relativeTime(row.last_login)}</td><td>{row.created_at ? new Date(row.created_at).toLocaleDateString() : '-'}</td><td><InlineActions>{canMutate && <button onClick={() => { setEditingUser(row); setUserErrors({}); setUserForm({ fullName: row.full_name || '', cnic: row.cnic || '', phone: row.phone || '', email: row.email || '', roleValue: row.custom_role_id ? `custom-role:${row.custom_role_id}` : getRoleLabel(row.role), customRoleId: row.custom_role_id || '', status: row.status || 'active', sendWelcomeEmail: false, accountNotes: row.account_notes || '' }); setShowUserModal(true); }}><FaEdit /> Edit</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); suspendUser(row.id, user).then(() => { toast.success('User suspended'); loadPage(); }); }}><FaBan /> Suspend</button>}{canMutate && <button onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify users.'); reactivateUser(row.id, user).then(() => { toast.success('Access reset'); loadPage(); }); }}><FaCheck /> Reset Access</button>}<button onClick={() => { setActivityTarget(row); setShowActivityPanel(true); }}><FaEye /> View Activity</button></InlineActions></td></tr>; })}</tbody></Table></Panel>
         <FooterRow><span>Page {page} of {Math.max(1, Math.ceil(count / pageSize))}</span><div><SmallButton disabled={page === 1} onClick={() => setPage((prev) => prev - 1)}>Prev</SmallButton><SmallButton disabled={page >= Math.max(1, Math.ceil(count / pageSize))} onClick={() => setPage((prev) => prev + 1)}>Next</SmallButton></div></FooterRow>
         <UserModal open={showUserModal} title={editingUser ? 'Edit User' : 'Add New User'} form={userForm} setForm={setUserForm} errors={userErrors} setErrors={setUserErrors} roles={roles} editing={Boolean(editingUser)} onClose={() => { setShowUserModal(false); setUserErrors({}); }} onSubmit={saveUser} />
-        <AnimatePresence>{showRolePanel && <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><SidePanel initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }}><ModalHeader><div><h3>Manage Roles</h3><p>Edit staff role permissions and create custom admin access roles.</p></div><IconButton onClick={() => setShowRolePanel(false)}><FaTimes /></IconButton></ModalHeader><PanelBody><PanelIntro>Create the staff roles you need and assign module permissions. Admin keeps full access by design and is not editable.</PanelIntro><RoleGrid>{roles.map((role) => <RoleCard key={role.id}><strong>{role.icon} {role.name}</strong><small>{role.description || 'No description'}</small><small>{users.filter((entry) => entry.custom_role_id === role.id).length} users</small><InlineActions>{canMutate && <button onClick={() => { setEditingRole(role); setRoleForm({ name: role.name, description: role.description || '', icon: role.icon || '👤', color: role.color || 'gray', permissions: { ...emptyPermissions, ...(role.permissions || {}) } }); }}>Edit</button>}<button disabled={!canMutate || users.some((entry) => entry.custom_role_id === role.id)} onClick={() => { if (!canMutate) return toast.error('You do not have permission to modify roles.'); deleteRole(role.id).then(() => { toast.success('Role deleted'); loadPage(); }); }}>Delete</button></InlineActions></RoleCard>)}</RoleGrid><SectionTitle>{editingRole ? 'Edit Role' : 'Create Role'}</SectionTitle><Field><label>Role Name</label><input value={roleForm.name} onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))} /></Field><Field><label>Description</label><textarea rows="2" value={roleForm.description} onChange={(e) => setRoleForm((prev) => ({ ...prev, description: e.target.value }))} /></Field><Field><label>Icon</label><SimpleRow>{ICON_OPTIONS.map((icon) => <SmallButton key={icon} onClick={() => setRoleForm((prev) => ({ ...prev, icon }))}>{icon}</SmallButton>)}</SimpleRow></Field><Field><label>Color</label><SimpleRow>{COLOR_OPTIONS.map((color) => <SmallButton key={color} onClick={() => setRoleForm((prev) => ({ ...prev, color }))}>{color}</SmallButton>)}</SimpleRow></Field><Field><label>Permissions</label><PermissionsMatrix permissions={roleForm.permissions} onToggle={(key) => setRoleForm((prev) => ({ ...prev, permissions: { ...prev.permissions, [key]: cyclePermission(prev.permissions[key]) } }))} /></Field>{canMutate && <PrimaryButton onClick={saveRole}><FaShieldAlt /> {editingRole ? 'Update Role' : 'Create Role'}</PrimaryButton>}</PanelBody></SidePanel></ModalOverlay>}</AnimatePresence>
+        <AdminRoleEditorModal
+          isOpen={showRoleModal}
+          onClose={() => {
+            setShowRoleModal(false);
+            setEditingRole(null);
+          }}
+          role={editingRole}
+          onSaved={loadPage}
+          roles={roles}
+          users={users}
+          canMutate={canMutate}
+        />
         <AnimatePresence>{showActivityPanel && <ModalOverlay initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><SidePanel initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }}><ModalHeader><div><h3>{activityTarget?.full_name} — Activity Log</h3><p>{activityTotal} events</p></div><IconButton onClick={() => setShowActivityPanel(false)}><FaTimes /></IconButton></ModalHeader><PanelBody>{activityLogs.map((entry) => <ActivityItem key={entry.id}><ActivityIcon type={entry.event_type} /><div><strong>{entry.event_description}</strong><small>{new Date(entry.created_at).toLocaleString()}</small><small>{entry.device_info || 'Unknown device'}</small></div></ActivityItem>)}{activityLogs.length === 0 && <small>No activity found.</small>}</PanelBody></SidePanel></ModalOverlay>}</AnimatePresence>
       </Wrap>
     </AdminLayout>

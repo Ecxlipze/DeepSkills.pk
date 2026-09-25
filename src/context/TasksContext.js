@@ -46,7 +46,10 @@ export const TasksProvider = ({ children }) => {
             fileUrl: sub.file_url,
             status: sub.status,
             submittedAt: sub.submitted_at,
-            marksObtained: sub.marks_obtained
+            marksObtained: sub.marks_obtained,
+            grade: sub.grade,
+            feedback: sub.feedback,
+            rubricScores: sub.rubric_scores
           }))
       }));
 
@@ -177,9 +180,11 @@ export const TasksProvider = ({ children }) => {
         }
       }
 
-      fetchTasks();
+      await fetchTasks();
+      return true;
     } catch (error) {
-      alert("Failed to submit task: " + error.message);
+      console.error("Failed to submit task:", error.message);
+      throw error;
     }
   };
 
@@ -215,11 +220,18 @@ export const TasksProvider = ({ children }) => {
     }
   };
 
-  const gradeSubmission = async (submissionId, marksObtained) => {
+  const gradeSubmission = async (submissionId, marksObtained, feedback = null, grade = null) => {
     try {
+      const updatePayload = {
+        marks_obtained: marksObtained !== null && marksObtained !== undefined ? Number(marksObtained) : null,
+        status: 'Graded'
+      };
+      if (feedback !== null && feedback !== undefined) updatePayload.feedback = String(feedback).trim();
+      if (grade !== null && grade !== undefined) updatePayload.grade = grade;
+
       const { data: sub, error: subErr } = await supabase
         .from('task_submissions')
-        .update({ marks_obtained: marksObtained, status: 'Graded' })
+        .update(updatePayload)
         .eq('id', submissionId)
         .select('task_id, cnic')
         .single();
@@ -229,7 +241,7 @@ export const TasksProvider = ({ children }) => {
       // Trigger result recomputation
       const { data: studentRows } = await supabase
         .from('admissions')
-        .select('id')
+        .select('id, name')
         .eq('cnic', sub.cnic)
         .in('status', ['Active', 'Graduated'])
         .order('submitted_at', { ascending: false })
@@ -239,11 +251,22 @@ export const TasksProvider = ({ children }) => {
         const { computeAndCacheResult } = await import('../utils/resultUtils');
         await computeAndCacheResult(student.id, 'midterm');
         await computeAndCacheResult(student.id, 'finalterm');
+
+        await createNotification({
+          userId: student.id,
+          role: 'student',
+          type: 'task_graded',
+          title: 'Assignment Graded',
+          message: `Your assignment has been graded: ${marksObtained} marks${grade ? ` (${grade})` : ''}.`,
+          link: '/student/tasks'
+        });
       }
 
-      fetchTasks();
+      await fetchTasks();
+      return true;
     } catch (error) {
-      alert("Failed to grade submission: " + error.message);
+      console.error("Failed to grade submission:", error.message);
+      throw error;
     }
   };
 

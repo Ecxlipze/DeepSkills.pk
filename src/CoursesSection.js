@@ -9,7 +9,7 @@ import mernCardThumb from "./assets/mern-card.png";
 import graphicsCardThumb from "./assets/graphics-card.png";
 import wpCardThumb from "./assets/wp-card.png";
 import laravelCardThumb from "./assets/php-card.svg";
-import { getCourseDetailPath, getCourseSlugFromCategory } from "./utils/enrollmentNavigation";
+import { getCourseDetailPath, resolveCourseSlug } from "./utils/enrollmentNavigation";
 import SmartCoverImage from "../components/next/SmartCoverImage";
 
 const dummyCourses = [
@@ -249,8 +249,8 @@ const CoursesSection = ({ initialCourses = null }) => {
     return <FaCode />;
   };
 
-  const getPath = (category) => {
-    const slug = getCourseSlugFromCategory(category);
+  const getPath = (course) => {
+    const slug = resolveCourseSlug(course);
     return slug ? getCourseDetailPath(slug) : '/courses';
   };
 
@@ -287,7 +287,7 @@ const CoursesSection = ({ initialCourses = null }) => {
               key={course.id || index}
               variants={cardVariants}
               whileHover={{ y: -10, scale: 1.02 }}
-              to={course.path || getPath(course.category)}
+              to={course.path || getPath(course)}
             >
               <IconContainer>{getIcon(course.category)}</IconContainer>
               <Title>{course.title}</Title>
@@ -310,7 +310,7 @@ const CoursesSection = ({ initialCourses = null }) => {
               key={course.id || index}
               variants={cardVariants}
               whileHover={{ y: -10, scale: 1.02 }}
-              to={course.path || getPath(course.category)}
+              to={course.path || getPath(course)}
             >
               <IconContainer>{getIcon(course.category)}</IconContainer>
               <Title>{course.title}</Title>

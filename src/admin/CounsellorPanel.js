@@ -35,7 +35,7 @@ const STATUS_OPTIONS = [
   { value: 'enrolled', label: 'Enrolled' },
   { value: 'lost', label: 'Lost' }
 ];
-const SOURCES = ['Social Media', 'Friend', 'Google', 'Referral', 'Other'];
+const SOURCES = ['Social Media', 'Friend', 'Google', 'Referral', 'Website Chatbot', 'Other'];
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -270,8 +270,28 @@ const CounsellorPanel = ({ initialView }) => {
   const canMutate = user?.role === 'admin' || canAccess(user?.permissions || {}, 'counsellor', 'full');
   const navigate = useNavigate();
   const location = useLocation();
+  const queryView = new URLSearchParams(location.search).get('view');
   const pathSegment = location.pathname.split('/')[3];
-  const resolvedView = initialView || pathSegment || 'overview';
+  const isStaffContext = location.pathname.startsWith('/staff');
+  const resolvedView = queryView || initialView || (pathSegment && pathSegment !== 'inquiries' ? pathSegment : (isStaffContext ? 'inquiries' : 'overview'));
+
+  const getCounsellorPath = (view) => {
+    if (isStaffContext) {
+      if (view === 'inquiries') return '/staff/inquiries';
+      if (view.startsWith('inquiries?')) return `/staff/${view}`;
+      if (view === 'enroll') return '/staff/enroll';
+      if (view === 'students') return '/staff/students';
+      return `/staff/inquiries?view=${view}`;
+    }
+    return `/admin/counsellor/${view}`;
+  };
+
+  const getStudentPath = (studentId) => {
+    if (isStaffContext) {
+      return `/staff/students/${studentId}`;
+    }
+    return `/admin/management/students/${studentId}?from=counsellor`;
+  };
   const [loading, setLoading] = useState(true);
   const [inquiries, setInquiries] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -482,7 +502,7 @@ const CounsellorPanel = ({ initialView }) => {
     });
     setEnrollmentOpen(true);
     if (resolvedView !== 'enroll') {
-      navigate('/admin/counsellor/enroll');
+      navigate(getCounsellorPath('enroll'));
     }
   };
 
@@ -1244,6 +1264,44 @@ const CounsellorPanel = ({ initialView }) => {
           )}
         </Header>
 
+        <Tabs style={{ width: 'auto', flexWrap: 'wrap', marginBottom: '24px' }}>
+          <Tab
+            type="button"
+            $active={resolvedView === 'inquiries'}
+            onClick={() => navigate(getCounsellorPath('inquiries'))}
+          >
+            📋 Inquiries Pipeline ({inquiries.length})
+          </Tab>
+          <Tab
+            type="button"
+            $active={resolvedView === 'overview'}
+            onClick={() => navigate(getCounsellorPath('overview'))}
+          >
+            📊 Funnel & Batches
+          </Tab>
+          <Tab
+            type="button"
+            $active={resolvedView === 'performance'}
+            onClick={() => navigate(getCounsellorPath('performance'))}
+          >
+            📈 Lead Analytics & Sources
+          </Tab>
+          <Tab
+            type="button"
+            $active={resolvedView === 'enroll'}
+            onClick={() => navigate(getCounsellorPath('enroll'))}
+          >
+            🎓 Enroll Student
+          </Tab>
+          <Tab
+            type="button"
+            $active={resolvedView === 'students'}
+            onClick={() => navigate(getCounsellorPath('students'))}
+          >
+            👥 Enrolled Students ({students.length})
+          </Tab>
+        </Tabs>
+
         {resolvedView === 'enroll' ? (
           <InlinePanel>
             <InlinePanelHeader>
@@ -1251,7 +1309,7 @@ const CounsellorPanel = ({ initialView }) => {
                 <h2>{success ? 'Student Enrolled' : 'Enroll New Student'}</h2>
                 <p>{success ? 'Enrollment was completed successfully.' : 'Complete the student profile, batch assignment, and fee setup on this page.'}</p>
               </div>
-              <button onClick={() => { setEnrollmentOpen(false); setSuccess(null); navigate('/admin/counsellor/inquiries'); }}>Back to Inquiries</button>
+              <button onClick={() => { setEnrollmentOpen(false); setSuccess(null); navigate(getCounsellorPath('inquiries')); }}>Back to Inquiries</button>
             </InlinePanelHeader>
 
             {success ? (
@@ -1267,7 +1325,7 @@ const CounsellorPanel = ({ initialView }) => {
                     <FaEnvelope /> Resend Login Instructions
                   </button>
                   <button onClick={() => openEnroll()}>Enroll Another Student</button>
-                  <button onClick={() => navigate(`/admin/management/students/${success.id}?from=counsellor`)}>View Student Profile</button>
+                  <button onClick={() => navigate(getStudentPath(success.id))}>View Student Profile</button>
                 </Actions>
               </Success>
             ) : (
@@ -1790,7 +1848,7 @@ const CounsellorPanel = ({ initialView }) => {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        navigate(linkedStudent ? `/admin/management/students/${linkedStudent.id}?from=counsellor` : '/admin/counsellor/students');
+                                        navigate(linkedStudent ? getStudentPath(linkedStudent.id) : getCounsellorPath('students'));
                                       }}
                                       title="View Enrolled Student Profile"
                                       style={{ color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
@@ -2011,7 +2069,7 @@ const CounsellorPanel = ({ initialView }) => {
                       type="button"
                       onClick={() => {
                         setSelectedInquiry(null);
-                        navigate(linked ? `/admin/management/students/${linked.id}?from=counsellor` : '/admin/counsellor/students');
+                        navigate(linked ? getStudentPath(linked.id) : getCounsellorPath('students'));
                       }}
                       style={{
                         background: 'rgba(16, 185, 129, 0.18)',
@@ -3036,7 +3094,7 @@ function StudentList({ students = [], batches = [], courses = [], navigate, onAc
                       <button
                         type="button"
                         title="View student profile dossier (academics, attendance, fees, notes)"
-                        onClick={() => navigate(`/admin/management/students/${student.id}?from=counsellor`)}
+                        onClick={() => navigate(getStudentPath(student.id))}
                       >
                         <FaUserGraduate /> Profile
                       </button>
@@ -3831,7 +3889,7 @@ function OverviewContent({
             alert: stats.new > 0,
             badge: stats.new > 0 ? "Needs Action" : "All Clear",
             sub: stats.new > 0 ? "Pending initial contact" : "All leads contacted",
-            onClick: () => navigate('/admin/counsellor/inquiries')
+            onClick: () => navigate(getCounsellorPath('inquiries'))
           },
           {
             label: "Follow-ups Due Today",
@@ -3839,7 +3897,7 @@ function OverviewContent({
             alert: dueTodayCount > 0,
             badge: dueTodayCount > 0 ? "Scheduled" : "Up to date",
             sub: dueTodayCount > 0 ? "Calls & appointments pending" : "No overdue tasks",
-            onClick: () => navigate('/admin/counsellor/inquiries')
+            onClick: () => navigate(getCounsellorPath('inquiries'))
           },
           {
             label: "Admissions Conversion Rate",
@@ -3861,7 +3919,7 @@ function OverviewContent({
             label: "New Inquiry",
             icon: <FaPlus />,
             primary: true,
-            onClick: () => navigate('/admin/counsellor/inquiries?action=new')
+            onClick: () => navigate(getCounsellorPath('inquiries?action=new'))
           }] : []),
           ...(canMutate && openEnroll ? [{
             label: "Enroll Student",
@@ -3873,7 +3931,7 @@ function OverviewContent({
             label: "Inquiry Pipeline",
             icon: <FaArrowRight />,
             primary: false,
-            onClick: () => navigate('/admin/counsellor/inquiries')
+            onClick: () => navigate(getCounsellorPath('inquiries'))
           }
         ]}
       />
@@ -3890,7 +3948,7 @@ function OverviewContent({
           <span className="sub">{stats.new > 0 ? 'Pending initial contact' : 'All caught up'}</span>
         </OverviewStatCard>
         <OverviewStatCard
-          onClick={() => navigate('/admin/counsellor/inquiries')}
+          onClick={() => navigate(getCounsellorPath('inquiries'))}
           style={{ cursor: 'pointer' }}
           title="Click to view inquiries with pending follow-ups"
         >
@@ -3919,7 +3977,7 @@ function OverviewContent({
         <CardPanel>
           <div className="panel-header">
             <h3><FaClipboardList /> Recent Inquiries</h3>
-            <button type="button" onClick={() => navigate('/admin/counsellor/inquiries')}>
+            <button type="button" onClick={() => navigate(getCounsellorPath('inquiries'))}>
               View All ({stats.total}) <FaArrowRight />
             </button>
           </div>
@@ -3960,7 +4018,7 @@ function OverviewContent({
                           isEnrolled ? (
                             <button
                               type="button"
-                              onClick={() => navigate(linked ? `/admin/management/students/${linked.id}?from=counsellor` : '/admin/counsellor/students')}
+                              onClick={() => navigate(linked ? getStudentPath(linked.id) : getCounsellorPath('students'))}
                               title="View Enrolled Student Profile"
                               style={{ color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
                             >

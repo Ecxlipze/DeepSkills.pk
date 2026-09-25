@@ -831,8 +831,29 @@ const AdminHRManagement = ({ initialView }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const pathSegment = location.pathname.split('/')[3];
-  const activeView = initialView || pathSegment || 'overview';
+  const isStaffContext = location?.pathname?.startsWith('/staff');
+
+  const getHrPath = (viewId, param = '') => {
+    if (isStaffContext) {
+      if (viewId === 'overview') return '/staff/applications?view=overview';
+      if (viewId === 'applications') return '/staff/applications';
+      if (viewId === 'jds') return '/staff/jds';
+      if (viewId === 'signatures') return '/staff/signatures';
+      if (viewId === 'files') return '/staff/files';
+      if (viewId === 'leaves') return '/staff/leaves';
+      if (viewId === 'teachers') return param ? `/staff/teachers/${param}` : '/staff/teachers';
+      if (viewId === 'settings') return '/staff/applications?view=settings';
+      return `/staff/hr/${viewId}${param ? `/${param}` : ''}`;
+    }
+    if (viewId === 'overview') return '/admin/hr';
+    if (viewId === 'teachers' && param) return `/admin/hr/teachers/${param}`;
+    return `/admin/hr/${viewId}`;
+  };
+
+  const queryView = new URLSearchParams(location?.search || '').get('view');
+  const pathSegment = location?.pathname?.split('/')[3];
+  const staffSegment = isStaffContext ? location?.pathname?.split('/')[2] : null;
+  const activeView = queryView || initialView || (isStaffContext ? (staffSegment === 'hr' ? pathSegment : staffSegment) : pathSegment) || 'overview';
 
   const [applications, setApplications] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -1780,14 +1801,14 @@ const AdminHRManagement = ({ initialView }) => {
   };
 
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: <FaHome />, path: '/admin/hr' },
-    { id: 'applications', label: 'Applications', icon: <FaClipboardList />, path: '/admin/hr/applications', count: stats.total },
-    { id: 'jds', label: 'JD Management', icon: <FaFileAlt />, path: '/admin/hr/jds', count: applicationsWithJds.length },
-    { id: 'signatures', label: 'Signatures', icon: <FaSignature />, path: '/admin/hr/signatures', count: applicationsWithSignatures.length },
-    { id: 'files', label: 'Hiring Files', icon: <FaFolder />, path: '/admin/hr/files', count: hiredApplications.length },
-    { id: 'leaves', label: 'Leaves & Absence', icon: <FaCalendarCheck />, path: '/admin/hr/leaves', count: leaveStats.pending },
-    { id: 'teachers', label: 'All Teachers', icon: <FaUsers />, path: '/admin/hr/teachers', count: teachersList.length },
-    { id: 'settings', label: 'HR Settings', icon: <FaCog />, path: '/admin/hr/settings' }
+    { id: 'overview', label: 'Overview', icon: <FaHome />, path: getHrPath('overview') },
+    { id: 'applications', label: 'Applications', icon: <FaClipboardList />, path: getHrPath('applications'), count: stats.total },
+    { id: 'jds', label: 'JD Management', icon: <FaFileAlt />, path: getHrPath('jds'), count: applicationsWithJds.length },
+    { id: 'signatures', label: 'Signatures', icon: <FaSignature />, path: getHrPath('signatures'), count: applicationsWithSignatures.length },
+    { id: 'files', label: 'Hiring Files', icon: <FaFolder />, path: getHrPath('files'), count: hiredApplications.length },
+    { id: 'leaves', label: 'Leaves & Absence', icon: <FaCalendarCheck />, path: getHrPath('leaves'), count: leaveStats.pending },
+    { id: 'teachers', label: 'All Teachers', icon: <FaUsers />, path: getHrPath('teachers'), count: teachersList.length },
+    { id: 'settings', label: 'HR Settings', icon: <FaCog />, path: getHrPath('settings') }
   ];
 
   return (
@@ -1867,7 +1888,7 @@ const AdminHRManagement = ({ initialView }) => {
                       alert: stats.pending > 0,
                       badge: stats.pending > 0 ? "Review Needed" : "All Clear",
                       sub: stats.pending > 0 ? "Awaiting initial dossier action" : "All candidate files screened",
-                      onClick: () => navigate('/admin/hr/applications')
+                      onClick: () => navigate(getHrPath('applications'))
                     },
                     {
                       label: "Signed Contracts Ready",
@@ -1875,7 +1896,7 @@ const AdminHRManagement = ({ initialView }) => {
                       alert: stats.signed > 0,
                       badge: stats.signed > 0 ? "Ready to Hire" : "In Pipeline",
                       sub: stats.signed > 0 ? "Awaiting final onboarding activation" : "No pending activations",
-                      onClick: () => navigate('/admin/hr/signatures')
+                      onClick: () => navigate(getHrPath('signatures'))
                     },
                     {
                       label: "Staff On Leave Today",
@@ -1883,7 +1904,7 @@ const AdminHRManagement = ({ initialView }) => {
                       alert: leaveStats.onLeaveToday > 0,
                       badge: leaveStats.onLeaveToday > 0 ? "Coverage Active" : "Full Attendance",
                       sub: leaveStats.onLeaveToday > 0 ? "Faculty leaves logged today" : "All teachers present",
-                      onClick: () => navigate('/admin/hr/leaves')
+                      onClick: () => navigate(getHrPath('leaves'))
                     },
                     {
                       label: "Active Hired Staff",
@@ -1891,7 +1912,7 @@ const AdminHRManagement = ({ initialView }) => {
                       alert: false,
                       badge: "Active Roster",
                       sub: "Onboarded faculty and staff",
-                      onClick: () => navigate('/admin/hr/teachers')
+                      onClick: () => navigate(getHrPath('teachers'))
                     }
                   ]}
                   quickActions={[
@@ -1905,13 +1926,13 @@ const AdminHRManagement = ({ initialView }) => {
                       label: "Candidate Applications",
                       icon: <FaUsers />,
                       primary: false,
-                      onClick: () => navigate('/admin/hr/applications')
+                      onClick: () => navigate(getHrPath('applications'))
                     },
                     ...(canMutate ? [{
                       label: "JD Templates",
                       icon: <FaFileAlt />,
                       primary: false,
-                      onClick: () => navigate('/admin/hr/jds')
+                      onClick: () => navigate(getHrPath('jds'))
                     }] : [])
                   ]}
                 />
@@ -2064,7 +2085,7 @@ const AdminHRManagement = ({ initialView }) => {
                           alignItems: 'center',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate('/admin/hr/applications')}
+                        onClick={() => navigate(getHrPath('applications'))}
                       >
                         <div>
                           <strong style={{ color: '#c4b5fd', fontSize: '0.9rem' }}>Candidate Applications</strong>
@@ -2084,7 +2105,7 @@ const AdminHRManagement = ({ initialView }) => {
                           alignItems: 'center',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate('/admin/hr/leaves')}
+                        onClick={() => navigate(getHrPath('leaves'))}
                       >
                         <div>
                           <strong style={{ color: '#93c5fd', fontSize: '0.9rem' }}>Leaves & Absence Management</strong>
@@ -2104,7 +2125,7 @@ const AdminHRManagement = ({ initialView }) => {
                           alignItems: 'center',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate('/admin/hr/files')}
+                        onClick={() => navigate(getHrPath('files'))}
                       >
                         <div>
                           <strong style={{ color: '#6ee7b7', fontSize: '0.9rem' }}>Hiring Files & Dossiers</strong>
@@ -2124,7 +2145,7 @@ const AdminHRManagement = ({ initialView }) => {
                           alignItems: 'center',
                           cursor: 'pointer'
                         }}
-                        onClick={() => navigate('/admin/hr/teachers')}
+                        onClick={() => navigate(getHrPath('teachers'))}
                       >
                         <div>
                           <strong style={{ color: '#f1f5f9', fontSize: '0.9rem' }}>All Active Teachers</strong>
@@ -3260,7 +3281,7 @@ const AdminHRManagement = ({ initialView }) => {
                               <td>
                                 <div
                                   style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
-                                  onClick={() => navigate(`/admin/hr/teachers/${teacher.id}`)}
+                                  onClick={() => navigate(getHrPath('teachers', teacher.id))}
                                   title="View teacher profile"
                                 >
                                   <div style={{
@@ -3393,7 +3414,7 @@ const AdminHRManagement = ({ initialView }) => {
                               <td style={{ textAlign: 'right', paddingRight: '22px' }}>
                                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', flexWrap: 'nowrap' }}>
                                   <Button
-                                    onClick={() => navigate(`/admin/hr/teachers/${teacher.id}`)}
+                                    onClick={() => navigate(getHrPath('teachers', teacher.id))}
                                     title="View Teacher Profile & Academic History"
                                     style={{
                                       background: 'rgba(139, 92, 246, 0.1)',

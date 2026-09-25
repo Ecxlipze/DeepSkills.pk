@@ -75,6 +75,7 @@ export const DEPARTMENT_NAV = {
     { label: 'Careers & Jobs', icon: '', path: '/admin/management/careers', permissionKey: 'settings' },
     { label: 'Media Library', icon: '', path: '/admin/management/media', permissionKey: 'settings' },
     { label: 'Media Showcase', icon: '', path: '/admin/management/media-page', permissionKey: 'settings' },
+    { label: 'Chatbot Insights', icon: '', path: '/admin/management/chatbot', permissionKey: 'settings' },
     { section: 'SYSTEM' },
     { label: 'Time Tracker', icon: '', path: '/admin/time-tracker' },
     { label: 'Staff Time Reports', icon: '', path: '/admin/time-reports', permissionKey: 'reports' },
@@ -115,6 +116,10 @@ export const ADMIN_ROUTE_ALIASES = {
   '/admin/settings/announcement-bar': '/admin/management/programs',
   '/admin/settings/media': '/admin/management/media',
   '/admin/settings/content': '/admin/management/settings',
+  '/admin/roles': '/admin/management/settings/roles',
+  '/admin/settings/roles': '/admin/management/settings/roles',
+  '/admin/settings/system': '/admin/management/settings/system',
+  '/admin/settings/departments': '/admin/management/settings/departments',
   '/admin/tasks': '/admin/academic/tasks',
   '/admin/chats': '/admin/academic/chats',
   '/admin/settings/attendance': '/admin/academic/attendance/settings',
@@ -134,6 +139,9 @@ export const normalizeAdminPath = (pathname = '') => {
   if (cleanPath.startsWith('/admin/blog/')) return cleanPath.replace('/admin/blog/', '/admin/management/blog/');
   if (cleanPath.startsWith('/admin/careers')) return '/admin/management/careers';
   if (cleanPath.startsWith('/admin/users/activity')) return '/admin/management/users/activity';
+  if (cleanPath.startsWith('/admin/settings/roles')) return '/admin/management/settings/roles';
+  if (cleanPath.startsWith('/admin/settings/system')) return '/admin/management/settings/system';
+  if (cleanPath.startsWith('/admin/settings/departments')) return '/admin/management/settings/departments';
   return cleanPath;
 };
 

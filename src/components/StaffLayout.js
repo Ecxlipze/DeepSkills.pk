@@ -5,7 +5,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   FaHome, FaClock, FaTasks, FaUserTie, FaSignOutAlt, FaBars, FaTimes,
   FaBullhorn, FaComments, FaClipboardList, FaPlus, FaUsers, FaMoneyBillWave,
-  FaGraduationCap, FaCalendarCheck, FaFileAlt, FaAward, FaIdBadge, FaStop
+  FaGraduationCap, FaCalendarCheck, FaFileAlt, FaAward, FaIdBadge, FaStop,
+  FaUserGraduate, FaChartLine, FaChalkboardTeacher, FaHistory, FaSignature,
+  FaFolder, FaBlog, FaShareAlt, FaVideo, FaShieldAlt
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -328,6 +330,9 @@ const resolveStaffBreadcrumb = (pathname = '') => {
   if (clean.startsWith('/staff/enroll') || clean.startsWith('/staff/counsellor/enroll')) {
     return { section: 'Department Tools', page: 'Enroll Student' };
   }
+  if (clean.startsWith('/staff/admissions') || clean.startsWith('/staff/counsellor/admissions')) {
+    return { section: 'Department Tools', page: 'Online Admissions' };
+  }
   if (clean.startsWith('/staff/students')) {
     const isDetail = clean !== '/staff/students';
     return { section: 'Student Directory', page: isDetail ? 'Student Profile' : null };
@@ -335,34 +340,70 @@ const resolveStaffBreadcrumb = (pathname = '') => {
   if (clean.startsWith('/staff/fees') || clean.startsWith('/staff/finance/fees')) {
     return { section: 'Finance', page: 'Student Fees' };
   }
+  if (clean.startsWith('/staff/salaries') || clean.startsWith('/staff/finance/salaries')) {
+    return { section: 'Finance', page: 'Teacher Salaries' };
+  }
   if (clean.startsWith('/staff/transactions') || clean.startsWith('/staff/finance/transactions')) {
-    return { section: 'Finance', page: 'Transactions' };
+    return { section: 'Finance', page: 'Transactions Ledger' };
+  }
+  if (clean.startsWith('/staff/reports') || clean.startsWith('/staff/finance/reports')) {
+    return { section: 'Finance', page: 'Financial Reports' };
   }
   if (clean.startsWith('/staff/courses')) {
     const isDetail = clean !== '/staff/courses';
     return { section: 'Courses & Batches', page: isDetail ? 'Course Details' : null };
   }
-  if (clean.startsWith('/staff/attendance')) {
+  if (clean.startsWith('/staff/attendance') || clean.startsWith('/staff/academic/attendance')) {
     return { section: 'Academics', page: 'Academic Attendance' };
   }
-  if (clean.startsWith('/staff/results')) {
+  if (clean.startsWith('/staff/academic/tasks') || clean.startsWith('/staff/assignments') || clean.startsWith('/staff/homework') || clean.startsWith('/staff/academic-tasks')) {
+    return { section: 'Academics', page: 'Tasks & Homework' };
+  }
+  if (clean.startsWith('/staff/results') || clean.startsWith('/staff/academic/results')) {
     return { section: 'Academics', page: 'Results & Exams' };
   }
-  if (clean.startsWith('/staff/applications')) {
-    return { section: 'HR', page: 'Job Applications' };
+  if (clean.startsWith('/staff/academic/reports')) {
+    return { section: 'Academics', page: 'Academic Reports' };
   }
-  if (clean.startsWith('/staff/jds')) {
-    return { section: 'HR', page: 'JDs & Contracts' };
+  if (clean.startsWith('/staff/chats') || clean.startsWith('/staff/academic/chats') || clean.startsWith('/staff/group-chats')) {
+    return { section: 'Communication', page: 'Group Chats' };
+  }
+  if (clean.startsWith('/staff/applications') || clean.startsWith('/staff/hr/applications')) {
+    return { section: 'HR & Faculty', page: 'Job Applications' };
+  }
+  if (clean.startsWith('/staff/jds') || clean.startsWith('/staff/hr/jds')) {
+    return { section: 'HR & Faculty', page: 'JDs & Contracts' };
+  }
+  if (clean.startsWith('/staff/signatures') || clean.startsWith('/staff/hr/signatures')) {
+    return { section: 'HR & Faculty', page: 'Candidate Signatures' };
+  }
+  if (clean.startsWith('/staff/files') || clean.startsWith('/staff/hr/files')) {
+    return { section: 'HR & Faculty', page: 'Hiring Dossiers' };
+  }
+  if (clean.startsWith('/staff/leaves-management') || clean.startsWith('/staff/hr/leaves')) {
+    return { section: 'HR & Faculty', page: 'Faculty Leaves' };
   }
   if (clean.startsWith('/staff/teachers')) {
     const isDetail = clean !== '/staff/teachers';
     return { section: 'Faculty Directory', page: isDetail ? 'Teacher Profile' : null };
   }
-  if (clean.startsWith('/staff/announcements')) {
-    return { section: 'Communication', page: 'Announcements' };
+  if (clean.startsWith('/staff/announcements') || clean.startsWith('/staff/marketing/announcements')) {
+    return { section: 'Marketing & Media', page: 'Announcements' };
+  }
+  if (clean.startsWith('/staff/blog') || clean.startsWith('/staff/marketing/blog')) {
+    return { section: 'Marketing & Media', page: 'Blog Articles CMS' };
+  }
+  if (clean.startsWith('/staff/referrals') || clean.startsWith('/staff/marketing/referrals') || clean.startsWith('/staff/referral')) {
+    return { section: 'Marketing & Media', page: 'Referral Campaigns' };
+  }
+  if (clean.startsWith('/staff/testimonials') || clean.startsWith('/staff/marketing/testimonials')) {
+    return { section: 'Marketing & Media', page: 'Student Testimonials' };
   }
   if (clean.startsWith('/staff/complaints')) {
     return { section: 'Communication', page: 'Grievances & Tickets' };
+  }
+  if (clean.startsWith('/staff/audit') || clean.startsWith('/staff/auditor') || clean.startsWith('/staff/audit-logs')) {
+    return { section: 'Compliance & Audit', page: 'Audit Trail & Telemetry' };
   }
   if (clean.startsWith('/staff/profile') || clean.startsWith('/staff/leaves')) {
     return { section: 'Personal', page: 'Profile & Leaves' };
@@ -574,7 +615,18 @@ export default function StaffLayout({ children }) {
   const hasStudents = isSuperAdmin || (permissions.students && permissions.students !== 'none');
   const hasAnnouncements = isSuperAdmin || (permissions.announcements && permissions.announcements !== 'none');
   const hasComplaints = isSuperAdmin || (permissions.complaints && permissions.complaints !== 'none');
-  const hasDepartmentTools = hasCounsellor || hasFinance || hasCourses || hasAttendance || hasResults || hasHR || hasTeachers || hasStudents;
+  const hasTasks = isSuperAdmin || (permissions.tasks && permissions.tasks !== 'none');
+  const hasBlog = isSuperAdmin || (permissions.blog && permissions.blog !== 'none');
+  const hasReferral = isSuperAdmin || (permissions.referral && permissions.referral !== 'none');
+  const hasMarketing = hasBlog || hasReferral;
+  const hasReports = isSuperAdmin || (permissions.reports && permissions.reports !== 'none');
+  const isAuditorRole =
+    (user?.customRoleName && /auditor|executive viewer|compliance/i.test(user.customRoleName)) ||
+    (user?.roleName && /auditor|executive viewer|compliance/i.test(user.roleName)) ||
+    (user?.custom_roles?.name && /auditor|executive viewer|compliance/i.test(user.custom_roles.name)) ||
+    user?.custom_role_id === '07cf8bb6-1b3a-4db0-b5f4-50ec38b8eeb7';
+  const hasAudit = isSuperAdmin || isAuditorRole || hasReports;
+  const hasDepartmentTools = hasCounsellor || hasFinance || hasCourses || hasAttendance || hasTasks || hasResults || hasHR || hasTeachers || hasStudents || hasMarketing || hasAudit;
 
   return (
     <InStaffLayoutContext.Provider value={true}>
@@ -631,6 +683,9 @@ export default function StaffLayout({ children }) {
                     <NavItemLink to="/staff/enroll" $active={pathname === '/staff/enroll' || pathname === '/staff/counsellor/enroll'}>
                       <FaPlus /> Enroll Student
                     </NavItemLink>
+                    <NavItemLink to="/staff/admissions" $active={pathname === '/staff/admissions' || pathname === '/staff/counsellor/admissions'}>
+                      <FaUserGraduate /> Online Admissions
+                    </NavItemLink>
                   </>
                 )}
                 {(hasStudents || hasCounsellor) && (
@@ -643,8 +698,14 @@ export default function StaffLayout({ children }) {
                     <NavItemLink to="/staff/fees" $active={pathname === '/staff/fees' || pathname === '/staff/finance/fees'}>
                       <FaMoneyBillWave /> Student Fees
                     </NavItemLink>
+                    <NavItemLink to="/staff/salaries" $active={pathname === '/staff/salaries' || pathname === '/staff/finance/salaries'}>
+                      <FaChalkboardTeacher /> Teacher Salaries
+                    </NavItemLink>
                     <NavItemLink to="/staff/transactions" $active={pathname === '/staff/transactions' || pathname === '/staff/finance/transactions'}>
-                      <FaMoneyBillWave /> Transactions
+                      <FaHistory /> Transactions
+                    </NavItemLink>
+                    <NavItemLink to="/staff/reports" $active={pathname === '/staff/reports' || pathname === '/staff/finance/reports'}>
+                      <FaChartLine /> Financial Reports
                     </NavItemLink>
                   </>
                 )}
@@ -654,22 +715,36 @@ export default function StaffLayout({ children }) {
                   </NavItemLink>
                 )}
                 {hasAttendance && (
-                  <NavItemLink to="/staff/attendance" $active={pathname === '/staff/attendance'}>
+                  <NavItemLink to="/staff/attendance" $active={pathname === '/staff/attendance' || pathname.startsWith('/staff/academic/attendance')}>
                     <FaCalendarCheck /> Academic Attendance
                   </NavItemLink>
                 )}
+                {hasTasks && (
+                  <NavItemLink to="/staff/academic/tasks" $active={pathname.startsWith('/staff/academic/tasks') || pathname.startsWith('/staff/assignments') || pathname.startsWith('/staff/homework')}>
+                    <FaTasks /> Student Homework
+                  </NavItemLink>
+                )}
                 {hasResults && (
-                  <NavItemLink to="/staff/results" $active={pathname === '/staff/results'}>
+                  <NavItemLink to="/staff/results" $active={pathname === '/staff/results' || pathname.startsWith('/staff/academic/results')}>
                     <FaAward /> Results & Exams
                   </NavItemLink>
                 )}
                 {hasHR && (
                   <>
-                    <NavItemLink to="/staff/applications" $active={pathname === '/staff/applications'}>
+                    <NavItemLink to="/staff/applications" $active={pathname === '/staff/applications' || pathname === '/staff/hr/applications'}>
                       <FaIdBadge /> Job Applications
                     </NavItemLink>
-                    <NavItemLink to="/staff/jds" $active={pathname === '/staff/jds'}>
+                    <NavItemLink to="/staff/jds" $active={pathname === '/staff/jds' || pathname === '/staff/hr/jds'}>
                       <FaFileAlt /> JDs & Contracts
+                    </NavItemLink>
+                    <NavItemLink to="/staff/signatures" $active={pathname === '/staff/signatures' || pathname === '/staff/hr/signatures'}>
+                      <FaSignature /> Signatures
+                    </NavItemLink>
+                    <NavItemLink to="/staff/files" $active={pathname === '/staff/files' || pathname === '/staff/hr/files'}>
+                      <FaFolder /> Hiring Dossiers
+                    </NavItemLink>
+                    <NavItemLink to="/staff/leaves-management" $active={pathname === '/staff/leaves-management' || pathname === '/staff/hr/leaves'}>
+                      <FaCalendarCheck /> Faculty Leaves
                     </NavItemLink>
                   </>
                 )}
@@ -678,20 +753,47 @@ export default function StaffLayout({ children }) {
                     <FaUserTie /> Faculty Directory
                   </NavItemLink>
                 )}
+                {hasMarketing && (
+                  <>
+                    {hasBlog && (
+                      <NavItemLink to="/staff/blog" $active={pathname.startsWith('/staff/blog') || pathname.startsWith('/staff/marketing/blog')}>
+                        <FaBlog /> Blog Articles CMS
+                      </NavItemLink>
+                    )}
+                    {hasReferral && (
+                      <NavItemLink to="/staff/referrals" $active={pathname.startsWith('/staff/referrals') || pathname.startsWith('/staff/marketing/referrals') || pathname === '/staff/referral'}>
+                        <FaShareAlt /> Referral Campaigns
+                      </NavItemLink>
+                    )}
+                    <NavItemLink to="/staff/testimonials" $active={pathname.startsWith('/staff/testimonials') || pathname.startsWith('/staff/marketing/testimonials')}>
+                      <FaVideo /> Video Testimonials
+                    </NavItemLink>
+                  </>
+                )}
+                {hasAudit && (
+                  <NavItemLink to="/staff/audit" $active={pathname.startsWith('/staff/audit') || pathname === '/staff/audit-logs'}>
+                    <FaShieldAlt /> Audit & Compliance
+                  </NavItemLink>
+                )}
               </>
             )}
 
-            {(hasAnnouncements || hasComplaints) && (
+            {(hasAnnouncements || hasComplaints || hasTasks) && (
               <>
                 <SectionHeader>Communication</SectionHeader>
                 {hasAnnouncements && (
-                  <NavItemLink to="/staff/announcements" $active={pathname === '/staff/announcements'}>
+                  <NavItemLink to="/staff/announcements" $active={pathname === '/staff/announcements' || pathname.startsWith('/staff/academic/announcements')}>
                     <FaBullhorn /> Announcements
                   </NavItemLink>
                 )}
                 {hasComplaints && (
-                  <NavItemLink to="/staff/complaints" $active={pathname === '/staff/complaints'}>
+                  <NavItemLink to="/staff/complaints" $active={pathname === '/staff/complaints' || pathname.startsWith('/staff/academic/complaints')}>
                     <FaComments /> Grievances & Tickets
+                  </NavItemLink>
+                )}
+                {hasTasks && (
+                  <NavItemLink to="/staff/chats" $active={pathname === '/staff/chats' || pathname.startsWith('/staff/academic/chats') || pathname.startsWith('/staff/group-chats')}>
+                    <FaComments /> Group Chats
                   </NavItemLink>
                 )}
               </>

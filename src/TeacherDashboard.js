@@ -6,7 +6,7 @@ import {
   FaChalkboardTeacher, FaTasks, FaUserGraduate,
   FaCalendarCheck, FaClock, FaCheckCircle, FaBullhorn,
   FaArrowRight, FaClipboardCheck, FaIdBadge, FaWallet,
-  FaComments, FaUserFriends, FaExclamationCircle
+  FaComments, FaUserFriends, FaExclamationCircle, FaBookOpen
 } from 'react-icons/fa';
 import DashboardLayout from './components/DashboardLayout';
 import { useAuth } from './context/AuthContext';
@@ -549,6 +549,9 @@ export const TeacherDashboard = () => {
             </ActionButton>
             <ActionButton to="/teacher/tasks/view">
               <FaClipboardCheck /> View Submissions
+            </ActionButton>
+            <ActionButton to="/teacher/syllabus">
+              <FaBookOpen /> Syllabus Tracker
             </ActionButton>
           </BannerActions>
         </WelcomeBanner>

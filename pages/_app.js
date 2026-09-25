@@ -7,6 +7,7 @@ import { useRouter } from 'next/router';
 import { AuthProvider } from '../src/context/AuthContext';
 import { NotificationsProvider } from '../src/hooks/useNotifications';
 import ToastNotifications from '../src/components/ToastNotifications';
+import ChatWidget from '../src/components/ChatWidget';
 import { GA_MEASUREMENT_ID, pageview } from '../lib/analytics';
 
 export default function App({ Component, pageProps }) {
@@ -76,7 +77,7 @@ export default function App({ Component, pageProps }) {
       <AuthProvider>
         <NotificationsProvider>
           <Component {...pageProps} />
-          {isDashboardRoute && <ToastNotifications />}
+          {isDashboardRoute ? <ToastNotifications /> : <ChatWidget />}
         </NotificationsProvider>
       </AuthProvider>
     </>

@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const ButtonContainer = styled(motion.button)`
   position: fixed;
-  bottom: 40px;
+  /* Offset above the chat launcher (58px tall at bottom: 40px) so the two
+     floating buttons stack instead of overlapping. */
+  bottom: 112px;
   right: 40px;
   width: 50px;
   height: 50px;

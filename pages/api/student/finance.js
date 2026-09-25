@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     const { data: studentRows, error: studentErr } = await supabase
       .from('admissions')
-      .select('id, status')
+      .select('id, status, name, course, batch')
       .eq('cnic', cnic)
       .in('status', ['Active', 'Graduated'])
       .order('submitted_at', { ascending: false })
@@ -50,6 +50,57 @@ export default async function handler(req, res) {
     const student = studentRows?.[0];
     if (!student) {
       return res.status(403).json({ status: 'error', message: 'Active student admission not found.' });
+    }
+
+    // ── Handle Payment Proof Submission ──
+    if (data.action === 'submit_proof') {
+      const { payment_id, reference_number, method, amount, notes, paid_date } = data;
+      if (!payment_id) {
+        return res.status(400).json({ status: 'error', message: 'Payment voucher ID is required.' });
+      }
+
+      const updatePayload = {
+        status: 'pending',
+        method: method || 'bank_transfer',
+        reference_number: reference_number ? String(reference_number).trim() : null,
+        paid_date: paid_date || new Date().toISOString().slice(0, 10),
+        notes: notes ? `Proof: ${notes} (Ref: ${reference_number || 'N/A'})` : `Proof Ref: ${reference_number || 'N/A'}`
+      };
+      if (amount && Number(amount) > 0) {
+        updatePayload.amount = Number(amount);
+      }
+
+      const { data: updatedPayment, error: updateErr } = await supabase
+        .from('payments')
+        .update(updatePayload)
+        .eq('id', payment_id)
+        .eq('entity_id', student.id)
+        .select()
+        .single();
+
+      if (updateErr) {
+        console.error('[student/finance] Proof update error:', updateErr);
+        return res.status(500).json({ status: 'error', message: 'Failed to record payment proof.' });
+      }
+
+      // Notify administration and finance officer
+      try {
+        const { notifyAdmins } = await import('../../../src/utils/notifications');
+        await notifyAdmins({
+          type: 'fee_proof_submitted',
+          title: 'Fee Payment Proof Submitted',
+          message: `${student.name || 'Student'} submitted payment proof (Ref: ${reference_number || 'N/A'}) for ${student.course || 'course'}`,
+          link: '/staff/fees'
+        });
+      } catch (nErr) {
+        console.warn('[student/finance] Notification warning:', nErr);
+      }
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Payment proof submitted successfully! The Finance Office will verify your transaction shortly.',
+        data: updatedPayment
+      });
     }
 
     const { data: planRows, error: planErr } = await supabase
